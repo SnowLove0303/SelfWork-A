@@ -16,9 +16,9 @@ export const Header: React.FC<HeaderProps> = ({
   const currentMod = MODULES.find((m) => m.id === activeModule) || MODULES[0];
 
   return (
-    <header className="flex h-12 w-full items-center justify-between border-b border-border-subtle bg-canvas-default px-5 select-none">
+    <header className="flex h-11 w-full items-center justify-between border-b border-border-subtle bg-canvas-default px-4 select-none">
       <div className="flex items-center gap-2">
-        <h1 className="text-sm font-medium text-fg-primary">
+        <h1 className="text-xs font-medium text-fg-primary">
           {currentMod.name}
         </h1>
       </div>
@@ -27,7 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onRefreshKernel}
-          className="flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-mono text-fg-muted hover:text-fg-secondary hover:bg-canvas-elevated transition-colors"
+          className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-mono text-fg-muted hover:text-fg-secondary hover:bg-canvas-elevated transition-colors"
         >
           <span
             className={`h-1.5 w-1.5 rounded-full ${

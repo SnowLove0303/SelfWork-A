@@ -51,13 +51,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={`relative flex flex-col border-r border-border-subtle bg-canvas-default transition-all duration-200 select-none ${
-        collapsed ? 'w-14' : 'w-52'
+        collapsed ? 'w-12' : 'w-40'
       }`}
     >
       {/* 顶部 Brand 区域 */}
-      <div className="flex h-12 items-center justify-between px-3 border-b border-border-subtle">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-brand-primary text-white font-bold font-mono text-xs">
+      <div className="flex h-11 items-center justify-between px-2.5 border-b border-border-subtle">
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-brand-primary text-white font-bold font-mono text-[11px]">
             SW
           </div>
           {!collapsed && (
@@ -70,14 +70,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           type="button"
           onClick={onToggleCollapse}
           title={collapsed ? '展开侧栏' : '收起侧栏'}
-          className="flex h-6 w-6 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated transition-colors"
+          className="flex h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated transition-colors"
         >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
         </button>
       </div>
 
       {/* 模块导航清单 */}
-      <nav className="flex-1 space-y-0.5 p-2 overflow-y-auto">
+      <nav className="flex-1 space-y-0.5 p-1.5 overflow-y-auto">
         {MODULES.map((mod) => {
           const isActive = activeModule === mod.id;
           return (
@@ -86,17 +86,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={() => onSelectModule(mod.id)}
               title={collapsed ? mod.name : undefined}
-              className={`flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-xs transition-colors ${
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
                 isActive
                   ? 'bg-canvas-elevated text-fg-primary font-medium'
                   : 'text-fg-secondary hover:bg-canvas-elevated/60 hover:text-fg-primary'
               }`}
             >
               <div className={`shrink-0 ${isActive ? 'text-brand-primary' : 'text-fg-muted'}`}>
-                {renderIcon(mod.iconName, 'h-4 w-4')}
+                {renderIcon(mod.iconName, 'h-3.5 w-3.5')}
               </div>
               {!collapsed && (
-                <span className="truncate">{mod.name}</span>
+                <span className="truncate text-left text-[12px]">{mod.name}</span>
               )}
             </button>
           );
