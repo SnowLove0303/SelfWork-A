@@ -1,5 +1,5 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// 彻底禁用 Windows 终端控制台黑框，无论 Debug 还是 Release 均以纯桌面窗口启动
+#![windows_subsystem = "windows"]
 
 fn main() {
     selfwork_desktop_lib::run();
