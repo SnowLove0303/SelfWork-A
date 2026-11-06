@@ -5,8 +5,8 @@
 :root {
   /* 基础暗色工业画布 (带层次梯度的黑灰白基调) */
   --color-canvas-subtle: #080b11;
-  --color-canvas-default: rgba(13, 18, 28, 0.72);
-  --color-canvas-elevated: rgba(22, 28, 42, 0.75);
+  --color-canvas-default: rgba(12, 16, 26, 0.35);
+  --color-canvas-elevated: rgba(20, 26, 40, 0.45);
 
   /* 文字对比度 (WCAG 2.2 AA 严格达标) */
   --color-fg-primary: #f8fafc;
@@ -29,9 +29,6 @@ body {
   margin: 0;
   padding: 0;
   background-color: var(--color-canvas-subtle);
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.04), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 20% 110%, rgba(255, 255, 255, 0.02), transparent 70%);
   color: var(--color-fg-primary);
   font-family: 'Microsoft YaHei', '微软雅黑', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   user-select: none;
@@ -50,72 +47,115 @@ body {
   border-bottom: 1px solid var(--color-border-default);
 }
 
-/* 磨砂玻璃态容器 (Glassmorphism Acrylic Panels) */
+/* 高透明度磨砂玻璃态容器 (Crystal Glassmorphism Panels) */
 .glass-panel {
   background-color: var(--color-canvas-default);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .glass-card {
-  background-color: rgba(14, 19, 30, 0.55);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(12, 16, 26, 0.30);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--color-border-default);
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
-    0 4px 20px -2px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    0 4px 24px -2px rgba(0, 0, 0, 0.5);
 }
 
-/* 触觉微物理交互按钮 (Tactile Button Mechanics) */
+/* 触觉交互按钮：彻底消除文字与整体位移/缩放，依靠纯光学深度传达下压手感 */
 .tactile-btn {
   position: relative;
-  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 .tactile-btn:hover {
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
-    0 2px 8px 0 rgba(0, 0, 0, 0.3);
-  transform: translateY(-0.5px);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    0 2px 8px 0 rgba(0, 0, 0, 0.25);
 }
 
+/* 关键修复：绝对禁止 transform 缩放/位移，文字 100% 稳如磐石不晃眼 */
 .tactile-btn:active {
-  transform: scale(0.975) translateY(0.5px);
+  transform: none !important;
+  background-color: rgba(255, 255, 255, 0.04);
   box-shadow: 
-    inset 0 1px 2px 0 rgba(0, 0, 0, 0.5),
-    0 0 0 0 transparent;
+    inset 0 1px 3px 0 rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-/* 激活选中态按钮：悬浮亚克力实体感 */
+/* 激活选中态按钮：高透悬浮亚克力实体板效果 */
 .tactile-btn-active {
   background-color: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
-    0 2px 8px 0 rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 2px 10px 0 rgba(0, 0, 0, 0.35);
 }
 
-/* 触觉微物理状态胶囊 */
+/* 触觉状态胶囊：同样消除缩放 */
 .tactile-pill {
-  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
     0 1px 2px 0 rgba(0, 0, 0, 0.3);
 }
 
 .tactile-pill:hover {
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
     0 2px 6px 0 rgba(0, 0, 0, 0.45);
 }
 
 .tactile-pill:active {
-  transform: scale(0.97);
-  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.6);
+  transform: none !important;
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* 流光漂移动画定义 */
+@keyframes fluidDriftA {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(50px, -30px) scale(1.15);
+  }
+}
+
+@keyframes fluidDriftB {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-40px, 35px) scale(0.9);
+  }
+}
+
+@keyframes fluidSheenPulse {
+  0%, 100% {
+    opacity: 0.7;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.95));
+  }
+}
+
+.animate-fluid-a {
+  animation: fluidDriftA 16s ease-in-out infinite;
+}
+
+.animate-fluid-b {
+  animation: fluidDriftB 20s ease-in-out infinite;
+}
+
+.animate-sheen-pulse {
+  animation: fluidSheenPulse 3s ease-in-out infinite;
 }
 
 /* 兼容旧命名 */

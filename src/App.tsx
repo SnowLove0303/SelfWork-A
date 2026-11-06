@@ -66,7 +66,17 @@ export default function App(): React.JSX.Element {
   }, [refreshKernel]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none">
+    <div className="relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none">
+      {/* 底层动态流光发生器：在透明玻璃后方缓缓漂移折射 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        {/* 流光团 A：深冷海蓝与青羽流光 */}
+        <div className="absolute -top-[15%] left-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-sky-500/10 via-cyan-400/8 to-transparent blur-[100px] animate-fluid-a" />
+        {/* 流光团 B：珍珠冷白与微光雾霭 */}
+        <div className="absolute -bottom-[20%] right-[15%] w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-indigo-500/10 via-white/5 to-transparent blur-[120px] animate-fluid-b" />
+        {/* 顶部极细微环境冷光弧 */}
+        <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-sky-400/[0.03] to-transparent pointer-events-none" />
+      </div>
+
       {/* 侧边功能栏 */}
       <Sidebar
         activeModule={activeModule}
@@ -76,7 +86,7 @@ export default function App(): React.JSX.Element {
       />
 
       {/* 主内容工作区 */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         {/* 顶部状态感知栏 */}
         <Header
           activeModule={activeModule}

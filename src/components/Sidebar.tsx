@@ -62,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside
-      className={`relative flex flex-col bg-canvas-default/80 backdrop-blur-md border-r border-border-default transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
+      className={`relative z-10 flex flex-col bg-canvas-default/35 backdrop-blur-xl border-r border-border-default transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
@@ -86,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           type="button"
           onClick={onToggleCollapse}
           title="收起侧栏"
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-all duration-150 ${
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-colors duration-150 ${
             collapsed ? 'opacity-0 pointer-events-none scale-75' : 'opacity-100 scale-100'
           }`}
         >
@@ -94,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* 模块导航清单：图标绝对定宽，文字通过 max-width 与 opacity 柔性渐隐，彻底杜绝闪烁跳字 */}
+      {/* 模块导航清单：图标绝对定宽，文字通过 max-width 与 opacity 柔性渐隐，彻底杜绝闪烁跳字与按压抖动 */}
       <nav className="flex-1 space-y-1 p-1.5 overflow-y-auto overflow-x-hidden">
         {MODULES.map((mod) => {
           const isActive = activeModule === mod.id;
@@ -109,12 +109,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               } ${
                 isActive
                   ? 'tactile-btn-active text-fg-primary font-medium'
-                  : 'text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] border border-transparent hover:border-white/[0.06]'
+                  : 'text-fg-secondary hover:text-fg-primary hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08]'
               }`}
             >
-              {/* 激活指示光柱 */}
+              {/* 激活指示流光柱：微呼吸流光特效 */}
               {isActive && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-primary shadow-[0_0_8px_rgba(56,189,248,0.9)]" />
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-primary shadow-[0_0_10px_rgba(56,189,248,0.9)] animate-sheen-pulse" />
               )}
               
               {/* 图标容器：固定居中，绝不随文字移动 */}
@@ -124,9 +124,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {renderIcon(mod.iconName, 'h-3.5 w-3.5')}
               </div>
 
-              {/* 导航文字：通过 max-width 和 opacity 与 200ms 侧栏过渡绝对同步，绝无闪烁跳跃 */}
+              {/* 导航文字：像素绝对定帧稳定，点击绝对不抖动不晃眼 */}
               <span
-                className={`text-left text-[12px] whitespace-nowrap overflow-hidden transition-all duration-200 ease-in-out ${
+                className={`text-left text-[12px] whitespace-nowrap overflow-hidden transition-all duration-200 ease-in-out select-none ${
                   collapsed
                     ? 'opacity-0 max-w-0 pointer-events-none'
                     : 'opacity-100 max-w-[100px]'

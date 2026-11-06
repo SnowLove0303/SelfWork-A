@@ -2,6 +2,20 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.3] - 2026-11-06
+
+### Added & Fixed (高透明度晶体玻璃、动态流光特效与文字定帧零抖动)
+- **高透明度晶体玻璃 (High-Transparency Crystal Glass)**:
+  - 侧栏与顶栏底色不透明度由 70%~80% 深度下调至轻盈晶透的 35% (`rgba(12, 16, 26, 0.35)`)，结合 `backdrop-blur-xl` (24px) 硬件加速大范围高斯模糊，空间通透感倍增。
+- **灵动流光流动特效 (Fluid Ambient Sheen)**:
+  - 在 `App.tsx` 全屏底层注入 GPU 硬件加速的柔和流光发生器（深冷海蓝与珠光微雾流光团，`animate-fluid-a/b`），在半透明玻璃后方平缓漫射流淌；
+  - 激活项指示条注入呼吸流光光斑（`animate-sheen-pulse`），提升灵动质感。
+- **彻底根除点击时文字缩放抖动 (Zero-Jitter Stationary Typography)**:
+  - 彻底剔除 `.tactile-btn:active` 与 `.tactile-pill:active` 中的 `scale(0.975)` 与 `translateY(0.5px)` 物理形变；
+  - 交互触觉反馈 100% 转移至纯光学深度变化（表面光影收暗 + 内凹加深 `inset 0 1px 3px rgba(0,0,0,0.6)`），文字与图标像素绝对静止，彻底消除视觉疲劳与晃眼感。
+- **工程交付**:
+  - 重新编译 Release 版 `SelfWork.exe` (体积 3.8MB，免黑框启动)。
+
 ## [0.1.2] - 2026-11-06
 
 ### Added & Enhanced (黑灰白半透明磨砂毛玻璃与微物理触觉质感升级)
