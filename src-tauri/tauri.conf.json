@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "SelfWork 个人工作台",
         "width": 1280,
         "height": 840,

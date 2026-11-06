@@ -9,6 +9,7 @@ src-tauri/target/
 # Production / Bundles
 dist/
 build/
+*.exe
 
 # Local Environment & Secrets
 .env
