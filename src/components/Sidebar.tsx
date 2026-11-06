@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { ModuleId, ModuleItem } from '../types/workbench.ts';
+import appIcon from '../assets/app-icon.png';
 
 interface SidebarProps {
   activeModule: ModuleId;
@@ -30,30 +31,14 @@ export const MODULES: ModuleItem[] = [
 ];
 
 /**
- * 专业几何 S-W 连续能量拓扑 Logo (参考 Linear / Raycast 现代极简设计语言)
- * 将 S 的流向轨迹与 W 的双峰结构融合为单一单线折叠图腾
+ * 用户专属流体发光 S-W 品牌 Logo (已完成高精度白底抠图与超圆角适配)
  */
 export const BrandLogo: React.FC<{ size?: number; className?: string }> = ({ size = 22, className = '' }) => (
   <div
     style={{ width: size, height: size }}
-    className={`relative shrink-0 rounded-[5px] bg-gradient-to-b from-[#1b2537] to-[#0c121d] p-[2.5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),_0_1px_3px_rgba(0,0,0,0.6)] border border-white/[0.08] flex items-center justify-center transition-all ${className}`}
+    className={`relative shrink-0 overflow-hidden rounded-[5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),_0_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.08] flex items-center justify-center transition-all ${className}`}
   >
-    <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
-      <defs>
-        <linearGradient id="sw-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#38bdf8" />
-          <stop offset="100%" stopColor="#0284c7" />
-        </linearGradient>
-      </defs>
-      {/* 几何 S-W 一体化单线拓扑 */}
-      <path
-        d="M 18.5 5.5 H 8.5 C 6.5 5.5 5.2 6.8 5.2 8.5 C 5.2 10.2 6.5 11.2 8.5 11.2 H 14.5 C 15.5 11.2 16.2 11.8 15.8 12.8 L 13.8 18.5 L 11.2 13.5 L 8.8 18.5 L 6.5 14"
-        stroke="url(#sw-brand-grad)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <img src={appIcon} alt="SelfWork" className="h-full w-full object-cover select-none pointer-events-none" />
   </div>
 );
 
@@ -82,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域 (搭载高质感专业 BrandLogo) */}
+      {/* 顶部 Brand 区域 (装配抠好并高保真呈现的用户专属发光 Logo) */}
       <div className="flex h-11 items-center justify-between px-2.5 chiseled-border-b">
         <div className="flex items-center gap-2 overflow-hidden">
           <BrandLogo size={22} />
