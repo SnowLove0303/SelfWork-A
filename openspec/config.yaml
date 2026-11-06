@@ -1,0 +1,26 @@
+schema: spec-driven
+
+# Project context for OpenSpec
+context: |
+  Project: SelfWork - 个人多功能工作台 (Personal Multi-functional Workbench)
+  Core Architecture: Tauri v2 (Rust Native Core) + React 19 + TypeScript + Tailwind CSS
+  Architecture Philosophy: Micro-Kernel + Pluggable Capabilities (微内核 + 可插拔模块)
+  Governance: Ps-openspec (Lauren Tan 5-Layer Trust Pyramid + Spec-Driven Workflow)
+  Quality Rule: Zero Warnings, Zero Errors (--max-warnings=0)
+  Design Rule: Local-First, State Machine Explicitly Modeled, Modular Extensibility
+
+# Per-artifact rules
+rules:
+  proposal:
+    - Keep requirements mapped 1:1 with user raw inputs (1:1 RTM)
+    - Always include explicit causal attribution ([Root Source], [State Transition], [Consumer Sink])
+    - Always include Preserved Commitments (保持现状承诺清单)
+  specs:
+    - Strictly use RFC 2119 keywords (SHALL, SHALL NOT, SHOULD, MAY, WHEN, THEN)
+    - Emphasize explicit state machines and illegal state rejection
+  design:
+    - Include Mermaid sequence or statechart diagrams
+    - Differentiate core platform mechanics from pluggable feature policies
+  tasks:
+    - Single-focus lock discipline (at most one task in [-] state)
+    - Bind every task to a real, executable test/lint command with exit code 0 requirement
