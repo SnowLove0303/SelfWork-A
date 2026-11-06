@@ -67,24 +67,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域 (文案更新为 SW工作台) */}
-      <div className="flex h-11 items-center justify-between px-2.5 chiseled-border-b">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <BrandLogo size={22} />
-          {!collapsed && (
-            <span className="text-xs font-semibold text-fg-primary tracking-tight">
-              SW工作台
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          title={collapsed ? '展开侧栏' : '收起侧栏'}
-          className="flex h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all"
-        >
-          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
-        </button>
+      {/* 顶部 Brand 区域 (折叠时纯净居中，展开时两端对齐，彻底消除空间冲突) */}
+      <div className="flex h-11 items-center chiseled-border-b px-2">
+        {collapsed ? (
+          // 折叠状态：独占居中呈现 Logo，点击即可展开侧栏，绝不遮挡
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title="点击展开侧边栏"
+            className="flex w-full items-center justify-center rounded py-1 hover:bg-canvas-elevated/60 transition-colors group"
+          >
+            <BrandLogo size={24} className="group-hover:scale-105 transition-transform" />
+          </button>
+        ) : (
+          // 展开状态：Logo + 标题在左，收起按钮在右，各就其位
+          <div className="flex w-full items-center justify-between">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <BrandLogo size={22} />
+              <span className="text-xs font-semibold text-fg-primary tracking-tight">
+                SW工作台
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title="收起侧栏"
+              className="flex h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 模块导航清单 */}
@@ -98,6 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onSelectModule(mod.id)}
               title={collapsed ? mod.name : undefined}
               className={`group relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all duration-150 ${
+                collapsed ? 'justify-center' : ''
+              } ${
                 isActive
                   ? 'bg-canvas-elevated text-fg-primary font-medium border border-white/[0.08] chiseled-btn-active'
                   : 'text-fg-secondary hover:bg-canvas-elevated/40 hover:text-fg-primary border border-transparent hover:border-white/[0.04]'
@@ -117,6 +132,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </nav>
+
+      {/* 底部折叠/展开辅助切换区 (折叠状态下底部常驻居中展开按钮) */}
+      {collapsed && (
+        <div className="p-1.5 border-t border-border-subtle flex justify-center">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title="展开侧栏"
+            className="flex h-7 w-7 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </aside>
   );
 };
