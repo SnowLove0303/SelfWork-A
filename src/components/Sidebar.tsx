@@ -8,7 +8,6 @@ import {
   Bot,
   Settings,
   ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { ModuleId, ModuleItem } from '../types/workbench.ts';
 import appIcon from '../assets/app-icon.png';
@@ -67,42 +66,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域：折叠时上下垂直分层（上 Logo 绝不遮挡，下紧随展开按钮，原地可见） */}
-      {collapsed ? (
-        <div className="flex flex-col items-center justify-center chiseled-border-b py-2 gap-1.5 bg-canvas-default/60">
-          {/* 上层：独占居中发光 Logo，零遮挡 */}
-          <div className="flex items-center justify-center">
+      {/* 顶部 Brand 区域：折叠时纯净居中只放 Logo，绝无多余重复按钮；展开时右侧提供收起按钮 */}
+      <div className="flex h-11 items-center chiseled-border-b px-2.5">
+        {collapsed ? (
+          // 折叠状态：独占居中展示发光 Logo，纯净大气
+          <div className="flex w-full items-center justify-center">
             <BrandLogo size={24} />
           </div>
-          {/* 下层：紧邻就位的展开切换按钮，视线零迷失 */}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            title="展开侧边栏"
-            className="flex h-5 w-8 items-center justify-center rounded border border-white/[0.08] bg-canvas-elevated text-fg-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.06),_0_1px_2px_rgba(0,0,0,0.4)] hover:text-fg-primary hover:border-brand-primary/50 hover:bg-canvas-elevated/90 transition-all"
-          >
-            <ChevronRight className="h-3 w-3" />
-          </button>
-        </div>
-      ) : (
-        /* 展开状态：Logo 与标题居左，收起按钮居右，齐平优雅 */
-        <div className="flex h-11 items-center justify-between px-2.5 chiseled-border-b">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <BrandLogo size={22} />
-            <span className="text-xs font-semibold text-fg-primary tracking-tight">
-              SW工作台
-            </span>
+        ) : (
+          // 展开状态：Logo + 标题居左，收起按键居右
+          <div className="flex w-full items-center justify-between">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <BrandLogo size={22} />
+              <span className="text-xs font-semibold text-fg-primary tracking-tight">
+                SW工作台
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title="收起侧栏"
+              className="flex h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            title="收起侧栏"
-            className="flex h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all"
-          >
-            <ChevronLeft className="h-3 w-3" />
-          </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 模块导航清单 */}
       <nav className="flex-1 space-y-1 p-1.5 overflow-y-auto">
