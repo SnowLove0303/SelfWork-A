@@ -16,14 +16,14 @@
   - 编写 `src-tauri/src/main.rs` 与 `src-tauri/src/lib.rs` (实现强类型 `ping` 指令)
   - 验证命令: `cargo check --manifest-path src-tauri/Cargo.toml` 真实退出码 0
 
-- [-] Task 4: 构建符合 Anti-AI-Slop 的工作台主界面与模块插槽 [Consumer Sink]
+- [x] Task 4: 构建符合 Anti-AI-Slop 的工作台主界面与模块插槽 [Consumer Sink]
   - 编写 `src/components/Sidebar.tsx` (折叠导航栏，挂载启动器/待办/笔记/脑图/MCP/AI插槽)
   - 编写 `src/components/Header.tsx` (状态指示灯、微内核心跳探测)
   - 编写 `src/components/SlotContainer.tsx` (极简模块容器，支持各候选模块待命状态)
   - 编写 `src/App.tsx` 与入口渲染
   - 验证命令: `pnpm build` (零告警零错误退出码 0)
 
-- [ ] Task 5: 全链路联调、触觉检阅与 GitHub 同步 [Milestone Archive]
+- [x] Task 5: 全链路联调、触觉检阅与 GitHub 同步 [Milestone Archive]
   - 全量机检与类型验证
   - 提交 Git Commit 并推送到 GitHub 远程仓库 `SnowLove0303/SelfWork-A`
   - 验证命令: `git status && git log -1`
