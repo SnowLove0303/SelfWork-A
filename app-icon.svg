@@ -1,24 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
+    <!-- 深邃曜石底座渐变 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#182337"/>
+      <stop offset="60%" stop-color="#0c121e"/>
+      <stop offset="100%" stop-color="#060910"/>
+    </linearGradient>
+
+    <!-- 极光青蓝高精度矢量渐变 -->
+    <linearGradient id="swNeonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#0ea5e9"/>
       <stop offset="100%" stop-color="#0284c7"/>
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.4"/>
+
+    <!-- 柔和背部环境光晕 -->
+    <filter id="swGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- 边缘投影 -->
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="24" stdDeviation="32" flood-color="#000000" flood-opacity="0.6"/>
     </filter>
   </defs>
 
-  <!-- Background rounded rect -->
-  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg)" filter="url(#shadow)"/>
-  <rect x="32" y="32" width="448" height="448" rx="112" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="4"/>
+  <!-- Squircle Base Frame -->
+  <rect x="36" y="36" width="440" height="440" rx="116" fill="url(#bgGrad)" filter="url(#cardShadow)"/>
+  
+  <!-- 微倒角顶部 1px 反光线与内边框 -->
+  <rect x="36" y="36" width="440" height="440" rx="116" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+  <rect x="38" y="38" width="436" height="436" rx="114" fill="none" stroke="rgba(0,0,0,0.5)" stroke-width="2"/>
 
-  <!-- Geometric Monogram for SelfWork (S + Workbench Layers) -->
-  <g fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Top layer curve -->
-    <path d="M 336 176 L 224 176 C 188 176 160 204 160 240 C 160 276 188 296 224 296 L 288 296 C 324 296 352 316 352 352 C 352 388 324 416 288 416 L 176 416" stroke-width="36"/>
-    <!-- Center energy spark -->
-    <circle cx="336" cy="176" r="14" fill="#38bdf8" stroke="none"/>
-    <circle cx="176" cy="416" r="14" fill="#38bdf8" stroke="none"/>
+  <!-- S-W Monogram 连续几何能量图腾 -->
+  <g filter="url(#swGlow)">
+    <path
+      d="M 380 128 H 192 C 148 128 120 156 120 196 C 120 236 148 260 192 260 H 304 C 324 260 338 274 330 296 L 286 416 L 232 308 L 180 416 L 132 320"
+      fill="none"
+      stroke="url(#swNeonGrad)"
+      stroke-width="44"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
   </g>
+
+  <!-- 顶点微聚光点 (提升视觉焦点灵气) -->
+  <circle cx="380" cy="128" r="10" fill="#ffffff" opacity="0.9"/>
+  <circle cx="132" cy="320" r="8" fill="#38bdf8" opacity="0.8"/>
 </svg>

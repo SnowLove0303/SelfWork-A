@@ -29,6 +29,34 @@ export const MODULES: ModuleItem[] = [
   { id: 'settings', name: '设置', shortDesc: '工作台设置', iconName: 'Settings', category: 'system' },
 ];
 
+/**
+ * 专业几何 S-W 连续能量拓扑 Logo (参考 Linear / Raycast 现代极简设计语言)
+ * 将 S 的流向轨迹与 W 的双峰结构融合为单一单线折叠图腾
+ */
+export const BrandLogo: React.FC<{ size?: number; className?: string }> = ({ size = 22, className = '' }) => (
+  <div
+    style={{ width: size, height: size }}
+    className={`relative shrink-0 rounded-[5px] bg-gradient-to-b from-[#1b2537] to-[#0c121d] p-[2.5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),_0_1px_3px_rgba(0,0,0,0.6)] border border-white/[0.08] flex items-center justify-center transition-all ${className}`}
+  >
+    <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+      <defs>
+        <linearGradient id="sw-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#0284c7" />
+        </linearGradient>
+      </defs>
+      {/* 几何 S-W 一体化单线拓扑 */}
+      <path
+        d="M 18.5 5.5 H 8.5 C 6.5 5.5 5.2 6.8 5.2 8.5 C 5.2 10.2 6.5 11.2 8.5 11.2 H 14.5 C 15.5 11.2 16.2 11.8 15.8 12.8 L 13.8 18.5 L 11.2 13.5 L 8.8 18.5 L 6.5 14"
+        stroke="url(#sw-brand-grad)"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </div>
+);
+
 const renderIcon = (name: string, className: string): React.JSX.Element => {
   switch (name) {
     case 'Rocket': return <Rocket className={className} />;
@@ -54,14 +82,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域 (立体切削底线) */}
+      {/* 顶部 Brand 区域 (搭载高质感专业 BrandLogo) */}
       <div className="flex h-11 items-center justify-between px-2.5 chiseled-border-b">
-        <div className="flex items-center gap-1.5 overflow-hidden">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-brand-primary text-white font-bold font-mono text-[11px] shadow-[inset_0_1px_0_rgba(255,255,255,0.3),_0_1px_3px_rgba(0,0,0,0.5)]">
-            SW
-          </div>
+        <div className="flex items-center gap-2 overflow-hidden">
+          <BrandLogo size={22} />
           {!collapsed && (
-            <span className="text-xs font-semibold text-fg-primary tracking-tight">
+            <span className="text-xs font-semibold text-fg-primary tracking-tight font-mono">
               SelfWork
             </span>
           )}
@@ -76,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* 模块导航清单 (立体按钮凹凸质感) */}
+      {/* 模块导航清单 */}
       <nav className="flex-1 space-y-1 p-1.5 overflow-y-auto">
         {MODULES.map((mod) => {
           const isActive = activeModule === mod.id;
