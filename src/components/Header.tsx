@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   const currentMod = MODULES.find((m) => m.id === activeModule) || MODULES[0];
 
   return (
-    <header className="flex h-11 w-full items-center justify-between bg-canvas-default chiseled-border-b px-4 select-none">
+    <header className="flex h-11 w-full items-center justify-between bg-canvas-default border-b border-border-default px-4 select-none box-border">
       <div className="flex items-center gap-2.5">
         {/* 当侧栏折叠时，顶栏左侧显式提供快捷展开按钮 */}
         {sidebarCollapsed && onToggleSidebar && (

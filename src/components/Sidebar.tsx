@@ -62,12 +62,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside
-      className={`relative flex flex-col bg-canvas-default chiseled-border-r transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
+      className={`relative flex flex-col bg-canvas-default border-r border-border-default transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡 */}
-      <div className="flex h-11 items-center chiseled-border-b px-2.5 overflow-hidden">
+      {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡，严格基准高度 h-11 与单边框规范 */}
+      <div className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <BrandLogo size={22} className="shrink-0" />
           <span
