@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 :root {
-  /* 基础暗色工业画布 (默认深色专业极客风格) */
-  --color-canvas-subtle: #090d16;
-  --color-canvas-default: #0f172a;
-  --color-canvas-elevated: #1e293b;
+  /* 基础暗色工业画布 (带层次梯度的深色基调) */
+  --color-canvas-subtle: #080b11;
+  --color-canvas-default: #0d121c;
+  --color-canvas-elevated: #151c2a;
 
   /* 文字对比度 (WCAG 2.2 AA 严格达标) */
   --color-fg-primary: #f8fafc;
@@ -18,10 +18,11 @@
   --color-brand-hover: #0369a1;
   --color-brand-subtle: rgba(2, 132, 199, 0.15);
 
-  /* 边框与分割 */
+  /* 立体切削边框色阶 (阴阳线条) */
   --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-default: rgba(255, 255, 255, 0.12);
-  --color-border-emphasis: rgba(255, 255, 255, 0.2);
+  --color-border-default: rgba(255, 255, 255, 0.1);
+  --color-border-emphasis: rgba(255, 255, 255, 0.18);
+  --color-border-dark: rgba(0, 0, 0, 0.45);
 }
 
 body {
@@ -35,18 +36,43 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 工业级立体感线条与微浮雕切削 */
+.chiseled-border-r {
+  border-right: 1px solid var(--color-border-dark);
+  box-shadow: 1px 0 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.chiseled-border-b {
+  border-bottom: 1px solid var(--color-border-dark);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.chiseled-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px 0 rgba(0, 0, 0, 0.4),
+    0 4px 16px -2px rgba(0, 0, 0, 0.5);
+}
+
+.chiseled-btn-active {
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
 /* 滚动条极简处理 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.22);
 }
