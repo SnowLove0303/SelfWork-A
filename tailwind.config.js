@@ -36,18 +36,17 @@ export default {
       },
       fontFamily: {
         sans: [
-          'Inter',
+          '"Microsoft YaHei"',
+          '微软雅黑',
           '-apple-system',
           'BlinkMacSystemFont',
           '"Segoe UI"',
-          'Roboto',
           'sans-serif'
         ],
         mono: [
           '"JetBrains Mono"',
+          '"Microsoft YaHei"',
           'ui-monospace',
-          'SFMono-Regular',
-          'Menlo',
           'monospace'
         ]
       }

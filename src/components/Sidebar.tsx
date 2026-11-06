@@ -31,14 +31,14 @@ export const MODULES: ModuleItem[] = [
 ];
 
 /**
- * 用户专属流体发光 S-W 品牌 Logo (已完成高精度白底抠图与超圆角适配)
+ * 用户专属流体发光 S-W 品牌 Logo
  */
 export const BrandLogo: React.FC<{ size?: number; className?: string }> = ({ size = 22, className = '' }) => (
   <div
     style={{ width: size, height: size }}
     className={`relative shrink-0 overflow-hidden rounded-[5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),_0_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.08] flex items-center justify-center transition-all ${className}`}
   >
-    <img src={appIcon} alt="SelfWork" className="h-full w-full object-cover select-none pointer-events-none" />
+    <img src={appIcon} alt="SW工作台" className="h-full w-full object-cover select-none pointer-events-none" />
   </div>
 );
 
@@ -67,13 +67,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域 (装配抠好并高保真呈现的用户专属发光 Logo) */}
+      {/* 顶部 Brand 区域 (文案更新为 SW工作台) */}
       <div className="flex h-11 items-center justify-between px-2.5 chiseled-border-b">
         <div className="flex items-center gap-2 overflow-hidden">
           <BrandLogo size={22} />
           {!collapsed && (
-            <span className="text-xs font-semibold text-fg-primary tracking-tight font-mono">
-              SelfWork
+            <span className="text-xs font-semibold text-fg-primary tracking-tight">
+              SW工作台
             </span>
           )}
         </div>
