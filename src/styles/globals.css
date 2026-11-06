@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* 基础暗色工业画布 (默认深色专业极客风格) */
+  --color-canvas-subtle: #090d16;
+  --color-canvas-default: #0f172a;
+  --color-canvas-elevated: #1e293b;
+
+  /* 文字对比度 (WCAG 2.2 AA 严格达标) */
+  --color-fg-primary: #f8fafc;
+  --color-fg-secondary: #94a3b8;
+  --color-fg-muted: #64748b;
+
+  /* 专业克制品牌蓝 */
+  --color-brand-primary: #0284c7;
+  --color-brand-hover: #0369a1;
+  --color-brand-subtle: rgba(2, 132, 199, 0.15);
+
+  /* 边框与分割 */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-default: rgba(255, 255, 255, 0.12);
+  --color-border-emphasis: rgba(255, 255, 255, 0.2);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-canvas-subtle);
+  color: var(--color-fg-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 滚动条极简处理 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
