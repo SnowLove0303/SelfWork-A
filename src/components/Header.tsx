@@ -21,15 +21,15 @@ export const Header: React.FC<HeaderProps> = ({
   const currentMod = MODULES.find((m) => m.id === activeModule) || MODULES[0];
 
   return (
-    <header className="flex h-11 w-full items-center justify-between bg-canvas-default border-b border-border-default px-4 select-none box-border">
+    <header className="flex h-11 w-full items-center justify-between bg-canvas-default/80 backdrop-blur-md border-b border-border-default px-4 select-none box-border">
       <div className="flex items-center gap-2.5">
-        {/* 当侧栏折叠时，顶栏左侧显式提供快捷展开按钮 */}
+        {/* 当侧栏折叠时，顶栏左侧显式提供快捷展开按钮：毛玻璃方块与微触觉下压 */}
         {sidebarCollapsed && onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
             title="展开侧边栏"
-            className="flex h-6 w-6 items-center justify-center rounded border border-white/[0.08] bg-canvas-elevated/70 text-fg-muted hover:text-fg-primary hover:border-brand-primary/50 transition-all mr-1"
+            className="flex h-6 w-6 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/[0.16] text-fg-muted hover:text-fg-primary tactile-btn transition-all mr-1"
           >
             <PanelLeft className="h-3.5 w-3.5" />
           </button>
@@ -40,19 +40,20 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-3">
+        {/* 状态探测胶囊：微触觉毛玻璃胶囊 */}
         <button
           type="button"
           onClick={onRefreshKernel}
           title="点击重新探测连接状态"
-          className="flex items-center gap-1.5 rounded-md border border-white/[0.06] bg-canvas-elevated/80 px-2 py-0.5 text-[11px] font-mono text-fg-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.08),_0_1px_2px_rgba(0,0,0,0.3)] hover:text-fg-secondary hover:border-white/[0.12] active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] transition-all"
+          className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/[0.16] px-2.5 py-0.5 text-[11px] font-mono text-fg-muted hover:text-fg-secondary tactile-pill"
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
+            className={`h-1.5 w-1.5 rounded-full transition-colors ${
               kernelStatus.status === 'ready'
-                ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]'
+                ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
                 : kernelStatus.status === 'fallback_web'
-                ? 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)]'
-                : 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]'
+                ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                : 'bg-rose-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]'
             }`}
           />
           <span>{kernelStatus.status === 'ready' ? 'Desktop' : 'Web Preview'}</span>

@@ -62,12 +62,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside
-      className={`relative flex flex-col bg-canvas-default border-r border-border-default transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
+      className={`relative flex flex-col bg-canvas-default/80 backdrop-blur-md border-r border-border-default transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
       {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡，严格基准高度 h-11 与单边框规范 */}
-      <div className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border">
+      <div className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border bg-transparent">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <BrandLogo size={22} className="shrink-0" />
           <span
@@ -81,12 +81,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </div>
         
-        {/* 展开状态下的收起按钮：平滑淡隐淡出 */}
+        {/* 展开状态下的收起按钮：触觉微交互与毛玻璃微反光 */}
         <button
           type="button"
           onClick={onToggleCollapse}
           title="收起侧栏"
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-canvas-elevated hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-150 ${
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-all duration-150 ${
             collapsed ? 'opacity-0 pointer-events-none scale-75' : 'opacity-100 scale-100'
           }`}
         >
@@ -104,17 +104,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={() => onSelectModule(mod.id)}
               title={collapsed ? mod.name : undefined}
-              className={`group relative flex w-full items-center rounded-md px-2 py-1.5 text-xs transition-all duration-150 overflow-hidden ${
+              className={`group relative flex w-full items-center rounded-md px-2 py-1.5 text-xs tactile-btn overflow-hidden ${
                 collapsed ? 'justify-center gap-0' : 'gap-2'
               } ${
                 isActive
-                  ? 'bg-canvas-elevated text-fg-primary font-medium border border-white/[0.08] chiseled-btn-active'
-                  : 'text-fg-secondary hover:bg-canvas-elevated/40 hover:text-fg-primary border border-transparent hover:border-white/[0.04]'
+                  ? 'tactile-btn-active text-fg-primary font-medium'
+                  : 'text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] border border-transparent hover:border-white/[0.06]'
               }`}
             >
-              {/* 激活指示线 */}
+              {/* 激活指示光柱 */}
               {isActive && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-primary shadow-[0_0_6px_rgba(2,132,199,0.8)]" />
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-primary shadow-[0_0_8px_rgba(56,189,248,0.9)]" />
               )}
               
               {/* 图标容器：固定居中，绝不随文字移动 */}

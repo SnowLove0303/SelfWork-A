@@ -3,25 +3,25 @@
 @tailwind utilities;
 
 :root {
-  /* 基础暗色工业画布 (带层次梯度的深色基调) */
+  /* 基础暗色工业画布 (带层次梯度的黑灰白基调) */
   --color-canvas-subtle: #080b11;
-  --color-canvas-default: #0d121c;
-  --color-canvas-elevated: #151c2a;
+  --color-canvas-default: rgba(13, 18, 28, 0.72);
+  --color-canvas-elevated: rgba(22, 28, 42, 0.75);
 
   /* 文字对比度 (WCAG 2.2 AA 严格达标) */
   --color-fg-primary: #f8fafc;
   --color-fg-secondary: #94a3b8;
   --color-fg-muted: #64748b;
 
-  /* 专业克制品牌蓝 */
-  --color-brand-primary: #0284c7;
-  --color-brand-hover: #0369a1;
-  --color-brand-subtle: rgba(2, 132, 199, 0.15);
+  /* 专业克制品牌中性冷蓝与黑灰白 */
+  --color-brand-primary: #38bdf8;
+  --color-brand-hover: #0ea5e9;
+  --color-brand-subtle: rgba(56, 189, 248, 0.12);
 
-  /* 统一边框色阶 (精准 1px 工业级细线，杜绝粗细不均与多发色混杂) */
+  /* 统一边框色阶 (精准 1px 细线) */
   --color-border-subtle: rgba(255, 255, 255, 0.05);
   --color-border-default: rgba(255, 255, 255, 0.08);
-  --color-border-emphasis: rgba(255, 255, 255, 0.15);
+  --color-border-emphasis: rgba(255, 255, 255, 0.16);
   --color-border-dark: rgba(0, 0, 0, 0.45);
 }
 
@@ -29,6 +29,9 @@ body {
   margin: 0;
   padding: 0;
   background-color: var(--color-canvas-subtle);
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.04), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 20% 110%, rgba(255, 255, 255, 0.02), transparent 70%);
   color: var(--color-fg-primary);
   font-family: 'Microsoft YaHei', '微软雅黑', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   user-select: none;
@@ -36,7 +39,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 统一单边框类：纯净 1px 实线，剔除导致交界处光斑重影的 box-shadow */
+/* 统一单边框类：纯净 1px 实线，绝不附加破坏正交交界的外部投影 */
 .chiseled-border-r,
 .hairline-border-r {
   border-right: 1px solid var(--color-border-default);
@@ -47,20 +50,90 @@ body {
   border-bottom: 1px solid var(--color-border-default);
 }
 
+/* 磨砂玻璃态容器 (Glassmorphism Acrylic Panels) */
+.glass-panel {
+  background-color: var(--color-canvas-default);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-card {
+  background-color: rgba(14, 19, 30, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border-default);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+    0 4px 20px -2px rgba(0, 0, 0, 0.5);
+}
+
+/* 触觉微物理交互按钮 (Tactile Button Mechanics) */
+.tactile-btn {
+  position: relative;
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+.tactile-btn:hover {
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+    0 2px 8px 0 rgba(0, 0, 0, 0.3);
+  transform: translateY(-0.5px);
+}
+
+.tactile-btn:active {
+  transform: scale(0.975) translateY(0.5px);
+  box-shadow: 
+    inset 0 1px 2px 0 rgba(0, 0, 0, 0.5),
+    0 0 0 0 transparent;
+}
+
+/* 激活选中态按钮：悬浮亚克力实体感 */
+.tactile-btn-active {
+  background-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
+    0 2px 8px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* 触觉微物理状态胶囊 */
+.tactile-pill {
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+    0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.tactile-pill:hover {
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
+    0 2px 6px 0 rgba(0, 0, 0, 0.45);
+}
+
+.tactile-pill:active {
+  transform: scale(0.97);
+  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* 兼容旧命名 */
 .chiseled-card {
   border: 1px solid var(--color-border-default);
   box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
     0 1px 2px 0 rgba(0, 0, 0, 0.3),
     0 4px 16px -2px rgba(0, 0, 0, 0.4);
 }
 
 .chiseled-btn-active {
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
     0 1px 2px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* 滚动条极简处理 */
+/* 滚动条极简磨砂处理 */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;

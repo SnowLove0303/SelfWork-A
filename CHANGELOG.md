@@ -2,6 +2,21 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.2] - 2026-11-06
+
+### Added & Enhanced (黑灰白半透明磨砂毛玻璃与微物理触觉质感升级)
+- **黑灰白极简工业调色板 (Radical Monochrome)**:
+  - 收敛主色调为深冷黑微底 (`#080b11`)、半透明深灰 (`rgba(13, 18, 28, 0.72)`) 与阶梯白，文字对比度严格达标 WCAG 2.2 AA。
+- **亚克力磨砂玻璃材质 (Frosted Glass / Glassmorphism)**:
+  - 侧边栏与顶部状态栏应用 `backdrop-blur-md` 结合 80% 半透明面板底色，呈现通透空气感与景深穿透；
+  - 主舞台画板升级为 `backdrop-blur-xl` 悬浮亚克力实体，配合微弱环境冷光漫射，营造深邃空间层级。
+- **按钮微物理触觉交互 (Tactile Button Mechanics)**:
+  - 为侧栏导航按钮、折叠展开按钮及状态探测胶囊引入顶部内切高光 (`inset 0 1px 0 rgba(255, 255, 255, 0.12)`)；
+  - 注入 `hover` 微光提亮与 `active:scale-[0.975]` 机械微下压反馈，手感清脆灵敏；
+  - 激活项采用微透高光亚克力实体板效果 (`tactile-btn-active`)。
+- **工程资产与发布**:
+  - 重新编译 Release 版 `SelfWork.exe` (体积约 3.8MB，免黑框控制台启动)。
+
 ## [0.1.1] - 2026-11-06
 
 ### Fixed & Optimized (布局边界与分割线无缝咬合重构)
