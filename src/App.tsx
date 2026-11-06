@@ -8,7 +8,6 @@ import { ModuleId, WorkbenchKernelStatus } from './types/workbench.ts';
 async function pingTauriKernel(): Promise<WorkbenchKernelStatus> {
   const t0 = performance.now();
   try {
-    // 动态引用 @tauri-apps/api，避免非 Tauri 环境抛异常
     const { invoke } = await import('@tauri-apps/api/core');
     const res = await invoke<{
       status: string;
@@ -28,7 +27,6 @@ async function pingTauriKernel(): Promise<WorkbenchKernelStatus> {
       serverTime: res.server_time_ms,
     };
   } catch (_err) {
-    // 优雅降级为 Web Preview 模式
     const latency = Math.round(performance.now() - t0);
     return {
       status: 'fallback_web',
@@ -57,9 +55,12 @@ export default function App(): React.JSX.Element {
     pingTauriKernel().then(setKernelStatus);
   }, []);
 
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
   useEffect(() => {
     refreshKernel();
-    // 每 15 秒轻量探测一次心跳
     const timer = setInterval(refreshKernel, 15000);
     return () => clearInterval(timer);
   }, [refreshKernel]);
@@ -71,7 +72,7 @@ export default function App(): React.JSX.Element {
         activeModule={activeModule}
         onSelectModule={setActiveModule}
         collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggleCollapse={toggleSidebar}
       />
 
       {/* 主内容工作区 */}
@@ -81,6 +82,8 @@ export default function App(): React.JSX.Element {
           activeModule={activeModule}
           kernelStatus={kernelStatus}
           onRefreshKernel={refreshKernel}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
         />
 
         {/* 模块插槽画布 */}

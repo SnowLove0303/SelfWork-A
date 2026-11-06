@@ -1,4 +1,5 @@
 import React from 'react';
+import { PanelLeft } from 'lucide-react';
 import { ModuleId, WorkbenchKernelStatus } from '../types/workbench.ts';
 import { MODULES } from './Sidebar.tsx';
 
@@ -6,18 +7,33 @@ interface HeaderProps {
   activeModule: ModuleId;
   kernelStatus: WorkbenchKernelStatus;
   onRefreshKernel: () => void;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeModule,
   kernelStatus,
   onRefreshKernel,
+  sidebarCollapsed,
+  onToggleSidebar,
 }) => {
   const currentMod = MODULES.find((m) => m.id === activeModule) || MODULES[0];
 
   return (
     <header className="flex h-11 w-full items-center justify-between bg-canvas-default chiseled-border-b px-4 select-none">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
+        {/* 当侧栏折叠时，顶栏左侧显式提供快捷展开按钮 */}
+        {sidebarCollapsed && onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            title="展开侧边栏"
+            className="flex h-6 w-6 items-center justify-center rounded border border-white/[0.08] bg-canvas-elevated/70 text-fg-muted hover:text-fg-primary hover:border-brand-primary/50 transition-all mr-1"
+          >
+            <PanelLeft className="h-3.5 w-3.5" />
+          </button>
+        )}
         <h1 className="text-xs font-semibold text-fg-primary tracking-tight">
           {currentMod.name}
         </h1>
