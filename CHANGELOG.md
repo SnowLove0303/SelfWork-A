@@ -2,6 +2,19 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.4] - 2026-11-09
+
+### Added & Fixed (设置中心「外观与背景」首发上线 & 彻底修复离线单文件 EXE 静态封包)
+- **彻底根治“localhost 拒绝连接”问题 (Offline Embedded Assets)**:
+  - *根因*：此前直接使用 `cargo build --release` 编译，未通过 Tauri CLI 注入生产静态资产映射，导致二进制内部残留 `devUrl: http://localhost:1420`，脱离本地 Node 服务时弹出连接失败；
+  - *解决*：规范使用 `pnpm tauri build --no-bundle` 官方标准封包命令，将全部前端 HTML/CSS/JS/图标**100% 静态内嵌（Embedded Assets）进单个 `SelfWork.exe` 文件内部**，彻底脱离对本地 Node 服务的依赖，实现随时双击均可 100% 离线秒开。
+- **自定义背景与设置中心「外观与背景」子模块上线**:
+  - **双模背景作用域切换**：支持“全视口贯穿 (`window`)”与“仅主工作台画板 (`stage`)”即时平滑切换；
+  - **多样化背景源**：支持“系统预设流光 (`fluid`)”、“本地图片上传 (FileReader Base64 离线安全存储)”与“网络图片直链 (`image_url`)”；
+  - **高精光学滑块控制器**：定制开发极简亚克力磨砂滑动条（画板透光度 0%~100%、高斯磨砂模糊 0px~40px、深色防眩遮罩暗度 0%~80%）；
+  - **实时响应与状态持久化**：滑动即时零延迟生效，自动同步落盘至 `localStorage`，重启程序自动完美还原；
+  - **可扩展二级设置导航骨架**：设置视图内置左侧二级分类栏（首发“外观与背景”，预留“通用设置”、“快捷键”、“关于”）。
+
 ## [0.1.3] - 2026-11-06
 
 ### Added & Fixed (高透明度晶体玻璃、动态流光特效与文字定帧零抖动)

@@ -3,6 +3,10 @@ import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
 import { SlotContainer } from './components/SlotContainer.tsx';
 import { ModuleId, WorkbenchKernelStatus } from './types/workbench.ts';
+import {
+  AppearanceSettings,
+  DEFAULT_APPEARANCE_SETTINGS,
+} from './types/settings.ts';
 
 // 动态兼容 Tauri 与 Web 预览环境
 async function pingTauriKernel(): Promise<WorkbenchKernelStatus> {
@@ -51,6 +55,47 @@ export default function App(): React.JSX.Element {
     serverTime: 0,
   });
 
+  // 外观与背景设置：初始化尝试从本地缓存水合恢复
+  const [appearanceSettings, setAppearanceSettings] =
+    useState<AppearanceSettings>(() => {
+      try {
+        const saved = localStorage.getItem('selfwork_appearance_settings');
+        if (saved) {
+          return { ...DEFAULT_APPEARANCE_SETTINGS, ...JSON.parse(saved) };
+        }
+      } catch (_e) {
+        // 本地读取异常则降级为默认值
+      }
+      return DEFAULT_APPEARANCE_SETTINGS;
+    });
+
+  const updateAppearanceSettings = useCallback(
+    (newSettings: AppearanceSettings) => {
+      setAppearanceSettings(newSettings);
+      try {
+        localStorage.setItem(
+          'selfwork_appearance_settings',
+          JSON.stringify(newSettings),
+        );
+      } catch (_e) {
+        // ignore
+      }
+    },
+    [],
+  );
+
+  const resetAppearanceSettings = useCallback(() => {
+    setAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS);
+    try {
+      localStorage.setItem(
+        'selfwork_appearance_settings',
+        JSON.stringify(DEFAULT_APPEARANCE_SETTINGS),
+      );
+    } catch (_e) {
+      // ignore
+    }
+  }, []);
+
   const refreshKernel = useCallback(() => {
     pingTauriKernel().then(setKernelStatus);
   }, []);
@@ -67,15 +112,31 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none">
-      {/* 底层动态流光发生器：在透明玻璃后方缓缓漂移折射 */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        {/* 流光团 A：深冷海蓝与青羽流光 */}
-        <div className="absolute -top-[15%] left-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-sky-500/10 via-cyan-400/8 to-transparent blur-[100px] animate-fluid-a" />
-        {/* 流光团 B：珍珠冷白与微光雾霭 */}
-        <div className="absolute -bottom-[20%] right-[15%] w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-indigo-500/10 via-white/5 to-transparent blur-[120px] animate-fluid-b" />
-        {/* 顶部极细微环境冷光弧 */}
-        <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-sky-400/[0.03] to-transparent pointer-events-none" />
-      </div>
+      {/* 当 scope === 'window' 且有自定义壁纸时，在根视口渲染底层全景壁纸与防眩遮罩 */}
+      {appearanceSettings.scope === 'window' &&
+      appearanceSettings.type !== 'fluid' &&
+      appearanceSettings.imageUrl ? (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          <img
+            src={appearanceSettings.imageUrl}
+            alt="全视口背景"
+            className="h-full w-full object-cover"
+          />
+          <div
+            style={{
+              backgroundColor: `rgba(0, 0, 0, ${appearanceSettings.overlayDarkness})`,
+            }}
+            className="absolute inset-0 transition-colors duration-150"
+          />
+        </div>
+      ) : (
+        /* 底层动态流光发生器：在透明玻璃后方缓缓漂移折射 */
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          <div className="absolute -top-[15%] left-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-sky-500/10 via-cyan-400/8 to-transparent blur-[100px] animate-fluid-a" />
+          <div className="absolute -bottom-[20%] right-[15%] w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-indigo-500/10 via-white/5 to-transparent blur-[120px] animate-fluid-b" />
+          <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-sky-400/[0.03] to-transparent pointer-events-none" />
+        </div>
+      )}
 
       {/* 侧边功能栏 */}
       <Sidebar
@@ -97,7 +158,12 @@ export default function App(): React.JSX.Element {
         />
 
         {/* 模块插槽画布 */}
-        <SlotContainer activeModule={activeModule} />
+        <SlotContainer
+          activeModule={activeModule}
+          settings={appearanceSettings}
+          onUpdateSettings={updateAppearanceSettings}
+          onResetSettings={resetAppearanceSettings}
+        />
       </div>
     </div>
   );

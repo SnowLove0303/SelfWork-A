@@ -188,3 +188,121 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.22);
 }
+
+/* ==========================================================================
+   高透亚克力极简滑动条 (Acrylic Range Slider)
+   ========================================================================== */
+.glass-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+
+.glass-slider:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.glass-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #f8fafc;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    0 1px 4px rgba(0, 0, 0, 0.6),
+    0 0 8px rgba(56, 189, 248, 0.35);
+  cursor: pointer;
+  transition: transform 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.glass-slider::-webkit-slider-thumb:hover {
+  background: #ffffff;
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(56, 189, 248, 0.6);
+}
+
+.glass-slider::-webkit-slider-thumb:active {
+  background: #38bdf8;
+  border-color: #ffffff;
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.8),
+    0 0 14px rgba(56, 189, 248, 0.9);
+}
+
+.glass-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #f8fafc;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    0 1px 4px rgba(0, 0, 0, 0.6),
+    0 0 8px rgba(56, 189, 248, 0.35);
+  cursor: pointer;
+  transition: transform 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.glass-slider::-moz-range-thumb:hover {
+  background: #ffffff;
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(56, 189, 248, 0.6);
+}
+
+.glass-slider::-moz-range-thumb:active {
+  background: #38bdf8;
+  border-color: #ffffff;
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.8),
+    0 0 14px rgba(56, 189, 248, 0.9);
+}
+
+/* 分段选择器控件 (Segmented Control Pill Container) */
+.glass-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.glass-segmented-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-fg-muted);
+  border-radius: 6px;
+  transition: color 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out;
+  cursor: pointer;
+  user-select: none;
+}
+
+.glass-segmented-item:hover {
+  color: var(--color-fg-secondary);
+}
+
+.glass-segmented-item-active {
+  color: var(--color-fg-primary) !important;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+}
