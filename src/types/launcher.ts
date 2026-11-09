@@ -10,8 +10,21 @@ export interface ServiceItemConfig {
   commandTarget: string; // e.g. "apps", "dsh", "msds"
   port?: number;
   url?: string;
+  processNames?: string[]; // e.g. ['weixin.exe', 'wechat.exe']
+  pids?: number[]; // Detected active PIDs
   status: ServiceStatus;
   iconName?: string;
+}
+
+export interface HealthInspectionPayload {
+  ports: number[];
+  process_names: string[];
+}
+
+export interface SystemHealthSnapshot {
+  ports: Record<number, boolean>;
+  processes: Record<string, number[]>; // lowercase_name -> [PIDs]
+  duration_ms: number;
 }
 
 export interface ClusterConfig {

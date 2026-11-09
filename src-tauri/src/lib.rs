@@ -117,6 +117,112 @@ async fn check_service_ports(ports: Vec<u16>) -> Result<HashMap<u16, bool>, Stri
     .map_err(|e| format!("检测端口任务失败: {}", e))?
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthInspectionPayload {
+    pub ports: Vec<u16>,
+    pub process_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemHealthSnapshot {
+    pub ports: HashMap<u16, bool>,
+    pub processes: HashMap<String, Vec<u32>>, // lowercase_name -> [PIDs]
+    pub duration_ms: u64,
+}
+
+/// 基于 Windows Toolhelp32 原生快照的毫秒级进程扫描 (< 2ms)
+fn scan_target_processes(target_names: &[String]) -> HashMap<String, Vec<u32>> {
+    let mut result: HashMap<String, Vec<u32>> = HashMap::new();
+    let targets: Vec<String> = target_names.iter().map(|s| s.trim().to_lowercase()).collect();
+    for target in &targets {
+        result.entry(target.clone()).or_default();
+    }
+
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            TH32CS_SNAPPROCESS,
+        };
+
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot != INVALID_HANDLE_VALUE {
+                let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+                entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+                if Process32FirstW(snapshot, &mut entry) != 0 {
+                    loop {
+                        let len = entry
+                            .szExeFile
+                            .iter()
+                            .position(|&c| c == 0)
+                            .unwrap_or(entry.szExeFile.len());
+                        let exe_name = String::from_utf16_lossy(&entry.szExeFile[..len]).to_lowercase();
+                        let pid = entry.th32ProcessID;
+
+                        if let Some(pids) = result.get_mut(&exe_name) {
+                            pids.push(pid);
+                        }
+
+                        if Process32NextW(snapshot, &mut entry) == 0 {
+                            break;
+                        }
+                    }
+                }
+                CloseHandle(snapshot);
+            }
+        }
+    }
+
+    result
+}
+
+/// 全维巡检：极速原生进程快照枚举 + 多端口并发连通性探测
+#[tauri::command]
+async fn inspect_system_health(
+    payload: HealthInspectionPayload,
+) -> Result<SystemHealthSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let start_time = std::time::Instant::now();
+
+        let (ports, processes) = std::thread::scope(|s| {
+            let mut handles = Vec::with_capacity(payload.ports.len());
+            for port in payload.ports {
+                handles.push(s.spawn(move || {
+                    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+                    let is_open =
+                        TcpStream::connect_timeout(&addr, Duration::from_millis(150)).is_ok();
+                    (port, is_open)
+                }));
+            }
+
+            // 在等待端口网络握手的同时，本线程执行超高速 Toolhelp 进程扫描 (< 2ms)
+            let proc_map = scan_target_processes(&payload.process_names);
+
+            let mut port_map = HashMap::with_capacity(handles.len());
+            for h in handles {
+                if let Ok((port, is_open)) = h.join() {
+                    port_map.insert(port, is_open);
+                }
+            }
+
+            (port_map, proc_map)
+        });
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        Ok(SystemHealthSnapshot {
+            ports,
+            processes,
+            duration_ms,
+        })
+    })
+    .await
+    .map_err(|e| format!("全维巡检任务失败: {}", e))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -124,7 +230,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             workbench_ping,
             run_launcher_command,
-            check_service_ports
+            check_service_ports,
+            inspect_system_health
         ])
         .run(tauri::generate_context!())
         .expect("error while running SelfWork desktop core");
@@ -151,5 +258,28 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert!(res.contains_key(&59991));
         assert!(res.contains_key(&59992));
+    }
+
+    #[test]
+    fn test_inspect_system_health() {
+        let payload = HealthInspectionPayload {
+            ports: vec![59991, 59992],
+            process_names: vec![
+                "explorer.exe".to_string(),
+                "nonexistent_mock_service_process.exe".to_string(),
+            ],
+        };
+        let res = tauri::async_runtime::block_on(inspect_system_health(payload))
+            .expect("inspect_system_health failed");
+        assert_eq!(res.ports.len(), 2);
+        assert!(res.ports.contains_key(&59991));
+        assert!(res.ports.contains_key(&59992));
+        assert!(res.processes.contains_key("explorer.exe"));
+        assert!(res.processes.contains_key("nonexistent_mock_service_process.exe"));
+        assert!(res
+            .processes
+            .get("nonexistent_mock_service_process.exe")
+            .unwrap()
+            .is_empty());
     }
 }

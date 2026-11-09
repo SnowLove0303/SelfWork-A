@@ -4,10 +4,16 @@ import { TelemetryPanel } from './launcher/TelemetryPanel.tsx';
 import {
   ClusterConfig,
   ServiceItemConfig,
+  ServiceStatus,
+  SystemHealthSnapshot,
   TelemetryLogEntry,
   TelemetryLogLevel,
 } from '../types/launcher.ts';
-import { INITIAL_CLUSTERS, MONITORED_PORTS } from './launcher/launcherData.ts';
+import {
+  INITIAL_CLUSTERS,
+  MONITORED_PORTS,
+  MONITORED_PROCESS_NAMES,
+} from './launcher/launcherData.ts';
 
 // 格式化当前时间为 HH:mm:ss.SSS
 function formatTimestamp(): string {
@@ -27,11 +33,12 @@ export const LauncherDashboard: React.FC = () => {
       timestamp: formatTimestamp(),
       target: 'system',
       level: 'info',
-      message: '快速启动仪表盘与执行报文控制台已就绪，正在进行首轮端口探查...',
+      message: '快速启动仪表盘与执行报文控制台已就绪，正在进行首轮全维真实巡检...',
     },
   ]);
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const logCounterRef = useRef<number>(2);
+  const isInitialProbeRef = useRef<boolean>(true);
 
   // 追加结构化报文
   const appendLog = useCallback((target: string, level: TelemetryLogLevel, message: string) => {
@@ -45,44 +52,138 @@ export const LauncherDashboard: React.FC = () => {
     setLogs((prev) => [...prev, entry]);
   }, []);
 
-  // 执行端口探查并同步服务状态
-  const pollPorts = useCallback(async () => {
-    setIsPolling(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const portMap = await invoke<Record<number, boolean>>('check_service_ports', {
-        ports: MONITORED_PORTS,
-      });
+  // 执行全维系统真实巡检并同步服务状态 (包含 Windows Toolhelp 进程扫描与 TCP 端口探测)
+  const pollHealth = useCallback(
+    async (isManual = false) => {
+      setIsPolling(true);
+      if (isManual) {
+        appendLog('inspect', 'info', '正在执行全维系统真实巡检 (原生进程枚举 + 端口并发探测)...');
+      }
 
-      setClusters((prevClusters) =>
-        prevClusters.map((cluster) => ({
-          ...cluster,
-          items: cluster.items.map((item) => {
-            // 如果该服务项配置了端口，以端口的实际打开状态为权威依据
-            if (item.port && portMap[item.port] !== undefined) {
-              const isOpen = portMap[item.port];
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const snapshot = await invoke<SystemHealthSnapshot>('inspect_system_health', {
+          payload: {
+            ports: MONITORED_PORTS,
+            process_names: MONITORED_PROCESS_NAMES,
+          },
+        });
+
+        const externalChanges: Array<{ name: string; status: ServiceStatus }> = [];
+        const activeItemsSummary: string[] = [];
+        let totalMonitored = 0;
+        let activeCount = 0;
+
+        setClusters((prevClusters) =>
+          prevClusters.map((cluster) => ({
+            ...cluster,
+            items: cluster.items.map((item) => {
+              const hasProcessCheck = item.processNames && item.processNames.length > 0;
+              const hasPortCheck = item.port !== undefined;
+
+              if (!hasProcessCheck && !hasPortCheck) {
+                return item;
+              }
+
+              totalMonitored++;
+
+              // 收集匹配的所有真实 PID
+              const matchedPids: number[] = [];
+              if (hasProcessCheck && item.processNames) {
+                for (const name of item.processNames) {
+                  const pids = snapshot.processes[name.toLowerCase()];
+                  if (pids && pids.length > 0) {
+                    matchedPids.push(...pids);
+                  }
+                }
+              }
+
+              const isPortOpen = item.port ? Boolean(snapshot.ports[item.port]) : false;
+              // 判定双重见证存活
+              const isActive = (hasProcessCheck && matchedPids.length > 0) || (hasPortCheck && isPortOpen);
+
+              // 处于正在启动/停止过渡期时，若尚未检测到活跃则保持过渡状态，避免开关抖动
+              let nextStatus: ServiceStatus;
+              if (isActive) {
+                nextStatus = 'running';
+              } else if (item.status === 'starting' || item.status === 'stopping') {
+                nextStatus = item.status;
+              } else {
+                nextStatus = 'stopped';
+              }
+
+              if (nextStatus === 'running') {
+                activeCount++;
+                const details: string[] = [];
+                if (matchedPids.length > 0) {
+                  details.push(`PID: ${matchedPids.join(',')}`);
+                }
+                if (item.port && isPortOpen) {
+                  details.push(`:${item.port}`);
+                }
+                activeItemsSummary.push(
+                  `${item.name}${details.length > 0 ? ` (${details.join(', ')})` : ''}`
+                );
+              }
+
+              // 检测外部运行状态变动（非初次加载且非手动巡检，且旧新状态均为稳定态）
+              if (
+                !isInitialProbeRef.current &&
+                !isManual &&
+                item.status !== nextStatus &&
+                (item.status === 'running' || item.status === 'stopped') &&
+                (nextStatus === 'running' || nextStatus === 'stopped')
+              ) {
+                externalChanges.push({ name: item.name, status: nextStatus });
+              }
+
               return {
                 ...item,
-                status: isOpen ? 'running' : 'stopped',
+                status: nextStatus,
+                pids: matchedPids.length > 0 ? Array.from(new Set(matchedPids)) : undefined,
               };
-            }
-            return item;
-          }),
-        }))
-      );
-    } catch (_err) {
-      // 浏览器 Web 预览环境降级
-    } finally {
-      setIsPolling(false);
-    }
-  }, []);
+            }),
+          }))
+        );
+
+        // 输出手动探查小结
+        if (isManual) {
+          const activeDetails =
+            activeItemsSummary.length > 0
+              ? activeItemsSummary.map((line) => `  • ${line}`).join('\n')
+              : '  (暂无活跃服务)';
+          appendLog(
+            'inspect',
+            'success',
+            `巡检完成 (耗时 ${snapshot.duration_ms}ms): 共巡检 ${totalMonitored} 项服务，发现 ${activeCount} 项活跃:\n${activeDetails}`
+          );
+        }
+
+        // 输出外部状态变动日志
+        for (const change of externalChanges) {
+          appendLog(
+            'inspect',
+            'info',
+            `外部状态变动感知: ${change.name} 状态变更为 [${change.status === 'running' ? '运行中' : '已停止'}]`
+          );
+        }
+
+        isInitialProbeRef.current = false;
+      } catch (_err) {
+        // 浏览器 Web 预览环境降级
+      } finally {
+        setIsPolling(false);
+      }
+    },
+    [appendLog]
+  );
 
   // 挂载定时轮询 (每 4 秒轮询一次)
   useEffect(() => {
-    pollPorts();
-    const interval = setInterval(pollPorts, 4000);
+    pollHealth(false);
+    const interval = setInterval(() => pollHealth(false), 4000);
     return () => clearInterval(interval);
-  }, [pollPorts]);
+  }, [pollHealth]);
 
   // 调用 Rust IPC 执行启动器指令
   const dispatchCommand = useCallback(
@@ -121,14 +222,18 @@ export const LauncherDashboard: React.FC = () => {
           `指令执行完成 (耗时 ${duration}ms):\n${output}`
         );
 
-        // 如果是无端口的普通应用，在启动/停止完成后显式置位
+        // 如果是无端口且无进程关联的纯脚本应用，在启动/停止完成后显式置位
         if (itemIds && itemIds.length > 0) {
           const finalStatus = action === 'start' ? 'running' : 'stopped';
           setClusters((prev) =>
             prev.map((c) => ({
               ...c,
               items: c.items.map((i) => {
-                if (itemIds.includes(i.id) && !i.port) {
+                if (
+                  itemIds.includes(i.id) &&
+                  !i.port &&
+                  (!i.processNames || i.processNames.length === 0)
+                ) {
                   return { ...i, status: finalStatus };
                 }
                 return i;
@@ -137,8 +242,8 @@ export const LauncherDashboard: React.FC = () => {
           );
         }
 
-        // 即刻刷新端口以获取真实外部服务状态
-        setTimeout(pollPorts, 600);
+        // 即刻刷新以获取真实外部服务与进程状态
+        setTimeout(() => pollHealth(false), 600);
       } catch (err: unknown) {
         const duration = Math.round(performance.now() - t0);
         const errMsg = typeof err === 'string' ? err : String(err);
@@ -159,10 +264,10 @@ export const LauncherDashboard: React.FC = () => {
             }))
           );
         }
-        setTimeout(pollPorts, 500);
+        setTimeout(() => pollHealth(false), 500);
       }
     },
-    [appendLog, pollPorts]
+    [appendLog, pollHealth]
   );
 
   // 单个服务项启停
@@ -234,7 +339,7 @@ export const LauncherDashboard: React.FC = () => {
         <SwitchboardPanel
           clusters={clusters}
           isPolling={isPolling}
-          onRefreshPorts={pollPorts}
+          onRefreshPorts={() => pollHealth(true)}
           onStartService={handleStartService}
           onStopService={handleStopService}
           onStartCluster={handleStartCluster}

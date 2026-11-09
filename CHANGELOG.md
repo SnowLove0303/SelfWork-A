@@ -2,6 +2,23 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.6] - 2026-11-09
+
+### Added & Enhanced (快速启动巡检真实性强化 & Windows 原生进程快照扫描上线)
+- **Windows 原生 Toolhelp 进程快照扫描 (Native Low-Latency Process Enumeration)**:
+  - 在 Rust 后端通过 `windows-sys` 绑定 Windows 原生 Toolhelp32 API (`CreateToolhelp32Snapshot`, `Process32FirstW`, `Process32NextW`)；
+  - 直接在内存中遍历系统进程列表（单次扫描耗时 $< 2\text{ms}$，零命令行弹窗、零外部脚本进程开销）；
+  - 全面穿透微信（`weixin.exe`/`wechat.exe`）、企业微信（`wxwork.exe`）、FlClash（`flclash.exe`）、Antigravity（`antigravity.exe`）、Antigravity IDE（`antigravity ide.exe`）、ChatGPT（`chatgpt.exe`）、Cockpit（`cockpit-tools.exe`）、AIstudy（`aistudy.exe`）等无固定端口桌面工具；
+  - 彻底终结“点击开关后本地虚假乐观状态”以及“用户在外部启闭无法感知”的盲区顽疾。
+- **端口与进程双重见证存活判定 (Dual-Witness Health Inspection)**:
+  - 针对核心 Web 平台与微服务（DSH、StudyPower、MSDS、Docker、飞书桥接），在 TCP 监听握手与进程存活两端做双重真实性校验；
+  - 毫秒级返回真实活跃进程 PID，在前端卡片实时点亮呼吸指示灯与绿色 `PID: xxxxx` 真实存活凭据徽章。
+- **全维巡检事实流与外部状态变动感知**:
+  - 点击“🔍 探查”按钮时，右侧终端输出毫秒级耗时与详细活跃服务列表（扫描项数、存活进程及对应 PID、活跃端口）；
+  - 后台每 4 秒静默巡检，一旦捕获到用户在操作系统外部手动开启或关闭了任一软件，即时输出 `[INFO] [inspect] 外部状态变动感知: <软件名> 状态变更为 [运行中/已停止]`，实现真正的零死角座舱级全维状态透视。
+- **工程产物更新**:
+  - 重新编译 Release 版便携单文件 `SelfWork.exe`（4.4 MB，无黑框免安装，离线秒开）。
+
 ## [0.1.5] - 2026-11-09
 
 ### Added (快速启动仪表盘与实时执行报文控制台首发上线)

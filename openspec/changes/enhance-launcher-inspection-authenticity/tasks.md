@@ -2,7 +2,7 @@
 
 ## Single-Focus Lock: Task Pipeline
 
-- [ ] **Task 1: Rust 微内核原生进程枚举与全维巡检 IPC (inspect_system_health)**
+- [x] **Task 1: Rust 微内核原生进程枚举与全维巡检 IPC (inspect_system_health)**
   - **因果归属**: [Root Source] 后端核心状态检测能力
   - **实现目标**:
     - 在 `src-tauri/Cargo.toml` 中配置 `windows-sys` 针对 `Win32_System_Diagnostics_ToolHelp` 与 `Win32_Foundation` 的原生绑定；
@@ -13,7 +13,7 @@
     - `cargo check --manifest-path "F:/App Location/SelfWork/src-tauri/Cargo.toml"` 退出码 0。
     - `cargo test --manifest-path "F:/App Location/SelfWork/src-tauri/Cargo.toml"` 退出码 0。
 
-- [ ] **Task 2: 前端服务配置项进程映射与类型定义扩展**
+- [x] **Task 2: 前端服务配置项进程映射与类型定义扩展**
   - **因果归属**: [Root Source] 事实模型拓扑绑定
   - **实现目标**:
     - 在 `src/types/launcher.ts` 中扩展 `ServiceItemConfig`（增加 `processNames?: string[]` 与 `pids?: number[]`）；
@@ -22,7 +22,7 @@
   - **实测验证门禁 [Measured]**:
     - `pnpm tsc --noEmit` 静态类型检查退出码 0。
 
-- [ ] **Task 3: 前端全维状态同步与深度诊断报文回显**
+- [x] **Task 3: 前端全维状态同步与深度诊断报文回显**
   - **因果归属**: [State Transition] 用户交互与报文呈现
   - **实现目标**:
     - 在 `src/components/LauncherDashboard.tsx` 中升级 `pollPorts` 为 `pollHealth`，调用 `inspect_system_health`；
@@ -33,7 +33,7 @@
     - `pnpm check` 零错误、零警告退出码 0。
     - `pnpm build` 前端构建退出码 0。
 
-- [ ] **Task 4: 全量构建、单文件 EXE 封包与终审验收**
+- [x] **Task 4: 全量构建、单文件 EXE 封包与终审验收**
   - **因果归属**: [Verification & Delivery] 生产交付
   - **实测验证门禁 [Measured]**:
     - `pnpm tauri build --no-bundle` 编译出最新生产态 `SelfWork.exe` 退出码 0。

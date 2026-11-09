@@ -162,11 +162,11 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
               type="button"
               onClick={onRefreshPorts}
               disabled={isPolling}
-              title="即刻轮询探测全部端口状态"
+              title="即刻执行全维系统真实巡检"
               className="h-8 px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-secondary hover:text-fg-primary text-xs flex items-center gap-1.5 tactile-btn"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isPolling ? 'animate-spin text-brand-primary' : ''}`} />
-              <span className="hidden sm:inline">巡检</span>
+              <span className="hidden sm:inline">探查</span>
             </button>
 
             <button
@@ -333,6 +333,16 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
                                   {isRunning && <ArrowUpRight className="w-2.5 h-2.5" />}
                                 </button>
                               )}
+
+                              {/* 真实进程 PID 徽章 */}
+                              {isRunning && item.pids && item.pids.length > 0 && (
+                                <span
+                                  title={`真实存活进程 PID: ${item.pids.join(', ')}`}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.2)]"
+                                >
+                                  PID: {item.pids[0]}{item.pids.length > 1 ? `+${item.pids.length - 1}` : ''}
+                                </span>
+                              )}
                             </div>
 
                             <p className="text-[11px] text-fg-muted truncate mt-0.5">
@@ -343,6 +353,16 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
 
                         {/* 右侧：状态指示灯与启停控制开关 */}
                         <div className="flex items-center gap-3 shrink-0">
+                          {/* 真实进程 PID 徽章 (当检测到存活 PID 时紧凑展示) */}
+                          {item.status === 'running' && item.pids && item.pids.length > 0 && (
+                            <span
+                              title={`检测到真实活跃进程 PID: ${item.pids.join(', ')}`}
+                              className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.15)]"
+                            >
+                              PID: {item.pids[0]}{item.pids.length > 1 ? ` (+${item.pids.length - 1})` : ''}
+                            </span>
+                          )}
+
                           {/* 状态呼吸指示灯 */}
                           <div className="flex items-center gap-1.5 font-mono text-[11px]">
                             {item.status === 'running' && (

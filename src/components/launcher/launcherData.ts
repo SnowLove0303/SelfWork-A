@@ -12,6 +12,18 @@ export const MONITORED_PORTS = [
   9011,  // DSH WSL
 ];
 
+export const MONITORED_PROCESS_NAMES = [
+  'weixin.exe',
+  'wechat.exe',
+  'wxwork.exe',
+  'flclash.exe',
+  'antigravity.exe',
+  'antigravity ide.exe',
+  'chatgpt.exe',
+  'cockpit-tools.exe',
+  'aistudy.exe',
+];
+
 export const INITIAL_CLUSTERS: ClusterConfig[] = [
   {
     id: 'apps',
@@ -35,6 +47,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'apps',
         description: 'AI 原生开发协同平台桌面端',
         commandTarget: 'antigravity',
+        processNames: ['antigravity.exe'],
         status: 'stopped',
         iconName: 'Bot',
       },
@@ -44,6 +57,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'apps',
         description: '腾讯微信 Windows 官方桌面版',
         commandTarget: 'wechat',
+        processNames: ['weixin.exe', 'wechat.exe'],
         status: 'stopped',
         iconName: 'MessageCircle',
       },
@@ -53,6 +67,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'apps',
         description: '企业办公协同与客户沟通终端',
         commandTarget: 'wxwork',
+        processNames: ['wxwork.exe'],
         status: 'stopped',
         iconName: 'Briefcase',
       },
@@ -62,6 +77,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'apps',
         description: '多协议高性能网络代理客户端',
         commandTarget: 'flclash',
+        processNames: ['flclash.exe'],
         status: 'stopped',
         iconName: 'Shield',
       },
@@ -71,6 +87,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'apps',
         description: 'OpenAI 官方桌面交互应用程序',
         commandTarget: 'chatgpt',
+        processNames: ['chatgpt.exe'],
         status: 'stopped',
         iconName: 'Bot',
       },
@@ -107,6 +124,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'ai-suite',
         description: '智能体深度配对编程工程工作区',
         commandTarget: 'antigravity-ide',
+        processNames: ['antigravity ide.exe'],
         status: 'stopped',
         iconName: 'Code2',
       },
@@ -118,6 +136,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         commandTarget: 'cockpit',
         port: 5000,
         url: 'http://127.0.0.1:5000',
+        processNames: ['cockpit-tools.exe'],
         status: 'stopped',
         iconName: 'Activity',
       },
@@ -147,6 +166,7 @@ export const INITIAL_CLUSTERS: ClusterConfig[] = [
         cluster: 'web',
         description: '交互式知识研习与模型多维度评测',
         commandTarget: 'aistudy',
+        processNames: ['aistudy.exe'],
         status: 'stopped',
         iconName: 'BookOpen',
       },
