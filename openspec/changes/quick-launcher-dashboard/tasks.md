@@ -2,7 +2,7 @@
 
 ## Single-Focus Lock: Task Pipeline
 
-- [ ] **Task 1: Rust IPC 核心接口与系统类型定义**
+- [x] **Task 1: Rust IPC 核心接口与系统类型定义**
   - **因果归属**: [Root Source] 后端系统通信链路
   - **实现目标**:
     - 在 `src/types/launcher.ts` 中定义完整的集群、服务项、状态枚举与报文日志契约；
@@ -12,7 +12,7 @@
     - `cargo check --manifest-path "F:/App Location/SelfWork/src-tauri/Cargo.toml"` 退出码 0。
     - `cargo test --manifest-path "F:/App Location/SelfWork/src-tauri/Cargo.toml"` 退出码 0。
 
-- [ ] **Task 2: 前端左侧仪表盘开关阵列 (SwitchboardPanel)**
+- [x] **Task 2: 前端左侧仪表盘开关阵列 (SwitchboardPanel)**
   - **因果归属**: [State Transition] 用户交互与状态展现
   - **实现目标**:
     - 创建 `src/components/LauncherDashboard.tsx` 及其子组件；
@@ -23,7 +23,7 @@
   - **实测验证门禁 [Measured]**:
     - `pnpm tauri check` 或 `pnpm tsc --noEmit` 静态类型检查退出码 0。
 
-- [ ] **Task 3: 前端右侧执行报文控制台与系统联动 (TelemetryPanel)**
+- [x] **Task 3: 前端右侧执行报文控制台与系统联动 (TelemetryPanel)**
   - **因果归属**: [State Transition] 报文监控与日志沉淀
   - **实现目标**:
     - 实现高透流光风格报文控制台（深黑背景、等宽代码字体、滚动条美化）；
@@ -34,7 +34,7 @@
     - `pnpm check` 零错误、零警告退出码 0。
     - `pnpm build` 前端构建退出码 0。
 
-- [ ] **Task 4: 全量构建、单文件 EXE 封包与终审验收**
+- [x] **Task 4: 全量构建、单文件 EXE 封包与终审验收**
   - **因果归属**: [Verification & Delivery] 生产交付
   - **实测验证门禁 [Measured]**:
     - `pnpm tauri build --no-bundle` 编译出最新生产态 `SelfWork.exe` 退出码 0。

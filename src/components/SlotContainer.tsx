@@ -3,6 +3,7 @@ import { ModuleId } from '../types/workbench.ts';
 import { AppearanceSettings } from '../types/settings.ts';
 import { MODULES } from './Sidebar.tsx';
 import { SettingsView } from './SettingsView.tsx';
+import { LauncherDashboard } from './LauncherDashboard.tsx';
 
 interface SlotContainerProps {
   activeModule: ModuleId;
@@ -57,7 +58,7 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
           </div>
         )}
 
-        {/* 内容展示区：如果是设置模块，渲染设置中心；否则居中展示模块名 */}
+        {/* 内容展示区：如果是设置模块，渲染设置中心；如果是启动器模块，渲染仪表盘与报文控制台；否则展示模块名占位 */}
         <div className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden">
           {activeModule === 'settings' ? (
             <SettingsView
@@ -65,6 +66,8 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
               onUpdateSettings={onUpdateSettings}
               onResetSettings={onResetSettings}
             />
+          ) : activeModule === 'launcher' ? (
+            <LauncherDashboard />
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <span className="text-xl font-semibold tracking-tight text-fg-muted/40 font-mono drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none">
