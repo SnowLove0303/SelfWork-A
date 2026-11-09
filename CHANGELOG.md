@@ -2,6 +2,32 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.5] - 2026-11-09
+
+### Added (快速启动仪表盘与实时执行报文控制台首发上线)
+- **左侧仪表盘开关阵列 (Dashboard Switchboard)**:
+  - 完整映射 `D:\应用研究\统一启动器\System\Workflow-Launcher.ps1` 包含的 6 大业务集群与 20+ 项服务：
+    1. **常用办公套件 (`apps`)**：微信、企业微信、FlClash、ChatGPT、GLaDOS 自动签到及全套一键拉起；
+    2. **AI 协同套件 (`ai-suite`)**：Antigravity IDE、ChatGPT、Cockpit 5000 控制台（端口 5000 / CDP 9333）；
+    3. **核心 Web 平台 (`web`)**：DeepSeek Harness (:9010)、StudyPower (:3100)、冠志通 Docker (:18765)、合规性判断工作台、MSDS 智能处理引擎 (:5173 / API :5174) 及 AI Study Tauri；
+    4. **局域网安全控制 (`lan`)**：冠志通局域网接入与 Wi-Fi 防火墙规则启闭；
+    5. **飞书双桥接服务 (`feishu`)**：核心根服务、OpenCode 2 飞书桥接 (:49374)、Antigravity 飞书集成与守护进程；
+    6. **WSL 专区 (`wsl`)**：Ubuntu WSL 专区、DSH WSL 版 (:9011)、Antigravity WSL 及 Cockpit WSL 版。
+  - **交互体验**：卡片式集群布局，支持单个子项独立拨动开关与集群一键总控；
+  - **真实状态指示灯**：翠绿色呼吸微光（运行中）、深灰（未启动）、琥珀色闪烁（启动/停止过渡态）、玫瑰红（异常）；
+  - **端口直达胶囊**：动态探测 `:9010`, `:3100`, `:5000`, `:5173`, `:18765`, `:7891`, `:49374`, `:9011`，运行中点击直达系统默认浏览器。
+- **右侧执行报文控制台 (Telemetry Log Console)**:
+  - 高透晶体暗黑等宽排版（`#070a0f` 背景），极客终端质感；
+  - 格式化展示毫秒级时间戳（`HH:mm:ss.SSS`）、彩色日志级别徽章（`[INFO]` 浅蓝、`[SUCCESS]` 翠绿、`[WARN]` 琥珀、`[ERROR]` 玫瑰红）、目标分类标签与正文；
+  - 提供清空报文、一键复制全部日志至剪贴板、自动滚屏锁定/解锁切换功能；
+  - 点击开关与执行报文无缝联动，执行前后追加耗时计算与回显。
+- **Rust 后端微内核异步调度管道 (Tauri IPC Engine)**:
+  - `run_launcher_command`：通过 `std::process::Command` 异步安全执行外部 PowerShell 启动脚本，配置 Windows `CREATE_NO_WINDOW` 彻底杜绝命令行黑框闪烁；
+  - `check_service_ports`：基于 `std::thread::scope` 并行执行本地短超时（150ms）TCP 端口探查，每 4 秒无感巡检，毫秒级点亮服务呼吸灯。
+- **工程产物交付**:
+  - 更新便携版 `SelfWork.exe`（4.4 MB，全静态资源嵌入，离线秒开，退出码 0）；
+  - 生成官方安装包 `SelfWork-Setup.exe`（1.9 MB，Windows NSIS 一键安装向导，退出码 0）。
+
 ## [0.1.4] - 2026-11-09
 
 ### Added & Fixed (设置中心「外观与背景」首发上线 & 彻底修复离线单文件 EXE 静态封包)
