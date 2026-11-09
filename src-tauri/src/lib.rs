@@ -1,3 +1,5 @@
+pub mod db;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream};
@@ -231,7 +233,13 @@ pub fn run() {
             workbench_ping,
             run_launcher_command,
             check_service_ports,
-            inspect_system_health
+            inspect_system_health,
+            db::db_get_all_tasks,
+            db::db_save_all_tasks,
+            db::db_get_all_memos,
+            db::db_save_all_memos,
+            db::db_get_setting,
+            db::db_set_setting
         ])
         .run(tauri::generate_context!())
         .expect("error while running SelfWork desktop core");

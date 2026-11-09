@@ -7,6 +7,11 @@ import {
   AppearanceSettings,
   DEFAULT_APPEARANCE_SETTINGS,
 } from './types/settings.ts';
+import {
+  loadAppearanceSettings,
+  saveAppearanceSettings,
+  SETTINGS_STORAGE_KEY,
+} from './services/db.ts';
 
 // 动态兼容 Tauri 与 Web 预览环境
 async function pingTauriKernel(): Promise<WorkbenchKernelStatus> {
@@ -55,11 +60,11 @@ export default function App(): React.JSX.Element {
     serverTime: 0,
   });
 
-  // 外观与背景设置：初始化尝试从本地缓存水合恢复
+  // 外观与背景设置：初始化尝试从本地同步缓存瞬时恢复
   const [appearanceSettings, setAppearanceSettings] =
     useState<AppearanceSettings>(() => {
       try {
-        const saved = localStorage.getItem('selfwork_appearance_settings');
+        const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (saved) {
           return { ...DEFAULT_APPEARANCE_SETTINGS, ...JSON.parse(saved) };
         }
@@ -69,31 +74,30 @@ export default function App(): React.JSX.Element {
       return DEFAULT_APPEARANCE_SETTINGS;
     });
 
+  // 挂载时通过 SQLite 数据库权威水合外观配置
+  useEffect(() => {
+    let isMounted = true;
+    loadAppearanceSettings().then((loaded) => {
+      if (isMounted) {
+        setAppearanceSettings(loaded);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const updateAppearanceSettings = useCallback(
     (newSettings: AppearanceSettings) => {
       setAppearanceSettings(newSettings);
-      try {
-        localStorage.setItem(
-          'selfwork_appearance_settings',
-          JSON.stringify(newSettings),
-        );
-      } catch (_e) {
-        // ignore
-      }
+      saveAppearanceSettings(newSettings);
     },
     [],
   );
 
   const resetAppearanceSettings = useCallback(() => {
     setAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS);
-    try {
-      localStorage.setItem(
-        'selfwork_appearance_settings',
-        JSON.stringify(DEFAULT_APPEARANCE_SETTINGS),
-      );
-    } catch (_e) {
-      // ignore
-    }
+    saveAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS);
   }, []);
 
   const refreshKernel = useCallback(() => {

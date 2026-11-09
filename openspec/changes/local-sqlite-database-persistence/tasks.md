@@ -2,7 +2,7 @@
 
 ## Single-Focus Lock: Task Pipeline
 
-- [ ] **Task 1: Rust 微内核集成 rusqlite 并构建数据库持久化模块 (db.rs)**
+- [x] **Task 1: Rust 微内核集成 rusqlite 并构建数据库持久化模块 (db.rs)**
   - **因果归属**: [Root Source] 底层存储引擎与事务控制
   - **实现目标**:
     - 在 `src-tauri/Cargo.toml` 中配置 `rusqlite = { version = "0.32", features = ["bundled"] }`；
@@ -12,7 +12,7 @@
   - **实测验证门禁 [Measured]**:
     - `cargo test --manifest-path "F:/App Location/SelfWork/src-tauri/Cargo.toml"` 退出码 0。
 
-- [ ] **Task 2: 前端持久化服务层与历史数据平滑迁移 (services/db.ts)**
+- [x] **Task 2: 前端持久化服务层与历史数据平滑迁移 (services/db.ts)**
   - **因果归属**: [Root Source] 数据存取适配器
   - **实现目标**:
     - 新建 `src/services/db.ts`，封装与 Tauri 后端数据库 IPC 通信；
@@ -21,7 +21,7 @@
   - **实测验证门禁 [Measured]**:
     - `pnpm tsc --noEmit` 静态类型检查退出码 0。
 
-- [ ] **Task 3: 改造 TasksView 与 SettingsView 对接数据库实时存取**
+- [x] **Task 3: 改造 TasksView 与 SettingsView 对接数据库实时存取**
   - **因果归属**: [State Transition] 业务层数据接入
   - **实现目标**:
     - 改造 `src/components/TasksView.tsx`，初始化优先从 SQLite 获取 tasks 与 memos，变更实时入库；
@@ -31,7 +31,7 @@
     - `pnpm check` 零错误、零警告退出码 0。
     - `pnpm build` 前端构建退出码 0。
 
-- [ ] **Task 4: 全量构建、单文件 EXE 封包与重启不丢失终审实测**
+- [x] **Task 4: 全量构建、单文件 EXE 封包与重启不丢失终审实测**
   - **因果归属**: [Verification & Delivery] 生产交付
   - **实测验证门禁 [Measured]**:
     - `pnpm tauri build --no-bundle` 编译出最新生产态 `SelfWork.exe` 退出码 0。

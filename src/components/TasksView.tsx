@@ -1,17 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { TaskItem, MemoItem, TaskPriority } from '../types/tasks.ts';
+import React, { useState, useEffect } from 'react';
+import { TaskItem, MemoItem, TaskPriority, TaskStatus } from '../types/tasks.ts';
 import { INITIAL_TASKS, INITIAL_MEMOS } from './tasks/initialData.ts';
 import { TasksPanel } from './tasks/TasksPanel.tsx';
 import { MemoBoard } from './tasks/MemoBoard.tsx';
-
-const TASKS_STORAGE_KEY = 'selfwork_tasks_data';
-const MEMOS_STORAGE_KEY = 'selfwork_memos_data';
+import {
+  loadTasks,
+  saveTasks,
+  loadMemos,
+  saveMemos,
+  TASKS_STORAGE_KEY,
+  MEMOS_STORAGE_KEY,
+  TASKS_INIT_KEY,
+  MEMOS_INIT_KEY,
+} from '../services/db.ts';
 
 export const TasksView: React.FC = () => {
-  // 1. 初始化待办数据 (Local-First: 本地存储优先，缺失时种子填充)
+  // 1. 初始化待办数据(优先本地同步缓存消除白屏与等待)
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     try {
+      const isInit = localStorage.getItem(TASKS_INIT_KEY);
       const saved = localStorage.getItem(TASKS_STORAGE_KEY);
+      if (isInit === 'true' && saved !== null) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -24,10 +36,15 @@ export const TasksView: React.FC = () => {
     return INITIAL_TASKS;
   });
 
-  // 2. 初始化便签数据
+  // 2. 初始化便签数据(优先本地同步缓存消除白屏与等待)
   const [memos, setMemos] = useState<MemoItem[]>(() => {
     try {
+      const isInit = localStorage.getItem(MEMOS_INIT_KEY);
       const saved = localStorage.getItem(MEMOS_STORAGE_KEY);
+      if (isInit === 'true' && saved !== null) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -40,40 +57,41 @@ export const TasksView: React.FC = () => {
     return INITIAL_MEMOS;
   });
 
-  const isInitialTasksMount = useRef(true);
-  const isInitialMemosMount = useRef(true);
+  // 水合状态保护锁：只有底层 SQLite 数据加载完成后，才允许自动防抖持久化
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // 自动防抖持久化待办数据 (300ms)
+  // 挂载时通过 SQLite 数据库权威水合(含历史数据自动平滑迁移)
   useEffect(() => {
-    if (isInitialTasksMount.current) {
-      isInitialTasksMount.current = false;
-      return;
-    }
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-      } catch (err) {
-        console.error('Failed to persist tasks:', err);
+    let isMounted = true;
+    Promise.all([loadTasks(), loadMemos()]).then(([fetchedTasks, fetchedMemos]) => {
+      if (isMounted) {
+        setTasks(fetchedTasks);
+        setMemos(fetchedMemos);
+        setIsHydrated(true);
       }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 自动防抖持久化待办数据至 SQLite (300ms) - 仅在水合就绪后生效
+  useEffect(() => {
+    if (!isHydrated) return;
+    const timer = setTimeout(() => {
+      saveTasks(tasks);
     }, 300);
     return () => clearTimeout(timer);
-  }, [tasks]);
+  }, [tasks, isHydrated]);
 
-  // 自动防抖持久化便签数据 (300ms)
+  // 自动防抖持久化便签数据至 SQLite (300ms) - 仅在水合就绪后生效
   useEffect(() => {
-    if (isInitialMemosMount.current) {
-      isInitialMemosMount.current = false;
-      return;
-    }
+    if (!isHydrated) return;
     const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(MEMOS_STORAGE_KEY, JSON.stringify(memos));
-      } catch (err) {
-        console.error('Failed to persist memos:', err);
-      }
+      saveMemos(memos);
     }, 300);
     return () => clearTimeout(timer);
-  }, [memos]);
+  }, [memos, isHydrated]);
 
   // ==================== 待办操作管线 ====================
 
@@ -86,21 +104,27 @@ export const TasksView: React.FC = () => {
       isToday,
       createdAt: Date.now(),
     };
-    setTasks((prev) => [newTask, ...prev]);
+    setTasks((prev) => {
+      const next = [newTask, ...prev];
+      saveTasks(next);
+      return next;
+    });
   };
 
   const handleToggleStatus = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
+    setTasks((prev) => {
+      const next: TaskItem[] = prev.map((t) => {
         if (t.id !== id) return t;
-        const nextStatus = t.status === 'done' ? 'todo' : 'done';
+        const nextStatus: TaskStatus = t.status === 'done' ? 'todo' : 'done';
         return {
           ...t,
           status: nextStatus,
           completedAt: nextStatus === 'done' ? Date.now() : undefined,
         };
-      })
-    );
+      });
+      saveTasks(next);
+      return next;
+    });
   };
 
   const handleCyclePriority = (id: string) => {
@@ -109,23 +133,37 @@ export const TasksView: React.FC = () => {
       p2: 'p3',
       p3: 'p1',
     };
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, priority: cycleMap[t.priority] } : t))
-    );
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, priority: cycleMap[t.priority] } : t));
+      saveTasks(next);
+      return next;
+    });
   };
 
   const handleToggleToday = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isToday: !t.isToday } : t))
-    );
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, isToday: !t.isToday } : t));
+      saveTasks(next);
+      return next;
+    });
   };
 
+  // 即时原子提交：删除操作跳过防抖，直接同步物理落盘
   const handleDeleteTask = (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    setTasks((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      saveTasks(next);
+      return next;
+    });
   };
 
+  // 即时原子提交：清空操作跳过防抖，直接同步物理落盘
   const handleClearCompleted = () => {
-    setTasks((prev) => prev.filter((t) => t.status !== 'done'));
+    setTasks((prev) => {
+      const next = prev.filter((t) => t.status !== 'done');
+      saveTasks(next);
+      return next;
+    });
   };
 
   // ==================== 便签操作管线 ====================
@@ -140,7 +178,11 @@ export const TasksView: React.FC = () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setMemos((prev) => [newMemo, ...prev]);
+    setMemos((prev) => {
+      const next = [newMemo, ...prev];
+      saveMemos(next);
+      return next;
+    });
   };
 
   const handleUpdateMemo = (id: string, updates: Partial<MemoItem>) => {
@@ -149,8 +191,13 @@ export const TasksView: React.FC = () => {
     );
   };
 
+  // 即时原子提交：删除便签跳过防抖，直接同步物理落盘
   const handleDeleteMemo = (id: string) => {
-    setMemos((prev) => prev.filter((m) => m.id !== id));
+    setMemos((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      saveMemos(next);
+      return next;
+    });
   };
 
   return (
