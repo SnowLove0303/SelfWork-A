@@ -25,7 +25,6 @@ import {
   Monitor,
   Search,
   RefreshCw,
-  Power,
   Play,
   Square,
   ArrowUpRight,
@@ -226,7 +225,7 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
       </div>
 
       {/* 集群卡片阵列滚动容器 */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
+      <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
         {filteredClusters.length === 0 ? (
           <div className="h-48 flex flex-col items-center justify-center text-fg-muted gap-2 text-xs">
             <Search className="w-8 h-8 opacity-40" />
@@ -245,24 +244,17 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
                 className="glass-card rounded-xl border border-white/[0.08] bg-canvas-default/30 overflow-hidden shadow-lg"
               >
                 {/* 集群卡片标题与一键总控 */}
-                <div className="px-3.5 py-2.5 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-brand-primary/10 border border-brand-primary/20 text-brand-primary flex items-center justify-center shrink-0">
-                      {renderClusterIcon(cluster.iconName, 'w-3.5 h-3.5')}
+                <div className="px-3 py-2 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-5 h-5 rounded bg-brand-primary/10 border border-brand-primary/20 text-brand-primary flex items-center justify-center shrink-0">
+                      {renderClusterIcon(cluster.iconName, 'w-3 h-3')}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-fg-primary tracking-tight">
-                          {cluster.name}
-                        </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.06] text-fg-secondary">
-                          {clusterRunningCount}/{cluster.items.length}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-fg-muted truncate">
-                        {cluster.description}
-                      </p>
-                    </div>
+                    <span className="text-xs font-semibold text-fg-primary tracking-tight truncate">
+                      {cluster.name}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-fg-secondary shrink-0">
+                      {clusterRunningCount}/{cluster.items.length}
+                    </span>
                   </div>
 
                   {/* 集群一键启动 / 停止 */}
@@ -272,9 +264,9 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
                       disabled={hasTransitioning}
                       onClick={() => onStartCluster(cluster)}
                       title={`一键拉起 ${cluster.name}`}
-                      className="px-2 py-1 rounded-md text-[11px] border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 tactile-btn flex items-center gap-1 disabled:opacity-50"
+                      className="h-6 px-2 rounded-md text-[11px] border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 tactile-btn flex items-center gap-1 disabled:opacity-50"
                     >
-                      <Play className="w-3 h-3 fill-current" />
+                      <Play className="w-2.5 h-2.5 fill-current" />
                       <span>启动</span>
                     </button>
                     <button
@@ -282,9 +274,9 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
                       disabled={hasTransitioning}
                       onClick={() => onStopCluster(cluster)}
                       title={`一键关闭 ${cluster.name}`}
-                      className="px-2 py-1 rounded-md text-[11px] border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 tactile-btn flex items-center gap-1 disabled:opacity-50"
+                      className="h-6 px-2 rounded-md text-[11px] border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 tactile-btn flex items-center gap-1 disabled:opacity-50"
                     >
-                      <Square className="w-3 h-3 fill-current" />
+                      <Square className="w-2.5 h-2.5 fill-current" />
                       <span>停止</span>
                     </button>
                   </div>
@@ -299,95 +291,80 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                        title={item.description}
+                        className="px-3 py-2 flex items-center justify-between gap-2.5 hover:bg-white/[0.02] transition-colors"
                       >
-                        {/* 左侧：图标、名称、端口胶囊 */}
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
-                            isRunning
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                              : 'bg-white/[0.03] border-white/[0.06] text-fg-muted'
-                          }`}>
-                            {renderClusterIcon(item.iconName || 'Activity', 'w-3.5 h-3.5')}
+                        {/* 左侧：图标、名称、端口胶囊、PID 徽章 */}
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div
+                            className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                              isRunning
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                : 'bg-white/[0.03] border-white/[0.06] text-fg-muted'
+                            }`}
+                          >
+                            {renderClusterIcon(item.iconName || 'Activity', 'w-3 h-3')}
                           </div>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-medium text-fg-primary">
-                                {item.name}
-                              </span>
+                          <span className="text-xs font-medium text-fg-primary truncate">
+                            {item.name}
+                          </span>
 
-                              {/* 端口胶囊 & 外部跳转 */}
-                              {item.port && (
-                                <button
-                                  type="button"
-                                  onClick={() => item.url && onOpenUrl(item.url)}
-                                  title={isRunning ? `点击在浏览器打开 ${item.url}` : `服务未运行 (端口 :${item.port})`}
-                                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all ${
-                                    isRunning
-                                      ? 'bg-sky-500/15 border-sky-400/40 text-sky-300 hover:bg-sky-500/25 hover:border-sky-300 shadow-[0_0_8px_rgba(56,189,248,0.3)] cursor-pointer'
-                                      : 'bg-white/[0.04] border-white/[0.08] text-fg-muted cursor-default'
-                                  }`}
-                                >
-                                  <span>:{item.port}</span>
-                                  {isRunning && <ArrowUpRight className="w-2.5 h-2.5" />}
-                                </button>
-                              )}
+                          {/* 端口胶囊 & 外部跳转 */}
+                          {item.port && (
+                            <button
+                              type="button"
+                              onClick={() => item.url && onOpenUrl(item.url)}
+                              title={isRunning ? `点击在浏览器打开 ${item.url}` : `服务未运行 (端口 :${item.port})`}
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all shrink-0 ${
+                                isRunning
+                                  ? 'bg-sky-500/15 border-sky-400/40 text-sky-300 hover:bg-sky-500/25 hover:border-sky-300 shadow-[0_0_8px_rgba(56,189,248,0.3)] cursor-pointer'
+                                  : 'bg-white/[0.04] border-white/[0.08] text-fg-muted cursor-default'
+                              }`}
+                            >
+                              <span>:{item.port}</span>
+                              {isRunning && <ArrowUpRight className="w-2.5 h-2.5" />}
+                            </button>
+                          )}
 
-                              {/* 真实进程 PID 徽章 */}
-                              {isRunning && item.pids && item.pids.length > 0 && (
-                                <span
-                                  title={`真实存活进程 PID: ${item.pids.join(', ')}`}
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.2)]"
-                                >
-                                  PID: {item.pids[0]}{item.pids.length > 1 ? `+${item.pids.length - 1}` : ''}
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="text-[11px] text-fg-muted truncate mt-0.5">
-                              {item.description}
-                            </p>
-                          </div>
+                          {/* 真实存活 PID 徽章 */}
+                          {isRunning && item.pids && item.pids.length > 0 && (
+                            <span
+                              title={`真实存活进程 PID: ${item.pids.join(', ')}`}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.2)] shrink-0"
+                            >
+                              PID: {item.pids[0]}{item.pids.length > 1 ? `+${item.pids.length - 1}` : ''}
+                            </span>
+                          )}
                         </div>
 
                         {/* 右侧：状态指示灯与启停控制开关 */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          {/* 真实进程 PID 徽章 (当检测到存活 PID 时紧凑展示) */}
-                          {item.status === 'running' && item.pids && item.pids.length > 0 && (
-                            <span
-                              title={`检测到真实活跃进程 PID: ${item.pids.join(', ')}`}
-                              className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.15)]"
-                            >
-                              PID: {item.pids[0]}{item.pids.length > 1 ? ` (+${item.pids.length - 1})` : ''}
-                            </span>
-                          )}
-
+                        <div className="flex items-center gap-2.5 shrink-0">
                           {/* 状态呼吸指示灯 */}
                           <div className="flex items-center gap-1.5 font-mono text-[11px]">
                             {item.status === 'running' && (
                               <>
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
                                 <span className="text-emerald-400">运行中</span>
                               </>
                             )}
                             {item.status === 'stopped' && (
                               <>
-                                <span className="w-2 h-2 rounded-full bg-slate-600" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
                                 <span className="text-fg-muted">已停止</span>
                               </>
                             )}
                             {(item.status === 'starting' || item.status === 'stopping') && (
                               <>
-                                <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-ping" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-ping" />
                                 <span className="text-amber-400">
-                                  {item.status === 'starting' ? '启动中...' : '停止中...'}
+                                  {item.status === 'starting' ? '启动中' : '停止中'}
                                 </span>
                               </>
                             )}
                             {item.status === 'error' && (
                               <>
-                                <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]" />
                                 <span className="text-rose-400">异常</span>
                               </>
                             )}
@@ -405,13 +382,23 @@ export const SwitchboardPanel: React.FC<SwitchboardPanelProps> = ({
                               }
                             }}
                             title={isRunning ? `停止 ${item.name}` : `启动 ${item.name}`}
-                            className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all tactile-btn disabled:opacity-50 ${
+                            className={`h-6 px-2 rounded-md text-[11px] border flex items-center gap-1 transition-all tactile-btn disabled:opacity-50 ${
                               isRunning
                                 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
                                 : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                             }`}
                           >
-                            <Power className="w-3.5 h-3.5" />
+                            {isRunning ? (
+                              <>
+                                <Square className="w-2.5 h-2.5 fill-current" />
+                                <span>停止</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-2.5 h-2.5 fill-current" />
+                                <span>启动</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
