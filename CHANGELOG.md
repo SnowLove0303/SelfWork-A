@@ -2,6 +2,29 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.17] - 2026-11-10
+
+### Added & Refactored (统一深色控制台顶栏重塑与左上角占位小图标彻底移除)
+- **左上角突兀占位小图标移除与纯净排版重构 (Placeholder Icon Purged)**:
+  - 彻底移除最顶部左上角的 22px 占位小图标，根除视觉杂质与结构干扰；
+  - 重构左侧区域布局对齐：主标 `SW工作台` 采用高亮浅色 `#E6EDF7`，模块信息采用沉稳弱化色 `#8FA3BF`，保持自然留白与严格基线对齐，杜绝结构错位或排版塌陷。
+- **全窗体贯穿的统一深色控制台色彩体系 (Unified Dark Console Palette)**:
+  - 顶部栏背景色精确采用比主视口略显微蓝灰的深色 `#0D1422`，完美融入整体科技感、冷静克制的深色控制台设计语言，彻底消除“系统默认窗口栏”的断层外挂感；
+  - 底部分隔线采用 `rgba(80, 140, 200, 0.15)` 极弱冷调描边，实现清晰可感知但低存在感的分层；
+  - 控件 Hover 状态采用柔和深蓝灰提亮（`rgba(80, 140, 200, 0.12)`），与主页面的青蓝/天蓝高亮元素浑然天成。
+- **克制窗口控制与柔和暗红关闭交互 (Restrained Window Controls)**:
+  - 窗口右上角集成极简细线条最小化、最大化/还原、关闭三按键；
+  - 关闭按钮默认保持与整体一致的克制暗调，仅在鼠标悬浮时触发柔和暗红（`hover:bg-rose-500/20 hover:text-rose-300`），移出即刻平滑恢复，绝不刺眼。
+- **硬件级零延迟窗口物理拖拽 (Zero-Latency Hardware Dragging)**:
+  - 在 `src-tauri/tauri.conf.json` 中配置 `"decorations": false` 与 `"shadow": true`；
+  - 顶部栏通过原生 `data-tauri-drag-region` 属性驱动，由底层 WebView2 与 Windows 消息循环直接接管拖拽与双击最大化，零 JS 异步微任务阻塞；
+  - 在 Rust 微内核（`src-tauri/src/lib.rs`）中注册 `window_minimize`、`window_toggle_maximize`、`window_close`、`window_is_maximized` 原生命令，与前端形成双通道高可用容灾。
+- **工程产物交付**:
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误退出码 0；
+  - `cargo test` 5/5 底层测试全绿退出码 0；
+  - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
+  - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.59MB）。
+
 ## [0.1.16] - 2026-11-10
 
 ### Added & Refactored (Windows 原生标题栏纯净化：剔除文字与图标，纯净深黑拖拽栏落地)

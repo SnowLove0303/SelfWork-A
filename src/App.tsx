@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Titlebar } from './components/Titlebar.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
-import { Header } from './components/Header.tsx';
 import { SlotContainer } from './components/SlotContainer.tsx';
 import { ModuleId, WorkbenchKernelStatus } from './types/workbench.ts';
 import {
@@ -121,57 +121,59 @@ export default function App(): React.JSX.Element {
   }, [refreshKernel]);
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none min-w-0 box-border">
-      {/* 当 scope === 'window' 且有自定义壁纸时，在根视口渲染底层全景壁纸与防眩遮罩 */}
-      {appearanceSettings.scope === 'window' &&
-      appearanceSettings.type !== 'fluid' &&
-      appearanceSettings.imageUrl ? (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-          <img
-            src={appearanceSettings.imageUrl}
-            alt="全视口背景"
-            className="h-full w-full object-cover"
-          />
-          <div
-            style={{
-              backgroundColor: `rgba(0, 0, 0, ${appearanceSettings.overlayDarkness})`,
-            }}
-            className="absolute inset-0 transition-colors duration-150"
-          />
-        </div>
-      ) : (
-        /* 底层动态流光发生器：在透明玻璃后方缓缓漂移折射 */
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-          <div className="absolute -top-[15%] left-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-sky-500/10 via-cyan-400/8 to-transparent blur-[100px] animate-fluid-a" />
-          <div className="absolute -bottom-[20%] right-[15%] w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-indigo-500/10 via-white/5 to-transparent blur-[120px] animate-fluid-b" />
-          <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-sky-400/[0.03] to-transparent pointer-events-none" />
-        </div>
-      )}
-
-      {/* 侧边功能栏 */}
-      <Sidebar
+    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none min-w-0 box-border">
+      {/* 贯穿全窗体的顶级深色控制台栏 */}
+      <Titlebar
         activeModule={activeModule}
-        onSelectModule={setActiveModule}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
+        kernelStatus={kernelStatus}
+        onRefreshKernel={refreshKernel}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
       />
 
-      {/* 主内容工作区 */}
-      <div className="relative z-10 flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* 顶部状态感知栏 */}
-        <Header
+      {/* 主体工作区容器 (侧栏 + 模块插槽) */}
+      <div className="relative flex flex-1 overflow-hidden min-w-0">
+        {/* 当 scope === 'window' 且有自定义壁纸时，在视口渲染底层全景壁纸与防眩遮罩 */}
+        {appearanceSettings.scope === 'window' &&
+        appearanceSettings.type !== 'fluid' &&
+        appearanceSettings.imageUrl ? (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            <img
+              src={appearanceSettings.imageUrl}
+              alt="全视口背景"
+              className="h-full w-full object-cover"
+            />
+            <div
+              style={{
+                backgroundColor: `rgba(0, 0, 0, ${appearanceSettings.overlayDarkness})`,
+              }}
+              className="absolute inset-0 transition-colors duration-150"
+            />
+          </div>
+        ) : (
+          /* 底层动态流光发生器：在透明玻璃后方缓缓漂移折射 */
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            <div className="absolute -top-[15%] left-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-sky-500/10 via-cyan-400/8 to-transparent blur-[100px] animate-fluid-a" />
+            <div className="absolute -bottom-[20%] right-[15%] w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-indigo-500/10 via-white/5 to-transparent blur-[120px] animate-fluid-b" />
+            <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-sky-400/[0.03] to-transparent pointer-events-none" />
+          </div>
+        )}
+
+        {/* 侧边功能栏 */}
+        <Sidebar
           activeModule={activeModule}
-          kernelStatus={kernelStatus}
-          onRefreshKernel={refreshKernel}
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={toggleSidebar}
+          onSelectModule={setActiveModule}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
         />
 
         {/* 模块插槽画布 */}
-        <SlotContainer
-          activeModule={activeModule}
-          settings={appearanceSettings}
-        />
+        <div className="relative z-10 flex flex-1 flex-col overflow-hidden min-w-0">
+          <SlotContainer
+            activeModule={activeModule}
+            settings={appearanceSettings}
+          />
+        </div>
       </div>
     </div>
   );

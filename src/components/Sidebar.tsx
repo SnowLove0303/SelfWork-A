@@ -3,6 +3,7 @@ import {
   Rocket,
   CheckSquare,
   ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { ModuleId, ModuleItem } from '../types/workbench.ts';
 import appIcon from '../assets/app-icon.png';
@@ -20,7 +21,7 @@ export const MODULES: ModuleItem[] = [
 ];
 
 /**
- * 用户专属流体发光 S-W 品牌 Logo
+ * 用户专属流体发光 S-W 品牌 Logo (保留导出供独立插槽调用)
  */
 export const BrandLogo: React.FC<{ size?: number; className?: string }> = ({ size = 22, className = '' }) => (
   <div
@@ -51,32 +52,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡，严格基准高度 h-11 与单边框规范 */}
-      <div className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border bg-transparent select-none">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <BrandLogo size={22} className="shrink-0" />
-          <span
-            className={`text-xs font-semibold text-fg-primary tracking-tight font-mono whitespace-nowrap overflow-hidden transition-all duration-200 ease-in-out ${
-              collapsed
-                ? 'opacity-0 max-w-0 pointer-events-none'
-                : 'opacity-100 max-w-[80px]'
-            }`}
-          >
-            SW工作台
-          </span>
-        </div>
-        
-        {/* 展开状态下的收起按钮：触觉微交互与毛玻璃微反光 */}
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          title="收起侧栏"
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-colors duration-150 ${
-            collapsed ? 'opacity-0 pointer-events-none scale-75' : 'opacity-100 scale-100'
-          }`}
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
+      {/* 侧栏顶端区域：无占位小图标，纯粹导航状态标识与折叠切换交互 */}
+      <div className="flex h-9 items-center border-b border-border-default px-2.5 overflow-hidden box-border bg-transparent select-none">
+        {collapsed ? (
+          <div className="w-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title="展开侧边栏"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-colors duration-150"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="w-full flex items-center justify-between min-w-0">
+            <span className="text-[10px] font-mono tracking-wider text-[#8FA3BF]/70 font-semibold uppercase truncate">
+              导航
+            </span>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title="收起侧边栏"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-colors duration-150"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 模块导航清单：图标绝对定宽，文字通过 max-width 与 opacity 柔性渐隐，彻底杜绝闪烁跳字与按压抖动 */}
@@ -99,19 +102,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               {/* 激活指示流光柱：微呼吸流光特效 */}
               {isActive && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-primary shadow-[0_0_10px_rgba(56,189,248,0.9)] animate-sheen-pulse" />
+                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-gradient-to-b from-sky-400 via-cyan-300 to-indigo-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
               )}
-              
-              {/* 图标容器：固定居中，绝不随文字移动 */}
-              <div className={`shrink-0 flex items-center justify-center transition-colors ${
-                isActive ? 'text-brand-primary' : 'text-fg-muted group-hover:text-fg-primary'
-              }`}>
-                {renderIcon(mod.iconName, 'h-3.5 w-3.5')}
-              </div>
-
-              {/* 导航文字：像素绝对定帧稳定，点击绝对不抖动不晃眼 */}
+              <span className={`shrink-0 transition-transform duration-150 ${isActive ? 'scale-105 text-sky-400' : ''}`}>
+                {renderIcon(mod.iconName, 'h-4 w-4')}
+              </span>
               <span
-                className={`text-left text-[12px] whitespace-nowrap overflow-hidden transition-all duration-200 ease-in-out select-none ${
+                className={`truncate font-mono transition-all duration-200 ease-in-out ${
                   collapsed
                     ? 'opacity-0 max-w-0 pointer-events-none'
                     : 'opacity-100 max-w-[100px]'
@@ -123,6 +120,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </nav>
+
+      {/* 底部微弱版本状态标识 */}
+      <div className="p-2 border-t border-border-default/40 flex items-center justify-center">
+        <span
+          className={`text-[9px] font-mono text-fg-muted/40 transition-all duration-200 overflow-hidden whitespace-nowrap ${
+            collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'
+          }`}
+        >
+          v0.1.0-alpha
+        </span>
+      </div>
     </aside>
   );
 };

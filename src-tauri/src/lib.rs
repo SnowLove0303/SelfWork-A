@@ -225,6 +225,37 @@ async fn inspect_system_health(
     .map_err(|e| format!("全维巡检任务失败: {}", e))?
 }
 
+/// 窗口原生最小化
+#[tauri::command]
+async fn window_minimize(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+/// 窗口原生最大化/还原切换
+#[tauri::command]
+async fn window_toggle_maximize(window: tauri::Window) -> Result<bool, String> {
+    let is_max = window.is_maximized().map_err(|e| e.to_string())?;
+    if is_max {
+        window.unmaximize().map_err(|e| e.to_string())?;
+        Ok(false)
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+}
+
+/// 检查窗口是否已处于最大化状态
+#[tauri::command]
+async fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
+/// 窗口原生关闭
+#[tauri::command]
+async fn window_close(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -234,7 +265,6 @@ pub fn run() {
             {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.set_title("");
                     if let Ok(hwnd) = window.hwnd() {
                         unsafe {
                             use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
@@ -253,30 +283,6 @@ pub fn run() {
                                 &use_dark as *const _ as _,
                                 std::mem::size_of::<i32>() as u32,
                             );
-
-                            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                                GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, SendMessageW,
-                                GWL_EXSTYLE, WS_EX_DLGMODALFRAME,
-                                SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-                                WM_SETICON, ICON_SMALL, ICON_BIG,
-                            };
-                            SendMessageW(hwnd.0 as _, WM_SETICON, ICON_SMALL as _, 0);
-                            SendMessageW(hwnd.0 as _, WM_SETICON, ICON_BIG as _, 0);
-                            let ex_style = GetWindowLongPtrW(hwnd.0 as _, GWL_EXSTYLE);
-                            SetWindowLongPtrW(
-                                hwnd.0 as _,
-                                GWL_EXSTYLE,
-                                ex_style | WS_EX_DLGMODALFRAME as isize,
-                            );
-                            SetWindowPos(
-                                hwnd.0 as _,
-                                std::ptr::null_mut(),
-                                0,
-                                0,
-                                0,
-                                0,
-                                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
-                            );
                         }
                     }
                 }
@@ -288,6 +294,10 @@ pub fn run() {
             run_launcher_command,
             check_service_ports,
             inspect_system_health,
+            window_minimize,
+            window_toggle_maximize,
+            window_is_maximized,
+            window_close,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
             db::db_get_all_memos,
