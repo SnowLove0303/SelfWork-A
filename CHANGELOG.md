@@ -4,15 +4,18 @@ All notable changes and architectural invariants for SelfWork will be documented
 
 ## [0.1.19] - 2026-11-10
 
-### Added & Enhanced (待办清单与灵感便签拖拽重排与持久化记忆)
-- **待办清单 GTD 原生 HTML5 拖拽重排 (Tasks Drag-and-Drop Reordering)**:
-  - 在 `src/components/tasks/TasksPanel.tsx` 为每个待办项左侧增设精致 `GripVertical` 六点抓手图标，提供 `cursor-grab active:cursor-grabbing` 触觉指引；
-  - 接入完整 HTML5 拖拽事件流（`onDragStart`, `onDragOver`, `onDragEnter`, `onDragLeave`, `onDrop`, `onDragEnd`），拖拽中卡片半透明（`opacity-30`），目标落点呈现明晰的青蓝外边框高亮指引（`border-sky-500/60 ring-1 ring-sky-500/30`）；
-  - 严格物理隔离复选框（Checkbox）、优先级切换（Priority Dot）、今日待办切换与删除等交互控件，防误触防拖拽事件吞没。
-- **灵感便签墙卡片拖拽重排 (Memos Drag-and-Drop Reordering)**:
-  - 在 `src/components/tasks/MemoBoard.tsx` 为每张便签卡片顶部操作栏增设 `GripHorizontal` 抓手把手，支持卡片在瀑布流网格中自由拖拽换位；
-  - 严格隔离标题输入框（`<input>`）、正文编辑框（`<textarea>`）、置顶图标、调色盘菜单与删除按钮，保证文字输入与点选体验 100% 丝滑无冲突；
-  - 拖拽过程附带高亮落点指引，释放后即时重塑卡片顺序。
+### Added & Enhanced (待办清单与灵感便签拖拽重排、Tauri 底座解禁与全卡片长按拖拽)
+- **Tauri v2 底座解禁 HTML5 原生拖拽 (`dragDropEnabled: false`)**:
+  - 穿透 5-Whys 根因：Windows 下 Tauri v2 默认启用 `dragDropEnabled: true` 捕获系统文件外拖入事件，导致全局拦截并吞没了 WebView2 内部所有 HTML5 DOM 原生拖拽事件（`dragstart`, `dragover`, `drop`）；
+  - 在 `src-tauri/tauri.conf.json` 中为主窗口显式配置 `"dragDropEnabled": false`，彻底卸载底层拦截钩子，释放浏览器引擎原生拖拽全能力。
+- **待办清单 GTD 全卡片热区与长按拖拽重排 (Tasks Full-Card Drag & Reorder)**:
+  - 在 `src/components/tasks/TasksPanel.tsx` 将拖拽监听由单一 Grip 图标拓展至整个待办项卡片，支持长按或抓取卡片任意非按钮区域自由拖动换位；
+  - 接入完整 HTML5 拖拽事件流，拖拽中卡片呈半透明（`opacity-30`），目标落点呈现明晰的青蓝外边框高亮指引（`border-sky-500/60 ring-1 ring-sky-500/30`）；
+  - 严格物理隔离复选框（Checkbox）、优先级切换（Priority Dot）、今日待办切换与删除等交互控件，配置 `onMouseDown` 冒泡拦截，点击与切换体验 100% 独立稳定。
+- **灵感便签墙卡片拖拽重排与跨区自适应 (Memos Full-Card Drag & Pinned Sync)**:
+  - 在 `src/components/tasks/MemoBoard.tsx` 将拖拽热区拓展至便签卡片全域与顶部水平 Grip 抓手，支持长按或抓取卡片在瀑布流网格中自由拖拽换位；
+  - 严格隔离标题输入框（`<input>`）、正文编辑框（`<textarea>`）、置顶图标、调色盘菜单与删除按钮，文字编辑与光标选中完全无冲突；
+  - 升级 `handleDropMemo` 重排算法：在基于 `sortedMemos` 重排的同时，自适应同步目标位置的 `isPinned` 置顶属性，拖拽位置与渲染视图 100% 绝对契合。
 - **SQLite 数据库零丢失原子落盘与自定义顺序长效记忆 (Atomic SQLite Order Persistence)**:
   - 在 `src/components/TasksView.tsx` 接入 `onReorderTasks` 与 `onReorderMemos` 事件管线，拖拽换位后即时原子提交至底层 SQLite 数据库持久化存储；
   - 借助 SQLite `save_all_tasks_atomic` 与 `save_all_memos_atomic` 事务保证，按新顺序重排并自增 `rowid`，应用冷启动通过 `ORDER BY rowid ASC` 1:1 绝对保真还原用户自定义顺序。
@@ -21,6 +24,13 @@ All notable changes and architectural invariants for SelfWork will be documented
   - `cargo test` 5/5 底层测试全绿退出码 0；
   - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
   - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.59MB）。
+
+### Root Cause & Engineering Defense (5-Whys 根因穿透与长效防线)
+1. **HTML5 拖拽事件无响应根因**:
+   - Tauri v2 默认开启的系统级文件拖入拦截器在 Windows WebView2 下劫持了原生 Drag/Drop 消息循环，导致前端 DOM 事件无法被派发。
+2. **长效防线下沉**:
+   - 在应用内存在富交互拖拽（如看板、清单排序）时，必须在 `tauri.conf.json` 中显式设置 `"dragDropEnabled": false`；
+   - 拖拽热区不可仅依赖小图标（如 14px Grip），必须支持全卡片（排除输入框与操作按钮）或卡片 Header，以契合用户的拖拽直觉与长按习惯。
 
 ## [0.1.18] - 2026-11-10
 

@@ -207,6 +207,21 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
             return (
               <div
                 key={task.id}
+                draggable
+                onDragStart={(e) => {
+                  // 如果点击的是特定操作按钮，不触发卡片拖拽
+                  if ((e.target as HTMLElement).closest('button')) {
+                    e.preventDefault();
+                    return;
+                  }
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', task.id);
+                  setDraggedTaskId(task.id);
+                }}
+                onDragEnd={() => {
+                  setDraggedTaskId(null);
+                  setDropTargetTaskId(null);
+                }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
@@ -227,7 +242,7 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
                   e.preventDefault();
                   handleDropTask(task.id);
                 }}
-                className={`group h-10 px-2.5 rounded-lg border transition-all flex items-center gap-2 min-w-0 ${
+                className={`group h-10 px-2.5 rounded-lg border transition-all flex items-center gap-2 min-w-0 cursor-grab active:cursor-grabbing ${
                   isDragging
                     ? 'opacity-30 scale-[0.99] border-dashed border-sky-400/60 bg-sky-500/[0.04]'
                     : isDropTarget
@@ -239,19 +254,8 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
               >
                 {/* 拖拽抓手图标 */}
                 <div
-                  draggable
-                  onDragStart={(e) => {
-                    e.stopPropagation();
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', task.id);
-                    setDraggedTaskId(task.id);
-                  }}
-                  onDragEnd={() => {
-                    setDraggedTaskId(null);
-                    setDropTargetTaskId(null);
-                  }}
                   title="按住拖拽调整顺序"
-                  className="opacity-20 group-hover:opacity-75 hover:!opacity-100 p-0.5 -ml-1 text-fg-muted hover:text-fg-primary cursor-grab active:cursor-grabbing transition-opacity shrink-0"
+                  className="opacity-30 group-hover:opacity-80 hover:!opacity-100 p-0.5 -ml-1 text-fg-muted hover:text-fg-primary cursor-grab active:cursor-grabbing transition-opacity shrink-0"
                 >
                   <GripVertical className="w-3.5 h-3.5 shrink-0" />
                 </div>
@@ -259,9 +263,11 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
                 {/* 触觉复选框 */}
                 <button
                   type="button"
+                  draggable={false}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onToggleStatus(task.id)}
                   title={isDone ? '标记为未完成' : '标记为已完成'}
-                  className={`w-4 h-4 rounded shrink-0 flex items-center justify-center transition-all tactile-btn ${
+                  className={`w-4 h-4 rounded shrink-0 flex items-center justify-center transition-all tactile-btn cursor-pointer ${
                     isDone
                       ? 'bg-brand-primary/80 border border-brand-primary text-black'
                       : 'border border-white/[0.25] hover:border-brand-primary/70 bg-black/30'
@@ -273,9 +279,11 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
                 {/* 优先级微光圆点 (点击切换) */}
                 <button
                   type="button"
+                  draggable={false}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onCyclePriority(task.id)}
                   title={dot.title}
-                  className="p-1 -m-1 rounded hover:bg-white/[0.08] transition-colors shrink-0"
+                  className="p-1 -m-1 rounded hover:bg-white/[0.08] transition-colors shrink-0 cursor-pointer"
                 >
                   <span className={`block w-2 h-2 rounded-full transition-all ${dot.className}`} />
                 </button>
@@ -283,7 +291,7 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
                 {/* 任务标题 */}
                 <span
                   onClick={() => onToggleStatus(task.id)}
-                  className={`flex-1 text-xs truncate cursor-pointer select-none transition-colors min-w-0 ${
+                  className={`flex-1 text-xs truncate select-none transition-colors min-w-0 ${
                     isDone
                       ? 'line-through text-fg-muted/70 font-normal'
                       : 'text-fg-primary font-medium'
@@ -295,9 +303,11 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
                 {/* 今日胶囊小标签 (点击切换今日归属) */}
                 <button
                   type="button"
+                  draggable={false}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onToggleToday(task.id)}
                   title={task.isToday ? '移出今日安排' : '设为今日待办'}
-                  className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors tactile-btn shrink-0 whitespace-nowrap ${
+                  className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors tactile-btn shrink-0 whitespace-nowrap cursor-pointer ${
                     task.isToday
                       ? 'bg-amber-400/15 text-amber-300 border border-amber-400/25'
                       : 'opacity-0 group-hover:opacity-100 text-fg-muted hover:text-fg-secondary bg-white/[0.04]'
@@ -310,9 +320,11 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
                 {/* 删除按钮 (悬停优雅浮现) */}
                 <button
                   type="button"
+                  draggable={false}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onDeleteTask(task.id)}
                   title="删除任务"
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/20 hover:text-rose-400 text-fg-muted transition-all tactile-btn shrink-0"
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/20 hover:text-rose-400 text-fg-muted transition-all tactile-btn shrink-0 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5 shrink-0" />
                 </button>
