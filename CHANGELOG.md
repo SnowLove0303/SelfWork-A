@@ -2,6 +2,29 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.11] - 2026-11-10
+
+### Fixed & Enhanced (窗口与 UI 全域弹性自适应与抗挤压重构)
+- **抗挤压不变量系统落地 (Anti-Squish Invariant Architecture)**:
+  - 在全局样式注入 `.anti-squish` 与抗形变规范，所有功能图标容器显式锁定 `shrink-0`，彻底阻断 Flexbox 压缩导致的图标扁塌走样；
+  - 核心操作按钮（“启动”、“停止”、“全启动”、“全停止”、“探查”、“便签”等）与状态徽章（`:port`、`PID: xxx`）锁定 `shrink-0` 与 `whitespace-nowrap`，彻底根除汉字断行与单字纵向扭曲；
+  - 文本主体（服务名称、待办标题、集群标题）统一应用 `min-w-0 flex-1 truncate`，实现优雅文本截断与安全弹性伸缩。
+- **双栏工作台最小安全宽度边界 (Dual-Column Safety Boundaries)**:
+  - 快速启动器分栏设立安全宽度底线：左侧开关阵列 `min-w-[380px] flex-1`，右侧报文控制台 `min-w-[300px]`；
+  - 待办与便签分栏设立安全宽度底线：左侧待办清单 `min-w-[380px] flex-1`，右侧便签墙 `min-w-[280px]`；
+  - 顶部控制栏与过滤标签组在窄视口下支持自适应弹性排列与滚动防溢出，消除十余个控件强行并排导致的挤压错位。
+- **视口宽度感知与侧栏自适应联动 (Viewport Awareness)**:
+  - 根视口注入窗口尺寸监听器，当视口宽度缩窄至 1080px 以下时，侧边栏智能平滑收起至 48px 图标模式，为工作台释放 112px 关键横向视野；
+  - 主舞台画板 `SlotContainer` 与各模块挂载 `min-w-0`，消除任何向外溢出与破坏性挤压。
+- **工程产物交付**:
+  - 全量生产编译更新单文件可执行程序 `SelfWork.exe`（5.5MB，退出码 0，离线秒开）。
+
+### Root Cause & Engineering Defense (根因穿透与长效防线)
+1. **窗口缩放导致 UI 与文字扭曲根因**:
+   - Flex 容器在无 `shrink-0` 约束下默认按等比压缩所有子项，将图标挤压扁塌；文字未配置 `min-w-0` 与 `whitespace-nowrap`，触发了恶性单字折行；双栏缺少安全最小宽度导致控件碰撞。
+2. **长效防线下沉**:
+   - 确立“原子控件抗挤压、文本主体安全截断、分栏容器设最小宽度、窄视口折叠侧栏”四位一体的自适应工程标准。
+
 ## [0.1.10] - 2026-11-09
 
 ### Fixed (修复便签与待办删除持久化与首发初始化生命周期)

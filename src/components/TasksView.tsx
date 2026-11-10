@@ -201,9 +201,9 @@ export const TasksView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex h-full w-full overflow-hidden">
-      {/* 左侧 58%：GTD 待办清单工作台 */}
-      <div className="w-[58%] h-full flex flex-col min-w-0">
+    <div className="flex-1 flex h-full w-full overflow-hidden min-w-0">
+      {/* 左侧 58%：GTD 待办清单工作台 (设置最小安全宽度 380px，支持弹性自适应伸缩) */}
+      <div className="w-[58%] min-w-[380px] flex-1 h-full flex flex-col min-w-0">
         <TasksPanel
           tasks={tasks}
           onAddTask={handleAddTask}
@@ -215,8 +215,8 @@ export const TasksView: React.FC = () => {
         />
       </div>
 
-      {/* 右侧 42%：灵感便签墙 */}
-      <div className="w-[42%] h-full flex flex-col min-w-0">
+      {/* 右侧 42%：灵感便签墙 (设置最小安全宽度 280px) */}
+      <div className="w-[42%] min-w-[280px] h-full flex flex-col min-w-0">
         <MemoBoard
           memos={memos}
           onAddMemo={handleAddMemo}

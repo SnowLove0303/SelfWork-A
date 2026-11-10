@@ -50,7 +50,10 @@ async function pingTauriKernel(): Promise<WorkbenchKernelStatus> {
 
 export default function App(): React.JSX.Element {
   const [activeModule, setActiveModule] = useState<ModuleId>('launcher');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  // 视口感知初始态：若窗口宽度小于 1080px 则默认收起侧栏，释放主舞台视野
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.innerWidth < 1080
+  );
   const [kernelStatus, setKernelStatus] = useState<WorkbenchKernelStatus>({
     status: 'connecting',
     version: '...',
@@ -59,6 +62,23 @@ export default function App(): React.JSX.Element {
     latencyMs: 0,
     serverTime: 0,
   });
+
+  // 监听窗口尺寸动态变化，跨越 1080px 临界阈值时自动平滑联动侧栏
+  useEffect(() => {
+    let prevWidth = window.innerWidth;
+    const handleResize = () => {
+      const curWidth = window.innerWidth;
+      if (curWidth < 1080 && prevWidth >= 1080) {
+        setSidebarCollapsed(true);
+      } else if (curWidth >= 1200 && prevWidth < 1080) {
+        setSidebarCollapsed(false);
+      }
+      prevWidth = curWidth;
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 外观与背景设置：初始化尝试从本地同步缓存瞬时恢复
   const [appearanceSettings, setAppearanceSettings] =
@@ -115,7 +135,7 @@ export default function App(): React.JSX.Element {
   }, [refreshKernel]);
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none">
+    <div className="relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none min-w-0">
       {/* 当 scope === 'window' 且有自定义壁纸时，在根视口渲染底层全景壁纸与防眩遮罩 */}
       {appearanceSettings.scope === 'window' &&
       appearanceSettings.type !== 'fluid' &&
@@ -151,7 +171,7 @@ export default function App(): React.JSX.Element {
       />
 
       {/* 主内容工作区 */}
-      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden min-w-0">
         {/* 顶部状态感知栏 */}
         <Header
           activeModule={activeModule}

@@ -140,37 +140,34 @@ export const LauncherDashboard: React.FC = () => {
               return {
                 ...item,
                 status: nextStatus,
-                pids: matchedPids.length > 0 ? Array.from(new Set(matchedPids)) : undefined,
+                pids: matchedPids,
               };
             }),
           }))
         );
 
-        // 输出手动探查小结
+        isInitialProbeRef.current = false;
+
         if (isManual) {
-          const activeDetails =
-            activeItemsSummary.length > 0
-              ? activeItemsSummary.map((line) => `  • ${line}`).join('\n')
-              : '  (暂无活跃服务)';
           appendLog(
             'inspect',
             'success',
-            `巡检完成 (耗时 ${snapshot.duration_ms}ms): 共巡检 ${totalMonitored} 项服务，发现 ${activeCount} 项活跃:\n${activeDetails}`
+            `巡检完成：探测到 ${activeCount}/${totalMonitored} 个服务活跃存活` +
+              (activeItemsSummary.length > 0
+                ? `\n存活明细: ${activeItemsSummary.join(' | ')}`
+                : ' (未探测到活跃外部服务)')
           );
+        } else if (externalChanges.length > 0) {
+          const lines = externalChanges
+            .map((c) => `• 服务 [${c.name}] 外部状态变更为: ${c.status === 'running' ? '运行中 (PID探测)' : '已停止'}`)
+            .join('\n');
+          appendLog('daemon', 'info', `感知到外部服务状态自主变更:\n${lines}`);
         }
-
-        // 输出外部状态变动日志
-        for (const change of externalChanges) {
-          appendLog(
-            'inspect',
-            'info',
-            `外部状态变动感知: ${change.name} 状态变更为 [${change.status === 'running' ? '运行中' : '已停止'}]`
-          );
+      } catch (err: unknown) {
+        if (isManual) {
+          const errMsg = typeof err === 'string' ? err : String(err);
+          appendLog('inspect', 'warn', `真实巡检探测受阻 (Web环境降级或端口拒绝): ${errMsg}`);
         }
-
-        isInitialProbeRef.current = false;
-      } catch (_err) {
-        // 浏览器 Web 预览环境降级
       } finally {
         setIsPolling(false);
       }
@@ -178,19 +175,24 @@ export const LauncherDashboard: React.FC = () => {
     [appendLog]
   );
 
-  // 挂载定时轮询 (每 4 秒轮询一次)
+  // 挂载初次真实巡检 + 每 3 秒后台低开销静默感知
   useEffect(() => {
     pollHealth(false);
-    const interval = setInterval(() => pollHealth(false), 4000);
-    return () => clearInterval(interval);
+    const timer = setInterval(() => {
+      pollHealth(false);
+    }, 3000);
+    return () => clearInterval(timer);
   }, [pollHealth]);
 
-  // 调用 Rust IPC 执行启动器指令
+  // 调用后端执行启动/停止操作
   const dispatchCommand = useCallback(
-    async (action: string, target: string, itemIds?: string[]) => {
-      // 设置关联服务项为过渡状态
+    async (
+      action: 'start' | 'stop',
+      target: string,
+      itemIds?: string[]
+    ) => {
       if (itemIds && itemIds.length > 0) {
-        const nextStatus = action === 'start' ? 'starting' : 'stopping';
+        const nextStatus: ServiceStatus = action === 'start' ? 'starting' : 'stopping';
         setClusters((prev) =>
           prev.map((c) => ({
             ...c,
@@ -333,9 +335,9 @@ export const LauncherDashboard: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-row h-full w-full overflow-hidden">
-      {/* 左侧 55%：仪表盘开关阵列 */}
-      <div className="w-[55%] h-full flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-row h-full w-full overflow-hidden min-w-0">
+      {/* 左侧 55%：仪表盘开关阵列 (设置最小安全宽度 380px，支持弹性自适应伸缩) */}
+      <div className="w-[55%] min-w-[380px] flex-1 h-full flex flex-col overflow-hidden">
         <SwitchboardPanel
           clusters={clusters}
           isPolling={isPolling}
@@ -350,8 +352,8 @@ export const LauncherDashboard: React.FC = () => {
         />
       </div>
 
-      {/* 右侧 45%：执行报文控制台 */}
-      <div className="w-[45%] h-full flex flex-col overflow-hidden">
+      {/* 右侧 45%：执行报文控制台 (设置最小安全宽度 300px) */}
+      <div className="w-[45%] min-w-[300px] h-full flex flex-col overflow-hidden">
         <TelemetryPanel logs={logs} onClearLogs={handleClearLogs} />
       </div>
     </div>

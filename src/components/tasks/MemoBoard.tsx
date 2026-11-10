@@ -118,16 +118,16 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent select-none">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent select-none min-w-0">
       {/* 顶部工具栏 */}
-      <div className="h-11 px-3.5 flex items-center justify-between shrink-0 border-b border-border-subtle bg-white/[0.01]">
-        <div className="flex items-center gap-2">
-          <StickyNote className="w-4 h-4 text-amber-400" />
-          <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono">
+      <div className="h-11 px-3.5 flex items-center justify-between shrink-0 border-b border-border-subtle bg-white/[0.01] min-w-0">
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
+          <StickyNote className="w-4 h-4 text-amber-400 shrink-0" />
+          <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
             灵感便签
           </h2>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted font-mono border border-white/[0.06]">
-            {memos.length} 条
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted font-mono border border-white/[0.06] shrink-0 whitespace-nowrap">
+            {memos.length} 张
           </span>
         </div>
 
@@ -135,18 +135,18 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
         <button
           type="button"
           onClick={onAddMemo}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-3.5 h-3.5 shrink-0" />
           <span>便签</span>
         </button>
       </div>
 
-      {/* 便签卡片流 */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
+      {/* 便签卡片区 */}
+      <div className="flex-1 overflow-y-auto p-3.5 space-y-3 min-w-0">
         {sortedMemos.length === 0 ? (
           <div className="h-44 flex flex-col items-center justify-center text-center">
-            <span className="text-xs text-fg-muted/50 font-mono">
+            <span className="text-xs text-fg-muted/50 font-mono shrink-0 whitespace-nowrap">
               暂无灵感便签，点击右上角 + 便签 记录
             </span>
           </div>
@@ -158,11 +158,11 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
             return (
               <div
                 key={memo.id}
-                className={`group relative rounded-xl p-3 border transition-all duration-150 shadow-[0_2px_12px_rgba(0,0,0,0.25)] flex flex-col gap-2 ${themeStyle.bg} ${themeStyle.border}`}
+                className={`group relative rounded-xl p-3 border transition-all duration-150 shadow-[0_2px_12px_rgba(0,0,0,0.25)] flex flex-col gap-2 min-w-0 ${themeStyle.bg} ${themeStyle.border}`}
               >
                 {/* 顶部卡片操作栏 (悬停优雅浮现) */}
-                <div className="flex items-center justify-between gap-1 text-fg-muted">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-1 text-fg-muted min-w-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {/* 置顶指示与切换 */}
                     <button
                       type="button"
@@ -173,13 +173,13 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                         })
                       }
                       title={memo.isPinned ? '取消置顶' : '置顶便签'}
-                      className={`p-1 rounded transition-colors tactile-btn ${
+                      className={`p-1 rounded transition-colors tactile-btn shrink-0 ${
                         memo.isPinned
                           ? 'text-amber-400 bg-amber-400/10'
                           : 'hover:text-fg-primary opacity-0 group-hover:opacity-100 hover:bg-white/[0.06]'
                       }`}
                     >
-                      <Pin className={`w-3.5 h-3.5 ${memo.isPinned ? 'fill-amber-400' : ''}`} />
+                      <Pin className={`w-3.5 h-3.5 shrink-0 ${memo.isPinned ? 'fill-amber-400' : ''}`} />
                     </button>
 
                     {/* 主题微光圆点指示 (点击循环切换) */}
@@ -187,27 +187,27 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                       type="button"
                       onClick={() => handleCycleTheme(memo)}
                       title="切换微冷色调"
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:text-fg-primary hover:bg-white/[0.06] transition-all tactile-btn flex items-center gap-1"
+                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:text-fg-primary hover:bg-white/[0.06] transition-all tactile-btn flex items-center gap-1 shrink-0"
                     >
-                      <Palette className="w-3.5 h-3.5" />
-                      <span className={`w-1.5 h-1.5 rounded-full ${themeStyle.dot}`} />
+                      <Palette className="w-3.5 h-3.5 shrink-0" />
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${themeStyle.dot}`} />
                     </button>
                   </div>
 
                   {/* 复制与删除 */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {/* 复制按钮 */}
                     <button
                       type="button"
                       onClick={() => handleCopy(memo)}
                       title={isCopied ? '已复制到剪贴板' : '复制便签文本'}
-                      className={`p-1 rounded transition-all tactile-btn relative ${
+                      className={`p-1 rounded transition-all tactile-btn relative shrink-0 ${
                         isCopied
                           ? 'text-emerald-400 bg-emerald-500/20 opacity-100'
                           : 'opacity-0 group-hover:opacity-100 hover:text-fg-primary hover:bg-white/[0.06]'
                       }`}
                     >
-                      {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {isCopied ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
                     </button>
 
                     {/* 删除按钮 */}
@@ -215,9 +215,9 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                       type="button"
                       onClick={() => onDeleteMemo(memo.id)}
                       title="删除便签"
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/20 hover:text-rose-400 transition-all tactile-btn"
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/20 hover:text-rose-400 transition-all tactile-btn shrink-0"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
                     </button>
                   </div>
                 </div>
@@ -233,10 +233,10 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                       updatedAt: Date.now(),
                     })
                   }
-                  className="bg-transparent border-none text-xs font-semibold text-fg-primary placeholder:text-fg-muted/40 focus:outline-none focus:ring-0 p-0"
+                  className="bg-transparent border-none text-xs font-semibold text-fg-primary placeholder:text-fg-muted/40 focus:outline-none focus:ring-0 p-0 min-w-0"
                 />
 
-                {/* 便签正文多行文本域 (自动高度/舒适阅读) */}
+                {/* 便签正文多行文本区 (自动高度/舒适阅读) */}
                 <textarea
                   rows={Math.max(3, Math.min(10, (memo.content.split('\n').length || 1) + 1))}
                   value={memo.content}
@@ -247,13 +247,13 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                       updatedAt: Date.now(),
                     })
                   }
-                  className="bg-transparent border-none text-[12px] leading-relaxed text-fg-secondary focus:text-fg-primary placeholder:text-fg-muted/40 focus:outline-none focus:ring-0 p-0 resize-y font-mono"
+                  className="bg-transparent border-none text-[12px] leading-relaxed text-fg-secondary focus:text-fg-primary placeholder:text-fg-muted/40 focus:outline-none focus:ring-0 p-0 resize-y font-mono min-w-0 break-words"
                 />
 
                 {/* 底部微小时间标签 */}
-                <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] text-[10px] text-fg-muted/50 font-mono">
-                  <span>{formatMemoTime(memo.updatedAt)}</span>
-                  {memo.isPinned && <span className="text-amber-400/80">已置顶</span>}
+                <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] text-[10px] text-fg-muted/50 font-mono min-w-0">
+                  <span className="shrink-0 whitespace-nowrap">{formatMemoTime(memo.updatedAt)}</span>
+                  {memo.isPinned && <span className="text-amber-400/80 shrink-0 whitespace-nowrap">已置顶</span>}
                 </div>
               </div>
             );

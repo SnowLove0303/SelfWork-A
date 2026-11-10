@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  /* 基础暗色工业画布 (带层次梯度的黑灰白基调) */
+  /* 基础暗色工业画布 (带层次梯度的黑灰白基底) */
   --color-canvas-subtle: #080b11;
   --color-canvas-default: rgba(12, 16, 26, 0.35);
   --color-canvas-elevated: rgba(20, 26, 40, 0.45);
@@ -13,7 +13,7 @@
   --color-fg-secondary: #94a3b8;
   --color-fg-muted: #64748b;
 
-  /* 专业克制品牌中性冷蓝与黑灰白 */
+  /* 专业克制品牌中性冷蓝与黑灰阶 */
   --color-brand-primary: #38bdf8;
   --color-brand-hover: #0ea5e9;
   --color-brand-subtle: rgba(56, 189, 248, 0.12);
@@ -30,10 +30,24 @@ body {
   padding: 0;
   background-color: var(--color-canvas-subtle);
   color: var(--color-fg-primary);
-  font-family: 'Microsoft YaHei', '微软雅黑', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "微软雅黑", sans-serif;
   user-select: none;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ==========================================================================
+   抗挤压不变量与几何保护 (Anti-Squish Invariant Classes)
+   ========================================================================== */
+.anti-squish {
+  flex-shrink: 0 !important;
+}
+
+.anti-squish-pill {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
 
 /* 统一单边框类：纯净 1px 实线，绝不附加破坏正交交界的外部投影 */
@@ -64,9 +78,11 @@ body {
     0 4px 24px -2px rgba(0, 0, 0, 0.5);
 }
 
-/* 触觉交互按钮：彻底消除文字与整体位移/缩放，依靠纯光学深度传达下压手感 */
+/* 触觉交互按钮：默认锁定 shrink-0 与 whitespace-nowrap，彻底消除挤压变形与文字断行 */
 .tactile-btn {
   position: relative;
+  flex-shrink: 0;
+  white-space: nowrap;
   transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
@@ -77,7 +93,7 @@ body {
     0 2px 8px 0 rgba(0, 0, 0, 0.25);
 }
 
-/* 关键修复：绝对禁止 transform 缩放/位移，文字 100% 稳如磐石不晃眼 */
+/* 关键修复：绝对禁止 transform 缩放/位移，文字 100% 稳如磐石不晃动 */
 .tactile-btn:active {
   transform: none !important;
   background-color: rgba(255, 255, 255, 0.04);
@@ -97,8 +113,10 @@ body {
     0 2px 10px 0 rgba(0, 0, 0, 0.35);
 }
 
-/* 触觉状态胶囊：同样消除缩放 */
+/* 触觉状态胶囊：锁定抗压缩 */
 .tactile-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
   transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
   box-shadow: 
     inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
@@ -114,6 +132,15 @@ body {
 .tactile-pill:active {
   transform: none !important;
   box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* 隐藏滚动条但保留滚动能力 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* 流光漂移动画定义 */

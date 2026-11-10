@@ -22,7 +22,7 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
   const currentMod = MODULES.find((m) => m.id === activeModule) || MODULES[0];
 
   return (
-    <main className="flex-1 bg-transparent p-3.5 overflow-hidden box-border">
+    <main className="flex-1 bg-transparent p-3.5 overflow-hidden box-border min-w-0">
       {/* 纯净主舞台：支持透明度与高斯模糊动态绑定的晶体画板 */}
       <div
         style={{
@@ -30,7 +30,7 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
           backdropFilter: `blur(${settings.blur}px)`,
           WebkitBackdropFilter: `blur(${settings.blur}px)`,
         }}
-        className="h-full w-full rounded-xl border border-white/[0.10] shadow-[0_4px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15)] flex flex-col relative overflow-hidden box-border transition-colors duration-150"
+        className="h-full w-full rounded-xl border border-white/[0.10] shadow-[0_4px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15)] flex flex-col relative overflow-hidden box-border transition-colors duration-150 min-w-0"
       >
         {/* 如果 scope === 'stage' 且配置了自定义背景，在画板卡片内部渲染壁纸与防眩遮罩 */}
         {settings.scope === 'stage' && settings.type !== 'fluid' && settings.imageUrl && (
@@ -60,7 +60,7 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
         )}
 
         {/* 内容展示区：根据激活模块渲染对应视图 */}
-        <div className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden">
+        <div className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden min-w-0">
           {activeModule === 'settings' ? (
             <SettingsView
               settings={settings}
