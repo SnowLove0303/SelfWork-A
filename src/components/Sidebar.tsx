@@ -51,12 +51,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         collapsed ? 'w-12' : 'w-40'
       }`}
     >
-      {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡，严格基准高度 h-11 与单边框规范 */}
-      <div className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border bg-transparent">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡，严格基准高度 h-11 与单边框规范，支持原生窗口拖拽抓手 */}
+      <div
+        data-tauri-drag-region
+        className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border bg-transparent select-none cursor-default"
+      >
+        <div data-tauri-drag-region className="flex items-center gap-2 min-w-0 flex-1 cursor-default">
           <BrandLogo size={22} className="shrink-0" />
           <span
-            className={`text-xs font-semibold text-fg-primary tracking-tight font-mono whitespace-nowrap overflow-hidden transition-all duration-200 ease-in-out ${
+            data-tauri-drag-region
+            className={`text-xs font-semibold text-fg-primary tracking-tight font-mono whitespace-nowrap overflow-hidden transition-all duration-200 ease-in-out cursor-default ${
               collapsed
                 ? 'opacity-0 max-w-0 pointer-events-none'
                 : 'opacity-100 max-w-[80px]'
@@ -66,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </div>
         
-        {/* 展开状态下的收起按钮：触觉微交互与毛玻璃微反光 */}
+        {/* 展开状态下的收起按钮：触觉微交互与毛玻璃微反光 (严格设为独立点击区，防止拖拽误触) */}
         <button
           type="button"
           onClick={onToggleCollapse}

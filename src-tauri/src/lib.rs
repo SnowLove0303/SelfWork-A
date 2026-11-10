@@ -31,6 +31,37 @@ fn workbench_ping(client_time_ms: Option<u64>) -> Result<PingResponse, String> {
     })
 }
 
+/// 窗口原生操作命令：最小化
+#[tauri::command]
+fn window_minimize(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+/// 窗口原生操作命令：最大化与还原切换
+#[tauri::command]
+fn window_toggle_maximize(window: tauri::Window) -> Result<bool, String> {
+    let is_max = window.is_maximized().map_err(|e| e.to_string())?;
+    if is_max {
+        window.unmaximize().map_err(|e| e.to_string())?;
+        Ok(false)
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+}
+
+/// 窗口原生操作命令：受控关闭
+#[tauri::command]
+fn window_close(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
+/// 窗口原生操作命令：查询是否处于最大化状态
+#[tauri::command]
+fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
 /// 执行 Workflow-Launcher.ps1 脚本指令
 /// 在 Windows 下配置 CREATE_NO_WINDOW 标志彻底杜绝命令行黑框闪烁
 #[tauri::command]
@@ -234,6 +265,10 @@ pub fn run() {
             run_launcher_command,
             check_service_ports,
             inspect_system_health,
+            window_minimize,
+            window_toggle_maximize,
+            window_close,
+            window_is_maximized,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
             db::db_get_all_memos,
