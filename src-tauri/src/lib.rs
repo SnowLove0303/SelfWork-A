@@ -234,6 +234,7 @@ pub fn run() {
             {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_title("");
                     if let Ok(hwnd) = window.hwnd() {
                         unsafe {
                             use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
@@ -251,6 +252,30 @@ pub fn run() {
                                 19,
                                 &use_dark as *const _ as _,
                                 std::mem::size_of::<i32>() as u32,
+                            );
+
+                            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                                GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, SendMessageW,
+                                GWL_EXSTYLE, WS_EX_DLGMODALFRAME,
+                                SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+                                WM_SETICON, ICON_SMALL, ICON_BIG,
+                            };
+                            SendMessageW(hwnd.0 as _, WM_SETICON, ICON_SMALL as _, 0);
+                            SendMessageW(hwnd.0 as _, WM_SETICON, ICON_BIG as _, 0);
+                            let ex_style = GetWindowLongPtrW(hwnd.0 as _, GWL_EXSTYLE);
+                            SetWindowLongPtrW(
+                                hwnd.0 as _,
+                                GWL_EXSTYLE,
+                                ex_style | WS_EX_DLGMODALFRAME as isize,
+                            );
+                            SetWindowPos(
+                                hwnd.0 as _,
+                                std::ptr::null_mut(),
+                                0,
+                                0,
+                                0,
+                                0,
+                                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
                             );
                         }
                     }

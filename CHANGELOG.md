@@ -2,6 +2,25 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.16] - 2026-11-10
+
+### Added & Refactored (Windows 原生标题栏纯净化：剔除文字与图标，纯净深黑拖拽栏落地)
+- **清空原生标题栏图文杂质 (Clean Native Caption Bar)**:
+  - 在 `src-tauri/tauri.conf.json` 中配置主窗口 `"title": ""`，并在 Rust 内核启动时显式调用 `window.set_title("")`，彻底清除系统原生标题栏上的任何文字；
+  - 在 `src-tauri/Cargo.toml` 中为 `windows-sys` 开启 `"Win32_UI_WindowsAndMessaging"` 特性依赖；
+  - 在 `src-tauri/src/lib.rs` 的 `.setup` 生命周期中，通过 Win32 API 向 HWND 发送 `WM_SETICON (ICON_SMALL, 0)` 与 `WM_SETICON (ICON_BIG, 0)` 清除图标句柄，并在 `GWL_EXSTYLE` 扩展样式中注入 `WS_EX_DLGMODALFRAME` 阻止系统回退读取 class 图标，配合 `SWP_FRAMECHANGED` 立即刷新 DWM 客户区与非客户区；
+  - 原生标题栏左侧完全无图标、无文本，变为一条深邃极简、沉浸感拉满的纯黑物理拖拽条。
+- **100% 保留原生硬件级物理交互与控制按键 (Native Interaction Preserved)**:
+  - 完整保留 Windows 10/11 原生硬件级拖动、双击最大化、Aero Snap 贴靠吸附、Snap Layouts 布局菜单；
+  - 右上角完整保留 Windows 原生沉浸深色的最小化、最大化与关闭三按键。
+- **品牌视觉标识收敛与单点独家呈现 (Brand Single Source of Truth)**:
+  - 应用程序流体发光 S-W Logo 与“SW工作台”名称纯粹收敛在左侧边栏顶端 BrandHeader 中独家展示，彻底根除“顶部标题栏 + 侧栏顶端”垂直堆叠的“视觉双胞胎”冗余。
+- **工程产物交付**:
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误退出码 0；
+  - `cargo test` 5/5 底层测试全绿退出码 0；
+  - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
+  - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.57MB）。
+
 ## [0.1.15] - 2026-11-10
 
 ### Added & Refactored (Windows 原生标题栏回归与 DWM 沉浸式深色模式工程落地)
