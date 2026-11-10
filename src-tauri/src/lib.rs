@@ -31,43 +31,6 @@ fn workbench_ping(client_time_ms: Option<u64>) -> Result<PingResponse, String> {
     })
 }
 
-/// 窗口原生操作命令：最小化
-#[tauri::command]
-fn window_minimize(window: tauri::Window) -> Result<(), String> {
-    window.minimize().map_err(|e| e.to_string())
-}
-
-/// 窗口原生操作命令：最大化与还原切换
-#[tauri::command]
-fn window_toggle_maximize(window: tauri::Window) -> Result<bool, String> {
-    let is_max = window.is_maximized().map_err(|e| e.to_string())?;
-    if is_max {
-        window.unmaximize().map_err(|e| e.to_string())?;
-        Ok(false)
-    } else {
-        window.maximize().map_err(|e| e.to_string())?;
-        Ok(true)
-    }
-}
-
-/// 窗口原生操作命令：受控关闭
-#[tauri::command]
-fn window_close(window: tauri::Window) -> Result<(), String> {
-    window.close().map_err(|e| e.to_string())
-}
-
-/// 窗口原生操作命令：查询是否处于最大化状态
-#[tauri::command]
-fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
-    window.is_maximized().map_err(|e| e.to_string())
-}
-
-/// 窗口原生操作命令：发起窗口拖拽移动
-#[tauri::command]
-fn window_start_dragging(window: tauri::Window) -> Result<(), String> {
-    window.start_dragging().map_err(|e| e.to_string())
-}
-
 /// 执行 Workflow-Launcher.ps1 脚本指令
 /// 在 Windows 下配置 CREATE_NO_WINDOW 标志彻底杜绝命令行黑框闪烁
 #[tauri::command]
@@ -266,16 +229,40 @@ async fn inspect_system_health(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            #[cfg(windows)]
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(hwnd) = window.hwnd() {
+                        unsafe {
+                            use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
+                            let use_dark: i32 = 1;
+                            // 20: DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 11 & Windows 10 20H1+)
+                            DwmSetWindowAttribute(
+                                hwnd.0 as _,
+                                20,
+                                &use_dark as *const _ as _,
+                                std::mem::size_of::<i32>() as u32,
+                            );
+                            // 19: DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 10 1809~1909)
+                            DwmSetWindowAttribute(
+                                hwnd.0 as _,
+                                19,
+                                &use_dark as *const _ as _,
+                                std::mem::size_of::<i32>() as u32,
+                            );
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             workbench_ping,
             run_launcher_command,
             check_service_ports,
             inspect_system_health,
-            window_minimize,
-            window_toggle_maximize,
-            window_close,
-            window_is_maximized,
-            window_start_dragging,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
             db::db_get_all_memos,

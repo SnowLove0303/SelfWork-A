@@ -53,8 +53,6 @@ export default function App(): React.JSX.Element {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(
     () => typeof window !== 'undefined' && window.innerWidth < 1080
   );
-  // 窗口最大化物理状态感知
-  const [isMaximized, setIsMaximized] = useState<boolean>(false);
   const [kernelStatus, setKernelStatus] = useState<WorkbenchKernelStatus>({
     status: 'connecting',
     version: '...',
@@ -123,13 +121,7 @@ export default function App(): React.JSX.Element {
   }, [refreshKernel]);
 
   return (
-    <div
-      className={`relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none min-w-0 box-border transition-colors duration-150 ${
-        isMaximized
-          ? 'border-0 rounded-none'
-          : 'border border-white/[0.08] shadow-[0_10px_40px_rgba(0,0,0,0.8)]'
-      }`}
-    >
+    <div className="relative flex h-screen w-screen overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none min-w-0 box-border">
       {/* 当 scope === 'window' 且有自定义壁纸时，在根视口渲染底层全景壁纸与防眩遮罩 */}
       {appearanceSettings.scope === 'window' &&
       appearanceSettings.type !== 'fluid' &&
@@ -166,15 +158,13 @@ export default function App(): React.JSX.Element {
 
       {/* 主内容工作区 */}
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* 顶部状态感知栏与一体化自定义标题栏 */}
+        {/* 顶部状态感知栏 */}
         <Header
           activeModule={activeModule}
           kernelStatus={kernelStatus}
           onRefreshKernel={refreshKernel}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
-          isMaximized={isMaximized}
-          onToggleMaximize={setIsMaximized}
         />
 
         {/* 模块插槽画布 */}
