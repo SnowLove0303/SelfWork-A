@@ -51,6 +51,42 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [onToggleMaximize]);
 
+  // 窗口物理拖拽触发函数（Channel A: JS Window API + Channel B: Rust IPC 备用通道）
+  const handleStartDragging = async (e: React.MouseEvent) => {
+    // 仅响应鼠标主键（左键）按下
+    if (e.button !== 0) return;
+
+    // 严密防御：若用户点击了按钮、链接、输入框或其子元素，绝对不触发拖动，保障原有点击交互 100% 独立生效
+    const target = e.target as HTMLElement | null;
+    if (
+      target?.closest('button') ||
+      target?.closest('a') ||
+      target?.closest('input') ||
+      target?.closest('[data-no-drag="true"]')
+    ) {
+      return;
+    }
+
+    // 双击场景让 onDoubleClick 处理最大化/还原，避免和拖拽冲突
+    if (e.detail > 1) {
+      return;
+    }
+
+    try {
+      // Channel A: 官方 getCurrentWindow().startDragging()
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().startDragging();
+    } catch (_err) {
+      try {
+        // Channel B: Rust 备用直通指令
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('window_start_dragging');
+      } catch (_e) {
+        // Web 预览环境静默降级
+      }
+    }
+  };
+
   // 窗口原生操作封装
   const handleMinimize = async () => {
     try {
@@ -84,8 +120,9 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       data-tauri-drag-region
+      onMouseDown={handleStartDragging}
       onDoubleClick={handleToggleMaximize}
-      className="flex h-11 w-full items-center justify-between bg-canvas-default/35 backdrop-blur-xl border-b border-border-default px-3 select-none box-border"
+      className="flex h-11 w-full items-center justify-between bg-canvas-default/35 backdrop-blur-xl border-b border-border-default px-3 select-none box-border cursor-default"
     >
       {/* 左侧：折叠展开按钮 + 当前模块标题（带拖拽防误触隔离） */}
       <div className="flex items-center gap-2 min-w-0 shrink-0">
@@ -99,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
             <PanelLeft className="h-3.5 w-3.5" />
           </button>
         )}
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 pointer-events-none">
           <h1 className="text-xs font-semibold text-fg-primary tracking-tight font-mono whitespace-nowrap">
             {currentMod.name}
           </h1>
@@ -116,7 +153,6 @@ export const Header: React.FC<HeaderProps> = ({
       <div
         data-tauri-drag-region
         className="flex-1 h-full cursor-default"
-        onDoubleClick={handleToggleMaximize}
       />
 
       {/* 右侧：状态探测胶囊 + 细线条原生窗口控制按钮组 */}
@@ -144,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="h-3.5 w-px bg-white/[0.08] shrink-0 mx-0.5" />
 
         {/* 窗口原生控制三按键组 (严格隔离拖拽属性) */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0" data-no-drag="true">
           {/* 最小化按钮 */}
           <button
             type="button"

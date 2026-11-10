@@ -62,6 +62,12 @@ fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
     window.is_maximized().map_err(|e| e.to_string())
 }
 
+/// 窗口原生操作命令：发起窗口拖拽移动
+#[tauri::command]
+fn window_start_dragging(window: tauri::Window) -> Result<(), String> {
+    window.start_dragging().map_err(|e| e.to_string())
+}
+
 /// 执行 Workflow-Launcher.ps1 脚本指令
 /// 在 Windows 下配置 CREATE_NO_WINDOW 标志彻底杜绝命令行黑框闪烁
 #[tauri::command]
@@ -269,6 +275,7 @@ pub fn run() {
             window_toggle_maximize,
             window_close,
             window_is_maximized,
+            window_start_dragging,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
             db::db_get_all_memos,

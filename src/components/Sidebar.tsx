@@ -45,6 +45,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   collapsed,
   onToggleCollapse,
 }) => {
+  // 顶端 Brand 区域拖拽处理
+  const handleBrandMouseDown = async (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button') || target?.closest('[data-no-drag="true"]')) {
+      return;
+    }
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().startDragging();
+    } catch (_err) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('window_start_dragging');
+      } catch (_e) {
+        // Web 预览环境静默降级
+      }
+    }
+  };
+
   return (
     <aside
       className={`relative z-10 flex flex-col bg-canvas-default/35 backdrop-blur-xl border-r border-border-default transition-all duration-200 ease-in-out select-none overflow-x-hidden ${
@@ -54,9 +74,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 顶部 Brand 区域：Logo 与标题无缝平滑过渡，严格基准高度 h-11 与单边框规范，支持原生窗口拖拽抓手 */}
       <div
         data-tauri-drag-region
+        onMouseDown={handleBrandMouseDown}
         className="flex h-11 items-center border-b border-border-default px-2.5 overflow-hidden box-border bg-transparent select-none cursor-default"
       >
-        <div data-tauri-drag-region className="flex items-center gap-2 min-w-0 flex-1 cursor-default">
+        <div data-tauri-drag-region className="flex items-center gap-2 min-w-0 flex-1 cursor-default pointer-events-none">
           <BrandLogo size={22} className="shrink-0" />
           <span
             data-tauri-drag-region
@@ -73,6 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* 展开状态下的收起按钮：触觉微交互与毛玻璃微反光 (严格设为独立点击区，防止拖拽误触) */}
         <button
           type="button"
+          data-no-drag="true"
           onClick={onToggleCollapse}
           title="收起侧栏"
           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted hover:text-fg-primary hover:bg-white/[0.08] tactile-btn transition-colors duration-150 ${
