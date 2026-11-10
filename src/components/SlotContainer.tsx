@@ -1,26 +1,18 @@
 import React from 'react';
 import { ModuleId } from '../types/workbench.ts';
 import { AppearanceSettings } from '../types/settings.ts';
-import { MODULES } from './Sidebar.tsx';
-import { SettingsView } from './SettingsView.tsx';
 import { LauncherDashboard } from './LauncherDashboard.tsx';
 import { TasksView } from './TasksView.tsx';
 
 interface SlotContainerProps {
   activeModule: ModuleId;
   settings: AppearanceSettings;
-  onUpdateSettings: (settings: AppearanceSettings) => void;
-  onResetSettings: () => void;
 }
 
 export const SlotContainer: React.FC<SlotContainerProps> = ({
   activeModule,
   settings,
-  onUpdateSettings,
-  onResetSettings,
 }) => {
-  const currentMod = MODULES.find((m) => m.id === activeModule) || MODULES[0];
-
   return (
     <main className="flex-1 bg-transparent p-3.5 overflow-hidden box-border min-w-0">
       {/* 纯净主舞台：支持透明度与高斯模糊动态绑定的晶体画板 */}
@@ -59,24 +51,12 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
           </div>
         )}
 
-        {/* 内容展示区：根据激活模块渲染对应视图 */}
+        {/* 内容展示区：根据激活模块渲染对应视图（收敛为快速启动与待办清单实体功能） */}
         <div className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden min-w-0">
-          {activeModule === 'settings' ? (
-            <SettingsView
-              settings={settings}
-              onUpdateSettings={onUpdateSettings}
-              onResetSettings={onResetSettings}
-            />
-          ) : activeModule === 'launcher' ? (
+          {activeModule === 'launcher' ? (
             <LauncherDashboard />
-          ) : activeModule === 'tasks' ? (
-            <TasksView />
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <span className="text-xl font-semibold tracking-tight text-fg-muted/40 font-mono drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none">
-                {currentMod.name}
-              </span>
-            </div>
+            <TasksView />
           )}
         </div>
       </div>

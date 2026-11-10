@@ -2,6 +2,32 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.12] - 2026-11-10
+
+### Removed & Refactored (清理虚假占位模块与设置页面，收敛纯净双主航道工作台)
+- **领域模型与侧栏导航收敛 (Prune Domain Model & Navigation)**:
+  - 将 `ModuleId` 严格收敛为 `'launcher' | 'tasks'`，从类型系统根源消除非法虚假状态；
+  - 侧栏清理剔除【块级笔记】(`notes`)、【思维导图】(`mindmap`)、【MCP 协议】(`mcp`)、【AI 助手】(`ai`) 与【设置】(`settings`) 5 个无实质业务功能的占位入口，移除无用图标引入；
+  - 侧栏导航精炼为聚焦于实际功能的【快速启动】与【待办清单】双主航道。
+- **主舞台路由与无用组件净化 (Streamline SlotContainer & Purge SettingsView)**:
+  - 移除 `SlotContainer` 中针对占位模块的 `currentMod.name` 居中文本回退兜底；
+  - 移除 `SettingsView` 渲染分支，安全移除 `src/components/SettingsView.tsx` 组件，彻底消除死代码堆积；
+  - 主舞台画板直接挂载 `<LauncherDashboard />` 与 `<TasksView />`，无缝呈现全实体功能视图；
+  - 保留全局默认暗黑亚克力磨砂玻璃背景质感及高斯模糊体系，保障视觉稳定性。
+- **顶层架构解耦 (Decouple App Container)**:
+  - 净化 `src/App.tsx` 传递给 `SlotContainer` 的多余设置变更回调；
+  - 保留并稳定维持 SQLite 持久化外观配置的水合能力。
+- **工程产物交付**:
+  - 通过 `pnpm check` (`tsc --noEmit`) 零警告零错误静态检查；
+  - 通过 `cargo test` 5/5 项 Rust 底层测试全绿；
+  - 全量生产编译更新单文件可执行程序 `SelfWork.exe`（5.5MB，退出码 0）。
+
+### Root Cause & Engineering Defense (根因穿透与长效防线)
+1. **虚假占位与未实现设置引发认知干扰根因**:
+   - 原原型阶段保留了诸多占位模块及不具备底层持久化联动能力的设置界面，导致用户在探索界面时频繁遭遇空文本或无实质功能的配置项。
+2. **长效防线下沉**:
+   - 在类型层通过穷举联合类型（`ModuleId = 'launcher' | 'tasks'`）实施硬阻断；在功能未真正就绪前严禁在 UI 导航与主路由中挂载空态占位。
+
 ## [0.1.11] - 2026-11-10
 
 ### Fixed & Enhanced (窗口与 UI 全域弹性自适应与抗挤压重构)

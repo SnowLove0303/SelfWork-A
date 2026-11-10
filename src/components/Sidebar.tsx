@@ -2,11 +2,6 @@ import React from 'react';
 import {
   Rocket,
   CheckSquare,
-  FileText,
-  Network,
-  Cpu,
-  Bot,
-  Settings,
   ChevronLeft,
 } from 'lucide-react';
 import { ModuleId, ModuleItem } from '../types/workbench.ts';
@@ -22,11 +17,6 @@ interface SidebarProps {
 export const MODULES: ModuleItem[] = [
   { id: 'launcher', name: '快速启动', shortDesc: '本地应用调度', iconName: 'Rocket', category: 'workspace' },
   { id: 'tasks', name: '待办清单', shortDesc: '任务管理', iconName: 'CheckSquare', category: 'workspace' },
-  { id: 'notes', name: '块级笔记', shortDesc: '个人知识库', iconName: 'FileText', category: 'knowledge' },
-  { id: 'mindmap', name: '思维导图', shortDesc: '思维画布', iconName: 'Network', category: 'knowledge' },
-  { id: 'mcp', name: 'MCP 协议', shortDesc: '接口协议', iconName: 'Cpu', category: 'system' },
-  { id: 'ai', name: 'AI 助手', shortDesc: '自动化行为', iconName: 'Bot', category: 'system' },
-  { id: 'settings', name: '设置', shortDesc: '工作台设置', iconName: 'Settings', category: 'system' },
 ];
 
 /**
@@ -45,11 +35,6 @@ const renderIcon = (name: string, className: string): React.JSX.Element => {
   switch (name) {
     case 'Rocket': return <Rocket className={className} />;
     case 'CheckSquare': return <CheckSquare className={className} />;
-    case 'FileText': return <FileText className={className} />;
-    case 'Network': return <Network className={className} />;
-    case 'Cpu': return <Cpu className={className} />;
-    case 'Bot': return <Bot className={className} />;
-    case 'Settings': return <Settings className={className} />;
     default: return <Rocket className={className} />;
   }
 };

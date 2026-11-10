@@ -9,7 +9,6 @@ import {
 } from './types/settings.ts';
 import {
   loadAppearanceSettings,
-  saveAppearanceSettings,
   SETTINGS_STORAGE_KEY,
 } from './services/db.ts';
 
@@ -107,19 +106,6 @@ export default function App(): React.JSX.Element {
     };
   }, []);
 
-  const updateAppearanceSettings = useCallback(
-    (newSettings: AppearanceSettings) => {
-      setAppearanceSettings(newSettings);
-      saveAppearanceSettings(newSettings);
-    },
-    [],
-  );
-
-  const resetAppearanceSettings = useCallback(() => {
-    setAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS);
-    saveAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS);
-  }, []);
-
   const refreshKernel = useCallback(() => {
     pingTauriKernel().then(setKernelStatus);
   }, []);
@@ -185,8 +171,6 @@ export default function App(): React.JSX.Element {
         <SlotContainer
           activeModule={activeModule}
           settings={appearanceSettings}
-          onUpdateSettings={updateAppearanceSettings}
-          onResetSettings={resetAppearanceSettings}
         />
       </div>
     </div>
