@@ -53,7 +53,7 @@ export default function App(): React.JSX.Element {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(
     () => typeof window !== 'undefined' && window.innerWidth < 1080
   );
-  const [kernelStatus, setKernelStatus] = useState<WorkbenchKernelStatus>({
+  const [_kernelStatus, setKernelStatus] = useState<WorkbenchKernelStatus>({
     status: 'connecting',
     version: '...',
     osFamily: '...',
@@ -123,13 +123,7 @@ export default function App(): React.JSX.Element {
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-canvas-subtle text-fg-primary antialiased font-sans select-none min-w-0 box-border">
       {/* 贯穿全窗体的顶级深色控制台栏 */}
-      <Titlebar
-        activeModule={activeModule}
-        kernelStatus={kernelStatus}
-        onRefreshKernel={refreshKernel}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
-      />
+      <Titlebar activeModule={activeModule} />
 
       {/* 主体工作区容器 (侧栏 + 模块插槽) */}
       <div className="relative flex flex-1 overflow-hidden min-w-0">

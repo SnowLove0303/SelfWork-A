@@ -2,6 +2,23 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.18] - 2026-11-10
+
+### Refactored (顶部控制台栏极致减噪：移除冗余侧栏折叠按钮与 Desktop 状态胶囊)
+- **彻底移除顶部栏重复的侧栏折叠按钮 (Duplicate Toggle Purged)**:
+  - 剔除 `src/components/Titlebar.tsx` 左侧的 `PanelLeft` 折叠按钮，消除“顶栏与侧栏两个折叠键”的重复堆叠，仅保留侧边栏原有的收起/展开机制作为全局唯一控制入口；
+  - 顶栏左侧无缝贴合纯净品牌文字 `SW工作台`（`#E6EDF7`）与模块信息（`#8FA3BF`），自然左对齐，呼吸留白舒朗。
+- **彻底移除右侧 Desktop 状态指示胶囊 (Desktop Pill Purged)**:
+  - 剔除常驻于顶栏右侧的“Desktop / Web Preview”状态探测胶囊与状态小圆点，彻底消灭技术性指示造成的视觉杂音；
+  - 右侧仅纯粹保留最小化、最大化/向下还原、克制暗调且悬浮柔和暗红的关闭三按键。
+- **最大化扩展原生物理拖拽抓手面积 (Expanded Drag Surface)**:
+  - 在剥离左侧按钮与右侧胶囊后，顶部栏中间 `data-tauri-drag-region` 获得更宽阔平整的水平抓手，硬件级窗口拖动与双击最大化响应极为畅快。
+- **工程产物交付**:
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误退出码 0；
+  - `cargo test` 5/5 底层测试全绿退出码 0；
+  - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
+  - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.59MB）。
+
 ## [0.1.17] - 2026-11-10
 
 ### Added & Refactored (统一深色控制台顶栏重塑与左上角占位小图标彻底移除)
