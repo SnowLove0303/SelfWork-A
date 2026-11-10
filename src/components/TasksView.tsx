@@ -166,6 +166,12 @@ export const TasksView: React.FC = () => {
     });
   };
 
+  // 拖拽换位管线：待办清单重排并原子落盘持久化
+  const handleReorderTasks = (newTasks: TaskItem[]) => {
+    setTasks(newTasks);
+    saveTasks(newTasks);
+  };
+
   // ==================== 便签操作管线 ====================
 
   const handleAddMemo = () => {
@@ -200,6 +206,12 @@ export const TasksView: React.FC = () => {
     });
   };
 
+  // 拖拽换位管线：便签卡片重排并原子落盘持久化
+  const handleReorderMemos = (newMemos: MemoItem[]) => {
+    setMemos(newMemos);
+    saveMemos(newMemos);
+  };
+
   return (
     <div className="flex-1 flex h-full w-full overflow-hidden min-w-0">
       {/* 左侧 58%：GTD 待办清单工作台 (设置最小安全宽度 380px，支持弹性自适应伸缩) */}
@@ -212,6 +224,7 @@ export const TasksView: React.FC = () => {
           onToggleToday={handleToggleToday}
           onDeleteTask={handleDeleteTask}
           onClearCompleted={handleClearCompleted}
+          onReorderTasks={handleReorderTasks}
         />
       </div>
 
@@ -222,6 +235,7 @@ export const TasksView: React.FC = () => {
           onAddMemo={handleAddMemo}
           onUpdateMemo={handleUpdateMemo}
           onDeleteMemo={handleDeleteMemo}
+          onReorderMemos={handleReorderMemos}
         />
       </div>
     </div>

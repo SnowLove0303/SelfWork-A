@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle2,
   ListTodo,
+  GripVertical,
 } from 'lucide-react';
 import { TaskItem, TaskPriority, TaskFilterTab } from '../../types/tasks.ts';
 
@@ -17,6 +18,7 @@ interface TasksPanelProps {
   onToggleToday: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onClearCompleted: () => void;
+  onReorderTasks: (newTasks: TaskItem[]) => void;
 }
 
 const FILTER_TABS: Array<{ id: TaskFilterTab; label: string }> = [
@@ -34,9 +36,12 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
   onToggleToday,
   onDeleteTask,
   onClearCompleted,
+  onReorderTasks,
 }) => {
   const [inputText, setInputText] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TaskFilterTab>('all');
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
 
   // 键盘回车秒建
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -93,6 +98,21 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
           className: 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] ring-1 ring-emerald-300/30 shrink-0',
         };
     }
+  };
+
+  // 拖拽换位逻辑
+  const handleDropTask = (targetTaskId: string) => {
+    if (!draggedTaskId || draggedTaskId === targetTaskId) return;
+    const fromIndex = tasks.findIndex((t) => t.id === draggedTaskId);
+    const toIndex = tasks.findIndex((t) => t.id === targetTaskId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+
+    const nextTasks = [...tasks];
+    const [moved] = nextTasks.splice(fromIndex, 1);
+    nextTasks.splice(toIndex, 0, moved);
+    onReorderTasks(nextTasks);
+    setDraggedTaskId(null);
+    setDropTargetTaskId(null);
   };
 
   return (
@@ -181,16 +201,61 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
           filteredTasks.map((task) => {
             const isDone = task.status === 'done';
             const dot = getPriorityDot(task.priority);
+            const isDragging = draggedTaskId === task.id;
+            const isDropTarget = dropTargetTaskId === task.id;
 
             return (
               <div
                 key={task.id}
-                className={`group h-10 px-3 rounded-lg border transition-all flex items-center gap-2.5 min-w-0 ${
-                  isDone
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  if (draggedTaskId && draggedTaskId !== task.id) {
+                    setDropTargetTaskId(task.id);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                  if (dropTargetTaskId === task.id) {
+                    setDropTargetTaskId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDropTask(task.id);
+                }}
+                className={`group h-10 px-2.5 rounded-lg border transition-all flex items-center gap-2 min-w-0 ${
+                  isDragging
+                    ? 'opacity-30 scale-[0.99] border-dashed border-sky-400/60 bg-sky-500/[0.04]'
+                    : isDropTarget
+                    ? 'border-sky-400 bg-sky-500/[0.12] shadow-[0_0_12px_rgba(56,189,248,0.25)]'
+                    : isDone
                     ? 'bg-white/[0.01] border-white/[0.03] opacity-55'
                     : 'bg-white/[0.03] hover:bg-white/[0.05] border-white/[0.06] hover:border-white/[0.12] shadow-[0_1px_4px_rgba(0,0,0,0.2)]'
                 }`}
               >
+                {/* 拖拽抓手图标 */}
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', task.id);
+                    setDraggedTaskId(task.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedTaskId(null);
+                    setDropTargetTaskId(null);
+                  }}
+                  title="按住拖拽调整顺序"
+                  className="opacity-20 group-hover:opacity-75 hover:!opacity-100 p-0.5 -ml-1 text-fg-muted hover:text-fg-primary cursor-grab active:cursor-grabbing transition-opacity shrink-0"
+                >
+                  <GripVertical className="w-3.5 h-3.5 shrink-0" />
+                </div>
+
                 {/* 触觉复选框 */}
                 <button
                   type="button"

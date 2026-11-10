@@ -2,6 +2,26 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.19] - 2026-11-10
+
+### Added & Enhanced (待办清单与灵感便签拖拽重排与持久化记忆)
+- **待办清单 GTD 原生 HTML5 拖拽重排 (Tasks Drag-and-Drop Reordering)**:
+  - 在 `src/components/tasks/TasksPanel.tsx` 为每个待办项左侧增设精致 `GripVertical` 六点抓手图标，提供 `cursor-grab active:cursor-grabbing` 触觉指引；
+  - 接入完整 HTML5 拖拽事件流（`onDragStart`, `onDragOver`, `onDragEnter`, `onDragLeave`, `onDrop`, `onDragEnd`），拖拽中卡片半透明（`opacity-30`），目标落点呈现明晰的青蓝外边框高亮指引（`border-sky-500/60 ring-1 ring-sky-500/30`）；
+  - 严格物理隔离复选框（Checkbox）、优先级切换（Priority Dot）、今日待办切换与删除等交互控件，防误触防拖拽事件吞没。
+- **灵感便签墙卡片拖拽重排 (Memos Drag-and-Drop Reordering)**:
+  - 在 `src/components/tasks/MemoBoard.tsx` 为每张便签卡片顶部操作栏增设 `GripHorizontal` 抓手把手，支持卡片在瀑布流网格中自由拖拽换位；
+  - 严格隔离标题输入框（`<input>`）、正文编辑框（`<textarea>`）、置顶图标、调色盘菜单与删除按钮，保证文字输入与点选体验 100% 丝滑无冲突；
+  - 拖拽过程附带高亮落点指引，释放后即时重塑卡片顺序。
+- **SQLite 数据库零丢失原子落盘与自定义顺序长效记忆 (Atomic SQLite Order Persistence)**:
+  - 在 `src/components/TasksView.tsx` 接入 `onReorderTasks` 与 `onReorderMemos` 事件管线，拖拽换位后即时原子提交至底层 SQLite 数据库持久化存储；
+  - 借助 SQLite `save_all_tasks_atomic` 与 `save_all_memos_atomic` 事务保证，按新顺序重排并自增 `rowid`，应用冷启动通过 `ORDER BY rowid ASC` 1:1 绝对保真还原用户自定义顺序。
+- **工程产物交付**:
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误退出码 0；
+  - `cargo test` 5/5 底层测试全绿退出码 0；
+  - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
+  - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.59MB）。
+
 ## [0.1.18] - 2026-11-10
 
 ### Refactored (顶部控制台栏极致减噪：移除冗余侧栏折叠按钮与 Desktop 状态胶囊)

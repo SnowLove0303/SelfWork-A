@@ -7,6 +7,7 @@ import {
   Check,
   Trash2,
   Palette,
+  GripHorizontal,
 } from 'lucide-react';
 import { MemoItem, MemoTheme } from '../../types/tasks.ts';
 
@@ -15,6 +16,7 @@ interface MemoBoardProps {
   onAddMemo: () => void;
   onUpdateMemo: (id: string, updates: Partial<MemoItem>) => void;
   onDeleteMemo: (id: string) => void;
+  onReorderMemos: (newMemos: MemoItem[]) => void;
 }
 
 const THEME_CYCLE: MemoTheme[] = ['neutral', 'blue', 'emerald', 'purple', 'amber'];
@@ -79,8 +81,11 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
   onAddMemo,
   onUpdateMemo,
   onDeleteMemo,
+  onReorderMemos,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [draggedMemoId, setDraggedMemoId] = useState<string | null>(null);
+  const [dropTargetMemoId, setDropTargetMemoId] = useState<string | null>(null);
 
   // 复制便签内容到系统剪贴板
   const handleCopy = async (memo: MemoItem) => {
@@ -102,26 +107,36 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
     }
   };
 
-  // 循环切换主题色
+  // 切换便签主题
   const handleCycleTheme = (memo: MemoItem) => {
     const currentIndex = THEME_CYCLE.indexOf(memo.theme);
     const nextTheme = THEME_CYCLE[(currentIndex + 1) % THEME_CYCLE.length];
     onUpdateMemo(memo.id, { theme: nextTheme, updatedAt: Date.now() });
   };
 
-  // 置顶的排在最前，其次按更新时间倒序
-  const sortedMemos = [...memos].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1;
-    }
-    return b.updatedAt - a.updatedAt;
-  });
+  // 拖拽换位逻辑
+  const handleDropMemo = (targetMemoId: string) => {
+    if (!draggedMemoId || draggedMemoId === targetMemoId) return;
+    const fromIndex = memos.findIndex((m) => m.id === draggedMemoId);
+    const toIndex = memos.findIndex((m) => m.id === targetMemoId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+
+    const nextMemos = [...memos];
+    const [moved] = nextMemos.splice(fromIndex, 1);
+    nextMemos.splice(toIndex, 0, moved);
+    onReorderMemos(nextMemos);
+    setDraggedMemoId(null);
+    setDropTargetMemoId(null);
+  };
+
+  // 置顶项优先排在前列展示，组内保持数组物理顺序
+  const sortedMemos = [...memos].sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent select-none min-w-0">
-      {/* 顶部工具栏 */}
-      <div className="h-11 px-3.5 flex items-center justify-between shrink-0 border-b border-border-subtle bg-white/[0.01] min-w-0">
-        <div className="flex items-center gap-2 min-w-0 shrink-0">
+      {/* 顶部标题与操作栏 */}
+      <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-border-subtle bg-white/[0.01] shrink-0 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
           <StickyNote className="w-4 h-4 text-amber-400 shrink-0" />
           <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
             灵感便签
@@ -154,11 +169,41 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
           sortedMemos.map((memo) => {
             const themeStyle = getThemeStyles(memo.theme);
             const isCopied = copiedId === memo.id;
+            const isDragging = draggedMemoId === memo.id;
+            const isDropTarget = dropTargetMemoId === memo.id;
 
             return (
               <div
                 key={memo.id}
-                className={`group relative rounded-xl p-3 border transition-all duration-150 shadow-[0_2px_12px_rgba(0,0,0,0.25)] flex flex-col gap-2 min-w-0 ${themeStyle.bg} ${themeStyle.border}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  if (draggedMemoId && draggedMemoId !== memo.id) {
+                    setDropTargetMemoId(memo.id);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                  if (dropTargetMemoId === memo.id) {
+                    setDropTargetMemoId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDropMemo(memo.id);
+                }}
+                className={`group relative rounded-xl p-3 border transition-all duration-150 shadow-[0_2px_12px_rgba(0,0,0,0.25)] flex flex-col gap-2 min-w-0 ${
+                  themeStyle.bg
+                } ${
+                  isDragging
+                    ? 'opacity-30 scale-[0.98] border-dashed border-sky-400/60'
+                    : isDropTarget
+                    ? 'ring-2 ring-sky-400/70 border-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.25)]'
+                    : themeStyle.border
+                }`}
               >
                 {/* 顶部卡片操作栏 (悬停优雅浮现) */}
                 <div className="flex items-center justify-between gap-1 text-fg-muted min-w-0">
@@ -192,6 +237,25 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                       <Palette className="w-3.5 h-3.5 shrink-0" />
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${themeStyle.dot}`} />
                     </button>
+                  </div>
+
+                  {/* 中间拖拽抓手 */}
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', memo.id);
+                      setDraggedMemoId(memo.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedMemoId(null);
+                      setDropTargetMemoId(null);
+                    }}
+                    title="按住拖拽调整便签顺序"
+                    className="flex-1 h-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-15 group-hover:opacity-75 hover:!opacity-100 transition-opacity"
+                  >
+                    <GripHorizontal className="w-3.5 h-3 shrink-0 text-fg-muted" />
                   </div>
 
                   {/* 复制与删除 */}
@@ -250,10 +314,9 @@ export const MemoBoard: React.FC<MemoBoardProps> = ({
                   className="bg-transparent border-none text-[12px] leading-relaxed text-fg-secondary focus:text-fg-primary placeholder:text-fg-muted/40 focus:outline-none focus:ring-0 p-0 resize-y font-mono min-w-0 break-words"
                 />
 
-                {/* 底部微小时间标签 */}
-                <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] text-[10px] text-fg-muted/50 font-mono min-w-0">
-                  <span className="shrink-0 whitespace-nowrap">{formatMemoTime(memo.updatedAt)}</span>
-                  {memo.isPinned && <span className="text-amber-400/80 shrink-0 whitespace-nowrap">已置顶</span>}
+                {/* 底部更新时间微标 */}
+                <div className="flex items-center justify-end text-[10px] text-fg-muted/50 font-mono select-none">
+                  <span>{formatMemoTime(memo.updatedAt)}</span>
                 </div>
               </div>
             );
