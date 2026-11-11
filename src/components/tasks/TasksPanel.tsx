@@ -117,51 +117,51 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent border-r border-border-default select-none min-w-0">
-      {/* 顶部标题与过滤控制栏 */}
-      <div className="p-3.5 pb-2.5 space-y-3 shrink-0 border-b border-border-subtle bg-white/[0.01]">
+      {/* 顶部标题与过滤控制栏：高度严格对齐 h-[49px]，基准线与思维导图/灵感便签绝对对齐 */}
+      <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-border-subtle bg-white/[0.01] shrink-0 min-w-0">
         {/* 标题与统计概览 */}
-        <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
-            <ListTodo className="w-4 h-4 text-brand-primary shrink-0" />
-            <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
-              待办清单
-            </h2>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted font-mono border border-white/[0.06] shrink-0 whitespace-nowrap">
-              {counts.pending} 待办 / {counts.all} 全部
-            </span>
-          </div>
-
-          {/* 状态过滤胶囊 */}
-          <div className="flex items-center gap-1 bg-black/25 p-0.5 rounded-lg border border-white/[0.06] shrink-0 overflow-x-auto no-scrollbar">
-            {FILTER_TABS.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const count = counts[tab.id];
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors tactile-btn shrink-0 whitespace-nowrap ${
-                    isActive
-                      ? 'bg-white/[0.12] text-fg-primary shadow-sm border border-white/[0.10]'
-                      : 'text-fg-muted hover:text-fg-secondary hover:bg-white/[0.04] border border-transparent'
-                  }`}
-                >
-                  <span className="shrink-0">{tab.label}</span>
-                  <span
-                    className={`text-[9px] px-1 py-0.1 rounded-full font-mono shrink-0 ${
-                      isActive ? 'bg-brand-primary/20 text-brand-primary' : 'bg-white/[0.05] text-fg-muted'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <ListTodo className="w-4 h-4 text-brand-primary shrink-0" />
+          <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
+            待办清单
+          </h2>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted font-mono border border-white/[0.06] shrink-0 whitespace-nowrap">
+            {counts.pending} 待办 / {counts.all} 全部
+          </span>
         </div>
 
-        {/* 快速单行录入框 (回车秒建) */}
+        {/* 状态过滤胶囊 */}
+        <div className="flex items-center gap-1 bg-black/25 p-0.5 rounded-lg border border-white/[0.06] shrink-0 overflow-x-auto no-scrollbar">
+          {FILTER_TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const count = counts[tab.id];
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium transition-colors tactile-btn shrink-0 whitespace-nowrap ${
+                  isActive
+                    ? 'bg-white/[0.12] text-fg-primary shadow-sm border border-white/[0.10]'
+                    : 'text-fg-muted hover:text-fg-secondary hover:bg-white/[0.04] border border-transparent'
+                }`}
+              >
+                <span className="shrink-0">{tab.label}</span>
+                <span
+                  className={`text-[9px] px-1 py-0.1 rounded-full font-mono shrink-0 ${
+                    isActive ? 'bg-brand-primary/20 text-brand-primary' : 'bg-white/[0.05] text-fg-muted'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 次级快捷录入条 (回车秒建) */}
+      <div className="p-2.5 px-3.5 border-b border-border-subtle/50 bg-white/[0.005] shrink-0 min-w-0">
         <div className="relative flex items-center min-w-0">
           <input
             type="text"
@@ -169,7 +169,7 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="+ 快速添加待办任务，按 Enter 键保存..."
-            className="w-full h-9 pl-3 pr-9 rounded-lg bg-black/30 border border-white/[0.08] text-xs text-fg-primary placeholder:text-fg-muted/60 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/40 focus:bg-black/40 transition-all font-sans min-w-0"
+            className="w-full h-8 pl-3 pr-8 rounded-lg bg-black/30 border border-white/[0.08] text-xs text-fg-primary placeholder:text-fg-muted/60 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/40 focus:bg-black/40 transition-all font-sans min-w-0"
           />
           <button
             type="button"
@@ -182,7 +182,7 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
             }}
             disabled={!inputText.trim()}
             title="添加任务 (Enter)"
-            className="absolute right-1.5 w-6 h-6 flex items-center justify-center rounded bg-white/[0.06] hover:bg-brand-primary hover:text-black text-fg-muted disabled:opacity-20 disabled:pointer-events-none transition-colors tactile-btn shrink-0"
+            className="absolute right-1 w-6 h-6 flex items-center justify-center rounded bg-white/[0.06] hover:bg-brand-primary hover:text-black text-fg-muted disabled:opacity-20 disabled:pointer-events-none transition-colors tactile-btn shrink-0"
           >
             <Plus className="w-3.5 h-3.5 shrink-0" />
           </button>

@@ -2,6 +2,22 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.26] - 2026-11-11
+
+### Design & Alignment (待办清单与思维导图模块顶栏标题像素级物理对齐与全局 49px 基准线统合)
+- **待办清单顶栏解耦重构与 49px 基准统一 (`TasksPanel.tsx`)**:
+  - 响应用户“思维导图 的 分区管理和 待办清单的待办清单 两个标题间的位置不统一，切起来很怪啊， 懂我意思？”的指示；
+  - 根除此前将标题行、状态过滤胶囊与单行录入框挤压在 `p-3.5 pb-2.5 space-y-3` 复合容器中造成的 Y 轴下沉 4.5px（原中心点 Y ≈ 29px）病灶；
+  - 确立独立的 `h-[49px] px-3.5 flex items-center justify-between border-b border-border-subtle bg-white/[0.01]` 顶标行，图标与标题在 49px 容器内严格垂直居中（中心点 Y = 24.5px），与思维导图“分区管理”及灵感便签“灵感便签”达成 1:1 绝对像素级重合；
+  - 将单行快速录入框解耦为独立的次级工具条（`p-2.5 px-3.5 border-b border-border-subtle/50 bg-white/[0.005]`），回车秒建交互与过滤流转 100% 优雅保留。
+- **跨模块切页空间零跳移与水平贯穿线全域统合**:
+  - 无论在“待办清单”与“思维导图”之间如何来回切换，左上角标题文字（“待办清单”与“分区管理”）在屏幕上的绝对物理坐标保持完全静止，彻底消除了标题文本上下晃动的不适感；
+  - 待办清单、灵感便签与思维导图大盘首行顶栏底部分割线全域锁定在 Y = 49px，实现跨模块完全平齐贯穿。
+- **工程质量与全栈验证**:
+  - `pnpm check` (tsc --noEmit) 零警告零错误（退出码 0）；
+  - `cargo test` 5/5 全绿（退出码 0）；
+  - 全量打包产出最新单文件桌面端 `SelfWork.exe` (5.60 MB) 并经由 VS Code 原生 Diff 完成审查闭环。
+
 ## [0.1.25] - 2026-11-11
 
 ### Motion & Alignment (工作台全局平滑切页动效与空间视觉落位对齐)
