@@ -2,9 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MindMapNode } from '../types/mindmap.ts';
 import { INITIAL_MINDMAP } from '../types/mindmap.ts';
 import { loadMindMap, saveMindMap, MINDMAP_STORAGE_KEY } from '../services/db.ts';
-import { MindMapToolbar } from './mindmap/MindMapToolbar.tsx';
 import { MindMapCanvas } from './mindmap/MindMapCanvas.tsx';
-import { MindMapIOModal } from './mindmap/MindMapIOModal.tsx';
 
 // 递归查找指定节点及其父节点
 function findNodeAndParent(
@@ -45,10 +43,6 @@ export const MindMapView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 80, y: 120 });
   const [isHydrated, setIsHydrated] = useState(false);
-
-  // 模态框状态
-  const [ioModalOpen, setIoModalOpen] = useState(false);
-  const [ioMode, setIoMode] = useState<'import' | 'export'>('export');
 
   // 水合状态保护：从 SQLite 权威恢复
   useEffect(() => {
@@ -160,20 +154,6 @@ export const MindMapView: React.FC = () => {
     setEditingId(null);
   }, []);
 
-  // 居中复位
-  const handleRecenter = useCallback(() => {
-    setPan({ x: 80, y: 120 });
-  }, []);
-
-  // 导入并覆盖当前画布
-  const handleImportTree = useCallback((imported: MindMapNode) => {
-    setRoot(imported);
-    setSelectedId(imported.id);
-    setEditingId(null);
-    saveMindMap(imported);
-    handleRecenter();
-  }, [handleRecenter]);
-
   // ==================== 全局键盘交互调度器 ====================
 
   const editingIdRef = useRef(editingId);
@@ -215,22 +195,8 @@ export const MindMapView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full w-full overflow-hidden relative select-none min-w-0">
-      {/* 顶部极简工具栏 */}
-      <MindMapToolbar
-        selectedId={selectedId}
-        isRootSelected={isRootSelected}
-        onAddChild={handleAddChild}
-        onAddSibling={handleAddSibling}
-        onDeleteSelected={handleDeleteSelected}
-        onRecenter={handleRecenter}
-        onOpenIOModal={(mode) => {
-          setIoMode(mode);
-          setIoModalOpen(true);
-        }}
-      />
-
-      {/* 主画布内容区 */}
-      <div className="flex-1 relative overflow-hidden min-w-0">
+      {/* 主画布内容区：纵向顶格满高展开 */}
+      <div className="flex-1 relative overflow-hidden min-w-0 h-full w-full">
         <MindMapCanvas
           root={root}
           selectedId={selectedId}
@@ -259,15 +225,6 @@ export const MindMapView: React.FC = () => {
           <span><span className="text-fg-primary">双击/空格</span> 改名</span>
         </div>
       </div>
-
-      {/* 导入 / 导出模态框 */}
-      <MindMapIOModal
-        isOpen={ioModalOpen}
-        mode={ioMode}
-        root={root}
-        onClose={() => setIoModalOpen(false)}
-        onImportTree={handleImportTree}
-      />
     </div>
   );
 };
