@@ -1,361 +1,888 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { SwitchboardPanel } from './launcher/SwitchboardPanel.tsx';
-import { TelemetryPanel } from './launcher/TelemetryPanel.tsx';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  ClusterConfig,
-  ServiceItemConfig,
-  ServiceStatus,
-  SystemHealthSnapshot,
-  TelemetryLogEntry,
-  TelemetryLogLevel,
+  Rocket,
+  Plus,
+  Search,
+  Trash2,
+  Edit2,
+  Play,
+  FolderPlus,
+  Folder,
+  FolderOpen,
+  Terminal,
+  Globe,
+  Cpu,
+  X,
+  Check,
+  MoreVertical,
+  CheckCircle2,
+  AlertCircle,
+  Zap,
+} from 'lucide-react';
+import {
+  LauncherItem,
+  LauncherCategory,
+  LauncherStorageData,
+  LauncherItemType,
+  DEFAULT_LAUNCHER_CATEGORY_ID,
 } from '../types/launcher.ts';
 import {
-  INITIAL_CLUSTERS,
-  MONITORED_PORTS,
-  MONITORED_PROCESS_NAMES,
-} from './launcher/launcherData.ts';
+  loadLauncherStorage,
+  saveLauncherStorage,
+  createDefaultLauncherStorage,
+  LAUNCHER_STORAGE_KEY_V2,
+} from '../services/db.ts';
 
-// 格式化当前时间为 HH:mm:ss.SSS
-function formatTimestamp(): string {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  const ms = String(now.getMilliseconds()).padStart(3, '0');
-  return `${hh}:${mm}:${ss}.${ms}`;
+// 渲染启动项类型专属小徽章
+function renderTypeBadge(type: LauncherItemType) {
+  switch (type) {
+    case 'app':
+      return {
+        label: '应用',
+        className: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+        Icon: Cpu,
+      };
+    case 'script':
+      return {
+        label: '脚本',
+        className: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+        Icon: Terminal,
+      };
+    case 'url':
+      return {
+        label: '网页',
+        className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+        Icon: Globe,
+      };
+    case 'folder':
+    default:
+      return {
+        label: '目录',
+        className: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+        Icon: FolderOpen,
+      };
+  }
 }
 
 export const LauncherDashboard: React.FC = () => {
-  const [clusters, setClusters] = useState<ClusterConfig[]>(INITIAL_CLUSTERS);
-  const [logs, setLogs] = useState<TelemetryLogEntry[]>([
-    {
-      id: 'init-1',
-      timestamp: formatTimestamp(),
-      target: 'system',
-      level: 'info',
-      message: '快速启动仪表盘与执行报文控制台已就绪，正在进行首轮全维真实巡检...',
-    },
-  ]);
-  const [isPolling, setIsPolling] = useState<boolean>(false);
-  const logCounterRef = useRef<number>(2);
-  const isInitialProbeRef = useRef<boolean>(true);
-
-  // 追加结构化报文
-  const appendLog = useCallback((target: string, level: TelemetryLogLevel, message: string) => {
-    const entry: TelemetryLogEntry = {
-      id: `log-${Date.now()}-${logCounterRef.current++}`,
-      timestamp: formatTimestamp(),
-      target,
-      level,
-      message,
-    };
-    setLogs((prev) => [...prev, entry]);
-  }, []);
-
-  // 执行全维系统真实巡检并同步服务状态 (包含 Windows Toolhelp 进程扫描与 TCP 端口探测)
-  const pollHealth = useCallback(
-    async (isManual = false) => {
-      setIsPolling(true);
-      if (isManual) {
-        appendLog('inspect', 'info', '正在执行全维系统真实巡检 (原生进程枚举 + 端口并发探测)...');
-      }
-
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const snapshot = await invoke<SystemHealthSnapshot>('inspect_system_health', {
-          payload: {
-            ports: MONITORED_PORTS,
-            process_names: MONITORED_PROCESS_NAMES,
-          },
-        });
-
-        const externalChanges: Array<{ name: string; status: ServiceStatus }> = [];
-        const activeItemsSummary: string[] = [];
-        let totalMonitored = 0;
-        let activeCount = 0;
-
-        setClusters((prevClusters) =>
-          prevClusters.map((cluster) => ({
-            ...cluster,
-            items: cluster.items.map((item) => {
-              const hasProcessCheck = item.processNames && item.processNames.length > 0;
-              const hasPortCheck = item.port !== undefined;
-
-              if (!hasProcessCheck && !hasPortCheck) {
-                return item;
-              }
-
-              totalMonitored++;
-
-              // 收集匹配的所有真实 PID
-              const matchedPids: number[] = [];
-              if (hasProcessCheck && item.processNames) {
-                for (const name of item.processNames) {
-                  const pids = snapshot.processes[name.toLowerCase()];
-                  if (pids && pids.length > 0) {
-                    matchedPids.push(...pids);
-                  }
-                }
-              }
-
-              const isPortOpen = item.port ? Boolean(snapshot.ports[item.port]) : false;
-              // 判定双重见证存活
-              const isActive = (hasProcessCheck && matchedPids.length > 0) || (hasPortCheck && isPortOpen);
-
-              // 处于正在启动/停止过渡期时，若尚未检测到活跃则保持过渡状态，避免开关抖动
-              let nextStatus: ServiceStatus;
-              if (isActive) {
-                nextStatus = 'running';
-              } else if (item.status === 'starting' || item.status === 'stopping') {
-                nextStatus = item.status;
-              } else {
-                nextStatus = 'stopped';
-              }
-
-              if (nextStatus === 'running') {
-                activeCount++;
-                const details: string[] = [];
-                if (matchedPids.length > 0) {
-                  details.push(`PID: ${matchedPids.join(',')}`);
-                }
-                if (item.port && isPortOpen) {
-                  details.push(`:${item.port}`);
-                }
-                activeItemsSummary.push(
-                  `${item.name}${details.length > 0 ? ` (${details.join(', ')})` : ''}`
-                );
-              }
-
-              // 检测外部运行状态变动（非初次加载且非手动巡检，且旧新状态均为稳定态）
-              if (
-                !isInitialProbeRef.current &&
-                !isManual &&
-                item.status !== nextStatus &&
-                (item.status === 'running' || item.status === 'stopped') &&
-                (nextStatus === 'running' || nextStatus === 'stopped')
-              ) {
-                externalChanges.push({ name: item.name, status: nextStatus });
-              }
-
-              return {
-                ...item,
-                status: nextStatus,
-                pids: matchedPids,
-              };
-            }),
-          }))
-        );
-
-        isInitialProbeRef.current = false;
-
-        if (isManual) {
-          appendLog(
-            'inspect',
-            'success',
-            `巡检完成：探测到 ${activeCount}/${totalMonitored} 个服务活跃存活` +
-              (activeItemsSummary.length > 0
-                ? `\n存活明细: ${activeItemsSummary.join(' | ')}`
-                : ' (未探测到活跃外部服务)')
-          );
-        } else if (externalChanges.length > 0) {
-          const lines = externalChanges
-            .map((c) => `• 服务 [${c.name}] 外部状态变更为: ${c.status === 'running' ? '运行中 (PID探测)' : '已停止'}`)
-            .join('\n');
-          appendLog('daemon', 'info', `感知到外部服务状态自主变更:\n${lines}`);
+  // 1. 本地快速缓存优先秒开
+  const [storage, setStorage] = useState<LauncherStorageData>(() => {
+    try {
+      const cached = localStorage.getItem(LAUNCHER_STORAGE_KEY_V2);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.categories) && Array.isArray(parsed.items)) {
+          return parsed as LauncherStorageData;
         }
-      } catch (err: unknown) {
-        if (isManual) {
-          const errMsg = typeof err === 'string' ? err : String(err);
-          appendLog('inspect', 'warn', `真实巡检探测受阻 (Web环境降级或端口拒绝): ${errMsg}`);
-        }
-      } finally {
-        setIsPolling(false);
       }
-    },
-    [appendLog]
+    } catch {
+      // ignore
+    }
+    return createDefaultLauncherStorage();
+  });
+
+  const [activeCategoryId, setActiveCategoryId] = useState<string>(
+    storage.activeCategoryId || DEFAULT_LAUNCHER_CATEGORY_ID
   );
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // 挂载初次真实巡检 + 每 3 秒后台低开销静默感知
+  // 分区创建与重命名状态
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+
+  // 启动项创建与编辑弹窗状态
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<LauncherItem | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formType, setFormType] = useState<LauncherItemType>('app');
+  const [formTarget, setFormTarget] = useState('');
+  const [formArgs, setFormArgs] = useState('');
+  const [formWorkingDir, setFormWorkingDir] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formCategoryId, setFormCategoryId] = useState(activeCategoryId);
+
+  // 卡片操作菜单与执行状态反馈
+  const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [runningItemIds, setRunningItemIds] = useState<Record<string, boolean>>({});
+
+  // 从 SQLite 异步水合加载
   useEffect(() => {
-    pollHealth(false);
-    const timer = setInterval(() => {
-      pollHealth(false);
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [pollHealth]);
-
-  // 调用后端执行启动/停止操作
-  const dispatchCommand = useCallback(
-    async (
-      action: 'start' | 'stop',
-      target: string,
-      itemIds?: string[]
-    ) => {
-      if (itemIds && itemIds.length > 0) {
-        const nextStatus: ServiceStatus = action === 'start' ? 'starting' : 'stopping';
-        setClusters((prev) =>
-          prev.map((c) => ({
-            ...c,
-            items: c.items.map((i) =>
-              itemIds.includes(i.id) ? { ...i, status: nextStatus } : i
-            ),
-          }))
-        );
+    let isMounted = true;
+    loadLauncherStorage().then((loaded) => {
+      if (isMounted) {
+        setStorage(loaded);
+        setActiveCategoryId(loaded.activeCategoryId || DEFAULT_LAUNCHER_CATEGORY_ID);
+        setIsHydrated(true);
       }
-
-      appendLog(
-        target,
-        'info',
-        `正在下发启动器指令: Workflow-Launcher.ps1 ${action} ${target}...`
-      );
-
-      const t0 = performance.now();
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const output = await invoke<string>('run_launcher_command', {
-          action,
-          target,
-        });
-
-        const duration = Math.round(performance.now() - t0);
-        appendLog(
-          target,
-          'success',
-          `指令执行完成 (耗时 ${duration}ms):\n${output}`
-        );
-
-        // 如果是无端口且无进程关联的纯脚本应用，在启动/停止完成后显式置位
-        if (itemIds && itemIds.length > 0) {
-          const finalStatus = action === 'start' ? 'running' : 'stopped';
-          setClusters((prev) =>
-            prev.map((c) => ({
-              ...c,
-              items: c.items.map((i) => {
-                if (
-                  itemIds.includes(i.id) &&
-                  !i.port &&
-                  (!i.processNames || i.processNames.length === 0)
-                ) {
-                  return { ...i, status: finalStatus };
-                }
-                return i;
-              }),
-            }))
-          );
-        }
-
-        // 即刻刷新以获取真实外部服务与进程状态
-        setTimeout(() => pollHealth(false), 600);
-      } catch (err: unknown) {
-        const duration = Math.round(performance.now() - t0);
-        const errMsg = typeof err === 'string' ? err : String(err);
-        appendLog(
-          target,
-          'error',
-          `指令执行失败 (耗时 ${duration}ms):\n${errMsg}`
-        );
-
-        // 回滚过渡状态
-        if (itemIds && itemIds.length > 0) {
-          setClusters((prev) =>
-            prev.map((c) => ({
-              ...c,
-              items: c.items.map((i) =>
-                itemIds.includes(i.id) ? { ...i, status: 'error' } : i
-              ),
-            }))
-          );
-        }
-        setTimeout(() => pollHealth(false), 500);
-      }
-    },
-    [appendLog, pollHealth]
-  );
-
-  // 单个服务项启停
-  const handleStartService = useCallback(
-    (item: ServiceItemConfig) => {
-      dispatchCommand('start', item.commandTarget, [item.id]);
-    },
-    [dispatchCommand]
-  );
-
-  const handleStopService = useCallback(
-    (item: ServiceItemConfig) => {
-      dispatchCommand('stop', item.commandTarget, [item.id]);
-    },
-    [dispatchCommand]
-  );
-
-  // 集群一键启停
-  const handleStartCluster = useCallback(
-    (cluster: ClusterConfig) => {
-      const allItemIds = cluster.items.map((i) => i.id);
-      dispatchCommand('start', cluster.batchTarget, allItemIds);
-    },
-    [dispatchCommand]
-  );
-
-  const handleStopCluster = useCallback(
-    (cluster: ClusterConfig) => {
-      const allItemIds = cluster.items.map((i) => i.id);
-      dispatchCommand('stop', cluster.batchTarget, allItemIds);
-    },
-    [dispatchCommand]
-  );
-
-  // 全局启停
-  const handleStartAll = useCallback(() => {
-    const allItemIds = clusters.flatMap((c) => c.items.map((i) => i.id));
-    dispatchCommand('start', 'all', allItemIds);
-  }, [clusters, dispatchCommand]);
-
-  const handleStopAll = useCallback(() => {
-    const allItemIds = clusters.flatMap((c) => c.items.map((i) => i.id));
-    dispatchCommand('stop', 'all', allItemIds);
-  }, [clusters, dispatchCommand]);
-
-  // 打开外部浏览器 URL
-  const handleOpenUrl = useCallback(
-    async (url: string) => {
-      appendLog('browser', 'info', `正在请求在系统默认浏览器中打开: ${url}`);
-      try {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(url);
-      } catch (_e) {
-        window.open(url, '_blank');
-      }
-    },
-    [appendLog]
-  );
-
-  // 清空报文
-  const handleClearLogs = useCallback(() => {
-    setLogs([]);
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // 自动防抖持久化 (300ms)
+  useEffect(() => {
+    if (!isHydrated) return;
+    const timer = setTimeout(() => {
+      saveLauncherStorage({
+        ...storage,
+        activeCategoryId,
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [storage, activeCategoryId, isHydrated]);
+
+  // 提示反馈自动清除
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), 3000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
+
+  // 计算每个分类包含的项目总数
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of storage.categories) {
+      counts[c.id] = 0;
+    }
+    for (const item of storage.items) {
+      if (counts[item.categoryId] !== undefined) {
+        counts[item.categoryId] += 1;
+      }
+    }
+    return counts;
+  }, [storage.categories, storage.items]);
+
+  // 当前激活的分类对象
+  const activeCategory = useMemo(() => {
+    return (
+      storage.categories.find((c) => c.id === activeCategoryId) ||
+      storage.categories[0]
+    );
+  }, [storage.categories, activeCategoryId]);
+
+  // 过滤当前展示的启动项列表
+  const currentItems = useMemo(() => {
+    return storage.items
+      .filter((item) => item.categoryId === activeCategoryId)
+      .filter((item) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(q) ||
+          item.target.toLowerCase().includes(q) ||
+          (item.description && item.description.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [storage.items, activeCategoryId, searchQuery]);
+
+  // ==================== 启动调度核心逻辑 ====================
+
+  const handleLaunchItem = useCallback(async (item: LauncherItem) => {
+    setRunningItemIds((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      if (item.type === 'script') {
+        const output = await invoke<string>('execute_custom_script', {
+          scriptType: 'powershell',
+          scriptContent: item.target,
+          workingDir: item.workingDir || undefined,
+        });
+        setFeedback({
+          type: 'success',
+          message: `脚本执行成功: ${item.name} (${output.slice(0, 30)}${output.length > 30 ? '...' : ''})`,
+        });
+      } else {
+        await invoke<string>('launch_custom_target', {
+          target: item.target,
+          args: item.args || undefined,
+          workingDir: item.workingDir || undefined,
+        });
+        setFeedback({
+          type: 'success',
+          message: `已成功拉起: ${item.name}`,
+        });
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        type: 'error',
+        message: `启动失败: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setRunningItemIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  }, []);
+
+  // 一键全启动 (捆绑拉起当前分类下所有项目)
+  const handleBatchLaunch = useCallback(async () => {
+    if (currentItems.length === 0) return;
+    setFeedback({
+      type: 'success',
+      message: `正在并发拉起【${activeCategory?.name}】全套 ${currentItems.length} 个启动项...`,
+    });
+
+    for (const item of currentItems) {
+      handleLaunchItem(item);
+      // 微小间隔避免 Windows 进程瞬间竞争
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }, [currentItems, activeCategory, handleLaunchItem]);
+
+  // ==================== 分类操作 ====================
+
+  const handleConfirmCreateCategory = () => {
+    const trimmed = newCategoryName.trim();
+    if (trimmed) {
+      const newId = `cat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newCat: LauncherCategory = {
+        id: newId,
+        name: trimmed,
+        createdAt: Date.now(),
+      };
+      setStorage((prev) => ({
+        ...prev,
+        categories: [...prev.categories, newCat],
+        activeCategoryId: newId,
+      }));
+      setActiveCategoryId(newId);
+      setNewCategoryName('');
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleConfirmRenameCategory = (id: string) => {
+    const trimmed = editingCategoryName.trim();
+    if (trimmed) {
+      setStorage((prev) => ({
+        ...prev,
+        categories: prev.categories.map((c) =>
+          c.id === id ? { ...c, name: trimmed } : c
+        ),
+      }));
+    }
+    setRenamingCategoryId(null);
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    if (storage.categories.length <= 1) {
+      alert('至少需要保留一个分类！');
+      return;
+    }
+    const defaultCat =
+      storage.categories.find((c) => c.isDefault)?.id ||
+      storage.categories.find((c) => c.id !== id)?.id ||
+      DEFAULT_LAUNCHER_CATEGORY_ID;
+
+    setStorage((prev) => {
+      // 被删除分类的启动项平移到默认分类
+      const updatedItems = prev.items.map((item) =>
+        item.categoryId === id ? { ...item, categoryId: defaultCat } : item
+      );
+      return {
+        ...prev,
+        categories: prev.categories.filter((c) => c.id !== id),
+        items: updatedItems,
+        activeCategoryId: prev.activeCategoryId === id ? defaultCat : prev.activeCategoryId,
+      };
+    });
+
+    if (activeCategoryId === id) {
+      setActiveCategoryId(defaultCat);
+    }
+  };
+
+  // ==================== 启动项增删改查 ====================
+
+  const handleOpenAddModal = () => {
+    setEditingItem(null);
+    setFormName('');
+    setFormType('app');
+    setFormTarget('');
+    setFormArgs('');
+    setFormWorkingDir('');
+    setFormDescription('');
+    setFormCategoryId(activeCategoryId);
+    setIsItemModalOpen(true);
+  };
+
+  const handleOpenEditModal = (item: LauncherItem) => {
+    setEditingItem(item);
+    setFormName(item.name);
+    setFormType(item.type);
+    setFormTarget(item.target);
+    setFormArgs(item.args || '');
+    setFormWorkingDir(item.workingDir || '');
+    setFormDescription(item.description || '');
+    setFormCategoryId(item.categoryId);
+    setIsItemModalOpen(true);
+  };
+
+  const handleSaveItem = () => {
+    const trimmedName = formName.trim();
+    const trimmedTarget = formTarget.trim();
+    if (!trimmedName || !trimmedTarget) {
+      alert('请填写启动项名称与目标路径/指令！');
+      return;
+    }
+
+    const now = Date.now();
+    if (editingItem) {
+      // 更新现有项
+      setStorage((prev) => ({
+        ...prev,
+        items: prev.items.map((i) =>
+          i.id === editingItem.id
+            ? {
+                ...i,
+                name: trimmedName,
+                type: formType,
+                target: trimmedTarget,
+                args: formArgs.trim() || undefined,
+                workingDir: formWorkingDir.trim() || undefined,
+                description: formDescription.trim() || undefined,
+                categoryId: formCategoryId,
+                updatedAt: now,
+              }
+            : i
+        ),
+      }));
+    } else {
+      // 新建项
+      const newItem: LauncherItem = {
+        id: `item-${now}-${Math.random().toString(36).slice(2, 6)}`,
+        categoryId: formCategoryId || activeCategoryId,
+        name: trimmedName,
+        type: formType,
+        target: trimmedTarget,
+        args: formArgs.trim() || undefined,
+        workingDir: formWorkingDir.trim() || undefined,
+        description: formDescription.trim() || undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setStorage((prev) => ({
+        ...prev,
+        items: [newItem, ...prev.items],
+      }));
+    }
+
+    setIsItemModalOpen(false);
+  };
+
+  const handleDeleteItem = (id: string) => {
+    setStorage((prev) => ({
+      ...prev,
+      items: prev.items.filter((i) => i.id !== id),
+    }));
+  };
 
   return (
-    <div className="flex-1 flex flex-row h-full w-full overflow-hidden min-w-0">
-      {/* 左侧 55%：仪表盘开关阵列 (设置最小安全宽度 380px，支持弹性自适应伸缩) */}
-      <div className="w-[55%] min-w-[380px] flex-1 h-full flex flex-col overflow-hidden">
-        <SwitchboardPanel
-          clusters={clusters}
-          isPolling={isPolling}
-          onRefreshPorts={() => pollHealth(true)}
-          onStartService={handleStartService}
-          onStopService={handleStopService}
-          onStartCluster={handleStartCluster}
-          onStopCluster={handleStopCluster}
-          onStartAll={handleStartAll}
-          onStopAll={handleStopAll}
-          onOpenUrl={handleOpenUrl}
-        />
+    <div className="flex h-full w-full bg-transparent text-slate-200 select-none overflow-hidden min-w-0">
+      {/* ================= 左侧分类管理侧栏 (固定 w-64 黄金宽度) ================= */}
+      <div className="w-64 flex-shrink-0 flex flex-col border-r border-white/[0.08] bg-black/20 backdrop-blur-md min-w-0">
+        {/* 侧栏顶标：高度严格对齐 h-[49px]，基准线与思维导图/待办清单 100% 贯穿对齐 */}
+        <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <Rocket className="w-4 h-4 text-brand-primary shrink-0" />
+            <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
+              快速启动
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsCreatingCategory(true);
+              setNewCategoryName('');
+            }}
+            title="新建启动分类"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+          >
+            <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+            <span>分类</span>
+          </button>
+        </div>
+
+        {/* 分类创建输入框 */}
+        {isCreatingCategory && (
+          <div className="px-3 pt-2.5">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-black/40 border border-brand-primary/40">
+              <input
+                type="text"
+                autoFocus
+                placeholder="分类名称..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleConfirmCreateCategory();
+                  if (e.key === 'Escape') setIsCreatingCategory(false);
+                }}
+                className="w-full bg-transparent px-2 py-0.5 text-xs text-slate-100 placeholder-slate-500 outline-none"
+              />
+              <button
+                onClick={handleConfirmCreateCategory}
+                className="p-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20 rounded"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIsCreatingCategory(false)}
+                className="p-1 text-slate-400 hover:text-slate-300 hover:bg-white/10 rounded"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 分类列表：L3 分类层级规范 */}
+        <div className="flex-1 overflow-y-auto px-2 py-2.5 space-y-1">
+          {storage.categories.map((cat) => {
+            const isActive = cat.id === activeCategoryId;
+            const count = categoryCounts[cat.id] || 0;
+            const isRenaming = renamingCategoryId === cat.id;
+
+            return (
+              <div
+                key={cat.id}
+                onClick={() => setActiveCategoryId(cat.id)}
+                className={`group relative flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer text-xs font-medium transition-all ${
+                  isActive
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <Folder
+                    className={`w-3.5 h-3.5 flex-shrink-0 ${
+                      isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400'
+                    }`}
+                  />
+                  {isRenaming ? (
+                    <input
+                      type="text"
+                      value={editingCategoryName}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setEditingCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleConfirmRenameCategory(cat.id);
+                        if (e.key === 'Escape') setRenamingCategoryId(null);
+                      }}
+                      onBlur={() => handleConfirmRenameCategory(cat.id)}
+                      className="bg-black/50 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-28"
+                    />
+                  ) : (
+                    <span className="truncate">{cat.name}</span>
+                  )}
+                </div>
+
+                {/* 数量标记：L2 统计徽标规范 */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono border ${
+                      isActive
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30 font-semibold'
+                        : 'bg-white/[0.06] text-fg-muted border-white/[0.06] group-hover:text-slate-300'
+                    }`}
+                  >
+                    {count}
+                  </span>
+
+                  {!cat.isDefault && (
+                    <div
+                      className="hidden group-hover:flex items-center gap-0.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => {
+                          setRenamingCategoryId(cat.id);
+                          setEditingCategoryName(cat.name);
+                        }}
+                        title="重命名分类"
+                        className="p-1 hover:text-cyan-300 hover:bg-white/10 rounded"
+                      >
+                        <Edit2 className="w-3 h-3 text-slate-400" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        title="删除分类"
+                        className="p-1 hover:text-rose-400 hover:bg-white/10 rounded"
+                      >
+                        <Trash2 className="w-3 h-3 text-slate-400" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* 右侧 45%：执行报文控制台 (设置最小安全宽度 300px) */}
-      <div className="w-[45%] min-w-[300px] h-full flex flex-col overflow-hidden">
-        <TelemetryPanel logs={logs} onClearLogs={handleClearLogs} />
+      {/* ================= 右侧启动项卡片大盘 ================= */}
+      <div className="flex-1 flex flex-col min-w-0 bg-transparent overflow-hidden">
+        {/* 顶部工具栏：高度严格对齐 h-[49px]，基准底线与左栏 100% 贯穿对齐 */}
+        <div className="h-[49px] px-4 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
+              {activeCategory?.name || '默认工具'}
+            </h2>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted border border-white/[0.06] shrink-0 whitespace-nowrap">
+              {currentItems.length} 项
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* 搜索框：内嵌紧凑形态 */}
+            <div className="relative w-52 shrink-0">
+              <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="搜索名称、路径或指令..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300 rounded"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* 一键全启动按钮 */}
+            {currentItems.length > 0 && (
+              <button
+                type="button"
+                onClick={handleBatchLaunch}
+                title="一键启动当前分类下全部项目"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                <span>一键全启动</span>
+              </button>
+            )}
+
+            {/* 添加启动项按钮 */}
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span>新建项</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 动态执行提示 Toast */}
+        {feedback && (
+          <div
+            className={`px-4 py-2 text-xs flex items-center gap-2 shrink-0 transition-all ${
+              feedback.type === 'success'
+                ? 'bg-emerald-500/15 text-emerald-300 border-b border-emerald-500/30'
+                : 'bg-rose-500/15 text-rose-300 border-b border-rose-500/30'
+            }`}
+          >
+            {feedback.type === 'success' ? (
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="truncate">{feedback.message}</span>
+          </div>
+        )}
+
+        {/* 启动项卡片大盘网格 */}
+        <div className="flex-1 overflow-y-auto p-4 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {/* 首卡：+ 添加快速启动项 */}
+            <div
+              onClick={handleOpenAddModal}
+              className="group relative flex flex-col items-center justify-center h-44 rounded-xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
+            >
+              <div className="p-3 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
+                <Plus className="w-5 h-5" />
+              </div>
+              <span className="mt-2.5 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
+                添加快速启动项
+              </span>
+              <span className="mt-0.5 text-[10px] text-slate-500 font-mono group-hover:text-slate-400 transition-colors">
+                配置应用程序、脚本或网址
+              </span>
+            </div>
+
+            {/* 启动项卡片列表 */}
+            {currentItems.map((item) => {
+              const badge = renderTypeBadge(item.type);
+              const isRunning = runningItemIds[item.id];
+              const isMenuOpen = activeMenuDocId === item.id;
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => handleLaunchItem(item)}
+                  className="group relative flex flex-col justify-between h-44 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_6px_20px_rgba(0,0,0,0.4)] p-3.5 overflow-hidden"
+                >
+                  {/* 顶栏：类型 Badge 与下拉菜单 */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${badge.className}`}
+                    >
+                      <badge.Icon className="w-3 h-3" />
+                      <span>{badge.label}</span>
+                    </span>
+
+                    <div
+                      className="relative flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveMenuDocId(isMenuOpen ? null : item.id)
+                        }
+                        className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* 下拉菜单浮层 */}
+                      {isMenuOpen && (
+                        <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                          <button
+                            onClick={() => {
+                              handleOpenEditModal(item);
+                              setActiveMenuDocId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>编辑</span>
+                          </button>
+                          <div className="h-px bg-white/5 my-1" />
+                          <button
+                            onClick={() => {
+                              handleDeleteItem(item.id);
+                              setActiveMenuDocId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>删除</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 核心名称与描述 */}
+                  <div className="my-1.5 flex flex-col justify-center flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-100 group-hover:text-cyan-300 truncate transition-colors">
+                      {item.name}
+                    </h3>
+                    <p
+                      className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed"
+                      title={item.description || item.target}
+                    >
+                      {item.description || item.target}
+                    </p>
+                  </div>
+
+                  {/* 底栏：运行状态按键与调用指引 */}
+                  <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-500 font-mono truncate max-w-[120px]">
+                      {item.target}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isRunning}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-500/15 group-hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all shrink-0"
+                    >
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>{isRunning ? '唤起中' : '运行'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
+
+      {/* ================= 新建 / 编辑启动项弹窗 ================= */}
+      {isItemModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-950/95 border border-white/10 shadow-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-semibold text-slate-100 font-mono">
+                {editingItem ? '编辑快速启动项' : '添加快速启动项'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsItemModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 text-xs">
+              {/* 名称 */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">名称 *</label>
+                <input
+                  type="text"
+                  placeholder="例如: VS Code / 前端构建 / 计算器"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                />
+              </div>
+
+              {/* 启动类型选择器 */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">类型 *</label>
+                <div className="grid grid-cols-4 gap-1.5 bg-black/30 p-1 rounded-lg border border-white/[0.06]">
+                  {(['app', 'script', 'url', 'folder'] as LauncherItemType[]).map((t) => {
+                    const b = renderTypeBadge(t);
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setFormType(t)}
+                        className={`py-1 rounded text-xs flex items-center justify-center gap-1 transition-all ${
+                          formType === t
+                            ? 'bg-white/15 text-slate-100 font-semibold shadow-sm'
+                            : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        <b.Icon className="w-3 h-3" />
+                        <span>{b.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 目标路径 / 网址 / 脚本内容 */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">
+                  {formType === 'script'
+                    ? 'PowerShell 脚本指令 *'
+                    : formType === 'url'
+                    ? '目标网址 (URL) *'
+                    : formType === 'folder'
+                    ? '文件夹绝对路径 *'
+                    : '应用程序路径 / 命令 *'}
+                </label>
+                {formType === 'script' ? (
+                  <textarea
+                    rows={3}
+                    placeholder="例如: pnpm dev 或 Get-Process"
+                    value={formTarget}
+                    onChange={(e) => setFormTarget(e.target.value)}
+                    className="w-full p-2.5 rounded-lg bg-black/40 border border-white/10 text-slate-100 font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    placeholder={
+                      formType === 'url'
+                        ? '例如: https://github.com'
+                        : formType === 'folder'
+                        ? '例如: D:\\Project 或 C:\\Users'
+                        : '例如: calc.exe 或 D:\\Apps\\Code.exe'
+                    }
+                    value={formTarget}
+                    onChange={(e) => setFormTarget(e.target.value)}
+                    className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                  />
+                )}
+              </div>
+
+              {/* 所属分类 */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">所属分类</label>
+                <select
+                  value={formCategoryId}
+                  onChange={(e) => setFormCategoryId(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg bg-black/40 border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                >
+                  {storage.categories.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-slate-900 text-slate-200">
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 启动参数 (应用与脚本可选) */}
+              {(formType === 'app' || formType === 'script') && (
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">启动参数 (可选)</label>
+                  <input
+                    type="text"
+                    placeholder="例如: --profile default 或 -v"
+                    value={formArgs}
+                    onChange={(e) => setFormArgs(e.target.value)}
+                    className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+              )}
+
+              {/* 工作目录 (可选) */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">工作目录 (可选)</label>
+                <input
+                  type="text"
+                  placeholder="例如: D:\\Project"
+                  value={formWorkingDir}
+                  onChange={(e) => setFormWorkingDir(e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                />
+              </div>
+
+              {/* 描述 */}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">辅助描述 (可选)</label>
+                <input
+                  type="text"
+                  placeholder="简短说明用途"
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsItemModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveItem}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium bg-brand-primary text-black hover:bg-brand-primary/90 transition-colors shadow-sm"
+              >
+                {editingItem ? '保存修改' : '确认添加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

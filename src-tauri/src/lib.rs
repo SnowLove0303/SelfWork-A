@@ -31,7 +31,140 @@ fn workbench_ping(client_time_ms: Option<u64>) -> Result<PingResponse, String> {
     })
 }
 
-/// 执行 Workflow-Launcher.ps1 脚本指令
+/// 通用桌面启动命令：支持启动本地可执行程序、目录、文件关联程序或 URL 网址
+/// 在 Windows 下配置 CREATE_NO_WINDOW 避免黑框闪烁
+#[tauri::command]
+async fn launch_custom_target(
+    target: String,
+    args: Option<String>,
+    working_dir: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let trimmed_target = target.trim();
+        if trimmed_target.is_empty() {
+            return Err("目标路径不能为空".to_string());
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let mut cmd = std::process::Command::new("cmd.exe");
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+            let mut full_cmd = format!("start \"\" \"{}\"", trimmed_target);
+            if let Some(arg_str) = args {
+                let trimmed_args = arg_str.trim();
+                if !trimmed_args.is_empty() {
+                    full_cmd.push(' ');
+                    full_cmd.push_str(trimmed_args);
+                }
+            }
+
+            cmd.args(&["/c", &full_cmd]);
+
+            if let Some(dir) = working_dir {
+                let trimmed_dir = dir.trim();
+                if !trimmed_dir.is_empty() {
+                    cmd.current_dir(trimmed_dir);
+                }
+            }
+
+            cmd.spawn().map_err(|e| format!("启动目标失败: {}", e))?;
+            Ok(format!("成功唤起: {}", trimmed_target))
+        }
+
+        #[cfg(not(windows))]
+        {
+            let mut cmd = std::process::Command::new("sh");
+            cmd.args(&["-c", &format!("xdg-open \"{}\"", trimmed_target)]);
+            cmd.spawn().map_err(|e| format!("启动目标失败: {}", e))?;
+            Ok(format!("成功唤起: {}", trimmed_target))
+        }
+    })
+    .await
+    .map_err(|e| format!("异步启动失败: {}", e))?
+}
+
+/// 通用脚本执行命令：支持后台静默执行 PowerShell / CMD 脚本指令并返回输出
+#[tauri::command]
+async fn execute_custom_script(
+    script_type: String,
+    script_content: String,
+    working_dir: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let trimmed_script = script_content.trim();
+        if trimmed_script.is_empty() {
+            return Err("脚本内容不能为空".to_string());
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let (mut cmd, args) = match script_type.to_lowercase().as_str() {
+                "cmd" | "bat" => {
+                    let c = std::process::Command::new("cmd.exe");
+                    let a = vec!["/c".to_string(), trimmed_script.to_string()];
+                    (c, a)
+                }
+                _ => {
+                    let c = std::process::Command::new("powershell.exe");
+                    let a = vec![
+                        "-NoProfile".to_string(),
+                        "-ExecutionPolicy".to_string(),
+                        "Bypass".to_string(),
+                        "-Command".to_string(),
+                        trimmed_script.to_string(),
+                    ];
+                    (c, a)
+                }
+            };
+
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd.args(&args);
+
+            if let Some(dir) = working_dir {
+                let trimmed_dir = dir.trim();
+                if !trimmed_dir.is_empty() {
+                    cmd.current_dir(trimmed_dir);
+                }
+            }
+
+            let output = cmd.output().map_err(|e| format!("脚本执行失败: {}", e))?;
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+            if !output.status.success() && !stderr.is_empty() {
+                if stdout.is_empty() {
+                    return Err(stderr);
+                } else {
+                    return Err(format!("{}\n{}", stdout, stderr));
+                }
+            }
+
+            if !stdout.is_empty() {
+                Ok(stdout)
+            } else if !stderr.is_empty() {
+                Ok(stderr)
+            } else {
+                Ok("执行成功 (无输出)".to_string())
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            let mut cmd = std::process::Command::new("sh");
+            cmd.args(&["-c", trimmed_script]);
+            let output = cmd.output().map_err(|e| format!("执行失败: {}", e))?;
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(stdout)
+        }
+    })
+    .await
+    .map_err(|e| format!("异步执行任务失败: {}", e))?
+}
+
+/// 执行 Workflow-Launcher.ps1 脚本指令 (向前兼容保留)
 /// 在 Windows 下配置 CREATE_NO_WINDOW 标志彻底杜绝命令行黑框闪烁
 #[tauri::command]
 async fn run_launcher_command(action: String, target: String) -> Result<String, String> {
@@ -116,7 +249,7 @@ async fn check_service_ports(ports: Vec<u16>) -> Result<HashMap<u16, bool>, Stri
         Ok(results)
     })
     .await
-    .map_err(|e| format!("检测端口任务失败: {}", e))?
+    .map_err(|e| format!("端口并发检测失败: {}", e))?
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,87 +261,72 @@ pub struct HealthInspectionPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemHealthSnapshot {
     pub ports: HashMap<u16, bool>,
-    pub processes: HashMap<String, Vec<u32>>, // lowercase_name -> [PIDs]
+    pub processes: HashMap<String, Vec<u32>>,
     pub duration_ms: u64,
 }
 
-/// 基于 Windows Toolhelp32 原生快照的毫秒级进程扫描 (< 2ms)
-fn scan_target_processes(target_names: &[String]) -> HashMap<String, Vec<u32>> {
-    let mut result: HashMap<String, Vec<u32>> = HashMap::new();
-    let targets: Vec<String> = target_names.iter().map(|s| s.trim().to_lowercase()).collect();
-    for target in &targets {
-        result.entry(target.clone()).or_default();
-    }
-
-    #[cfg(windows)]
-    {
-        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-            TH32CS_SNAPPROCESS,
-        };
-
-        unsafe {
-            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-            if snapshot != INVALID_HANDLE_VALUE {
-                let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-                entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-
-                if Process32FirstW(snapshot, &mut entry) != 0 {
-                    loop {
-                        let len = entry
-                            .szExeFile
-                            .iter()
-                            .position(|&c| c == 0)
-                            .unwrap_or(entry.szExeFile.len());
-                        let exe_name = String::from_utf16_lossy(&entry.szExeFile[..len]).to_lowercase();
-                        let pid = entry.th32ProcessID;
-
-                        if let Some(pids) = result.get_mut(&exe_name) {
-                            pids.push(pid);
-                        }
-
-                        if Process32NextW(snapshot, &mut entry) == 0 {
-                            break;
-                        }
-                    }
-                }
-                CloseHandle(snapshot);
-            }
-        }
-    }
-
-    result
-}
-
-/// 全维巡检：极速原生进程快照枚举 + 多端口并发连通性探测
+/// 全维系统健康真实巡检 (合并端口并发扫描与进程快照枚举，单线程秒级完成)
 #[tauri::command]
-async fn inspect_system_health(
-    payload: HealthInspectionPayload,
-) -> Result<SystemHealthSnapshot, String> {
+async fn inspect_system_health(payload: HealthInspectionPayload) -> Result<SystemHealthSnapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let start_time = std::time::Instant::now();
 
+        // 1. 并发扫描所有目标端口
         let (ports, processes) = std::thread::scope(|s| {
-            let mut handles = Vec::with_capacity(payload.ports.len());
-            for port in payload.ports {
-                handles.push(s.spawn(move || {
+            let port_handle = s.spawn(|| {
+                let mut p_map = HashMap::with_capacity(payload.ports.len());
+                for port in payload.ports {
                     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-                    let is_open =
-                        TcpStream::connect_timeout(&addr, Duration::from_millis(150)).is_ok();
-                    (port, is_open)
-                }));
-            }
-
-            // 在等待端口网络握手的同时，本线程执行超高速 Toolhelp 进程扫描 (< 2ms)
-            let proc_map = scan_target_processes(&payload.process_names);
-
-            let mut port_map = HashMap::with_capacity(handles.len());
-            for h in handles {
-                if let Ok((port, is_open)) = h.join() {
-                    port_map.insert(port, is_open);
+                    let is_open = TcpStream::connect_timeout(&addr, Duration::from_millis(150)).is_ok();
+                    p_map.insert(port, is_open);
                 }
-            }
+                p_map
+            });
+
+            // 2. Windows Toolhelp32Snapshot 原生进程快照枚举
+            let proc_handle = s.spawn(|| {
+                let mut map: HashMap<String, Vec<u32>> = HashMap::new();
+                for name in &payload.process_names {
+                    map.insert(name.to_lowercase(), Vec::new());
+                }
+
+                #[cfg(windows)]
+                {
+                    use windows_sys::Win32::Foundation::CloseHandle;
+                    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+                        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+                        TH32CS_SNAPPROCESS,
+                    };
+
+                    unsafe {
+                        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+                        if snapshot != windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+                            let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+                            entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+                            if Process32FirstW(snapshot, &mut entry) != 0 {
+                                loop {
+                                    let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                                    let exe_name = String::from_utf16_lossy(&entry.szExeFile[..len]).to_lowercase();
+
+                                    if let Some(pids) = map.get_mut(&exe_name) {
+                                        pids.push(entry.th32ProcessID);
+                                    }
+
+                                    if Process32NextW(snapshot, &mut entry) == 0 {
+                                        break;
+                                    }
+                                }
+                            }
+                            CloseHandle(snapshot);
+                        }
+                    }
+                }
+                map
+            });
+
+            let port_map = port_handle.join().unwrap_or_default();
+            let proc_map = proc_handle.join().unwrap_or_default();
 
             (port_map, proc_map)
         });
@@ -291,6 +409,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             workbench_ping,
+            launch_custom_target,
+            execute_custom_script,
             run_launcher_command,
             check_service_ports,
             inspect_system_health,
@@ -321,6 +441,20 @@ mod tests {
         assert!(res.server_time_ms > 0);
         assert!(!res.os_family.is_empty());
         assert!(!res.arch.is_empty());
+    }
+
+    #[test]
+    fn test_execute_custom_script_contract() {
+        #[cfg(windows)]
+        {
+            let res = tauri::async_runtime::block_on(execute_custom_script(
+                "cmd".to_string(),
+                "echo SelfWorkLauncherReady".to_string(),
+                None,
+            ))
+            .expect("execute_custom_script failed");
+            assert!(res.contains("SelfWorkLauncherReady"));
+        }
     }
 
     #[test]

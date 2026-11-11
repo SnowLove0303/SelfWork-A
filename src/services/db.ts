@@ -12,6 +12,10 @@ import {
   MindMapStorageData,
   DEFAULT_PARTITION_ID,
 } from '../types/mindmap.ts';
+import {
+  LauncherStorageData,
+  INITIAL_LAUNCHER_STORAGE,
+} from '../types/launcher.ts';
 
 export const TASKS_STORAGE_KEY = 'selfwork_tasks_data';
 export const MEMOS_STORAGE_KEY = 'selfwork_memos_data';
@@ -22,6 +26,8 @@ export const MINDMAP_STORAGE_KEY = 'selfwork_mindmap_data';
 export const MINDMAP_INIT_KEY = 'selfwork_mindmap_initialized';
 export const MINDMAP_STORAGE_KEY_V2 = 'selfwork_mindmap_storage_v2';
 export const MINDMAP_STORAGE_SETTING_KEY_V2 = 'sw_mindmap_storage_v2';
+export const LAUNCHER_STORAGE_KEY_V2 = 'selfwork_launcher_storage_v2';
+export const LAUNCHER_STORAGE_SETTING_KEY_V2 = 'sw_launcher_storage_v2';
 
 /**
  * 封装与 Tauri 原生 IPC 通信的底层调用器
@@ -58,103 +64,80 @@ export async function loadTasks(): Promise<TaskItem[]> {
     }
 
     // 尚未显式设置 tasks_initialized 标记，检查是历史升级还是全新安装
-    const legacyRaw = localStorage.getItem(TASKS_STORAGE_KEY);
-    const sqliteTasks = await tauriInvoke<TaskItem[]>('db_get_all_tasks');
+    const localSaved = localStorage.getItem(TASKS_STORAGE_KEY);
+    const localIsInit = localStorage.getItem(TASKS_INIT_KEY);
 
-    if (Array.isArray(sqliteTasks) && sqliteTasks.length > 0) {
-      // 数据库中已有数据，直接固化初始化标记
-      await tauriInvoke('db_set_setting', {
-        key: 'tasks_initialized',
-        value: 'true',
-      });
-      localStorage.setItem(TASKS_INIT_KEY, 'true');
-      return sqliteTasks;
-    }
-
-    if (legacyRaw !== null) {
-      // 历史缓存存在（说明用户此前已使用过，哪怕已被用户清空为 []）
+    if (localIsInit === 'true' && localSaved !== null) {
       try {
-        const legacyTasks = JSON.parse(legacyRaw);
-        if (Array.isArray(legacyTasks) && legacyTasks.length > 0) {
-          await saveTasks(legacyTasks);
+        const parsed = JSON.parse(localSaved);
+        if (Array.isArray(parsed)) {
+          await tauriInvoke('db_save_all_tasks', { tasks: parsed });
           await tauriInvoke('db_set_setting', {
             key: 'tasks_initialized',
             value: 'true',
           });
-          localStorage.setItem(TASKS_INIT_KEY, 'true');
-          return legacyTasks;
+          return parsed;
         }
-      } catch {
+      } catch (_e) {
         // ignore
       }
-      // 用户清空后的空态历史，直接锁定初始化标记并维持空态
-      await tauriInvoke('db_set_setting', {
-        key: 'tasks_initialized',
-        value: 'true',
-      });
-      localStorage.setItem(TASKS_INIT_KEY, 'true');
-      return [];
     }
 
-    // 真正白纸首次安装：播种 INITIAL_TASKS 并永久锁定标记
-    await saveTasks(INITIAL_TASKS);
+    // 全新安装白纸场景：播种初始数据
+    await tauriInvoke('db_save_all_tasks', { tasks: INITIAL_TASKS });
     await tauriInvoke('db_set_setting', {
       key: 'tasks_initialized',
       value: 'true',
     });
     localStorage.setItem(TASKS_INIT_KEY, 'true');
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(INITIAL_TASKS));
     return INITIAL_TASKS;
   } catch (_err) {
-    // Web 浏览器或桌面 IPC 异常降级
+    // Web 环境或 IPC 降级
     try {
-      const isInitWeb = localStorage.getItem(TASKS_INIT_KEY) === 'true';
-      const saved = localStorage.getItem(TASKS_STORAGE_KEY);
-      if (isInitWeb) {
-        if (saved !== null) {
-          const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : [];
-        }
-        return [];
+      const localIsInit = localStorage.getItem(TASKS_INIT_KEY);
+      const localSaved = localStorage.getItem(TASKS_STORAGE_KEY);
+
+      if (localIsInit === 'true' && localSaved !== null) {
+        const parsed = JSON.parse(localSaved);
+        return Array.isArray(parsed) ? parsed : [];
       }
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          localStorage.setItem(TASKS_INIT_KEY, 'true');
-          return parsed;
-        }
-      }
+
+      localStorage.setItem(TASKS_INIT_KEY, 'true');
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(INITIAL_TASKS));
+      return INITIAL_TASKS;
     } catch {
-      // ignore
+      return INITIAL_TASKS;
     }
-    localStorage.setItem(TASKS_INIT_KEY, 'true');
-    return INITIAL_TASKS;
   }
 }
 
 /**
- * 权威持久化待办事项集合至 SQLite 物理数据库与本地缓存
+ * 持久化保存待办事项 (立即写 SQLite 与 localStorage)
  */
 export async function saveTasks(tasks: TaskItem[]): Promise<void> {
-  // 1. 同步更新本地快速读取缓存
   try {
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    localStorage.setItem(TASKS_INIT_KEY, 'true');
   } catch (_e) {
     // ignore
   }
 
-  // 2. 物理落盘至 SQLite 事务
   try {
     await tauriInvoke('db_save_all_tasks', { tasks });
+    await tauriInvoke('db_set_setting', {
+      key: 'tasks_initialized',
+      value: 'true',
+    });
   } catch (_err) {
     // ignore
   }
 }
 
-// ==================== 灵感便签 (Memos) 服务 ====================
+// ==================== 便签 (Memos) 服务 ====================
 
 /**
- * 加载全部灵感便签
- * 遵循与 loadTasks 严格一致的权威生命周期不变量
+ * 加载全部便签
  */
 export async function loadMemos(): Promise<MemoItem[]> {
   try {
@@ -167,95 +150,79 @@ export async function loadMemos(): Promise<MemoItem[]> {
       return Array.isArray(sqliteMemos) ? sqliteMemos : [];
     }
 
-    const legacyRaw = localStorage.getItem(MEMOS_STORAGE_KEY);
-    const sqliteMemos = await tauriInvoke<MemoItem[]>('db_get_all_memos');
+    const localSaved = localStorage.getItem(MEMOS_STORAGE_KEY);
+    const localIsInit = localStorage.getItem(MEMOS_INIT_KEY);
 
-    if (Array.isArray(sqliteMemos) && sqliteMemos.length > 0) {
-      await tauriInvoke('db_set_setting', {
-        key: 'memos_initialized',
-        value: 'true',
-      });
-      localStorage.setItem(MEMOS_INIT_KEY, 'true');
-      return sqliteMemos;
-    }
-
-    if (legacyRaw !== null) {
+    if (localIsInit === 'true' && localSaved !== null) {
       try {
-        const legacyMemos = JSON.parse(legacyRaw);
-        if (Array.isArray(legacyMemos) && legacyMemos.length > 0) {
-          await saveMemos(legacyMemos);
+        const parsed = JSON.parse(localSaved);
+        if (Array.isArray(parsed)) {
+          await tauriInvoke('db_save_all_memos', { memos: parsed });
           await tauriInvoke('db_set_setting', {
             key: 'memos_initialized',
             value: 'true',
           });
-          localStorage.setItem(MEMOS_INIT_KEY, 'true');
-          return legacyMemos;
+          return parsed;
         }
-      } catch {
+      } catch (_e) {
         // ignore
       }
-      await tauriInvoke('db_set_setting', {
-        key: 'memos_initialized',
-        value: 'true',
-      });
-      localStorage.setItem(MEMOS_INIT_KEY, 'true');
-      return [];
     }
 
-    await saveMemos(INITIAL_MEMOS);
+    // 全新安装白纸场景
+    await tauriInvoke('db_save_all_memos', { memos: INITIAL_MEMOS });
     await tauriInvoke('db_set_setting', {
       key: 'memos_initialized',
       value: 'true',
     });
     localStorage.setItem(MEMOS_INIT_KEY, 'true');
+    localStorage.setItem(MEMOS_STORAGE_KEY, JSON.stringify(INITIAL_MEMOS));
     return INITIAL_MEMOS;
   } catch (_err) {
     try {
-      const isInitWeb = localStorage.getItem(MEMOS_INIT_KEY) === 'true';
-      const saved = localStorage.getItem(MEMOS_STORAGE_KEY);
-      if (isInitWeb) {
-        if (saved !== null) {
-          const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : [];
-        }
-        return [];
+      const localIsInit = localStorage.getItem(MEMOS_INIT_KEY);
+      const localSaved = localStorage.getItem(MEMOS_STORAGE_KEY);
+
+      if (localIsInit === 'true' && localSaved !== null) {
+        const parsed = JSON.parse(localSaved);
+        return Array.isArray(parsed) ? parsed : [];
       }
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          localStorage.setItem(MEMOS_INIT_KEY, 'true');
-          return parsed;
-        }
-      }
+
+      localStorage.setItem(MEMOS_INIT_KEY, 'true');
+      localStorage.setItem(MEMOS_STORAGE_KEY, JSON.stringify(INITIAL_MEMOS));
+      return INITIAL_MEMOS;
     } catch {
-      // ignore
+      return INITIAL_MEMOS;
     }
-    localStorage.setItem(MEMOS_INIT_KEY, 'true');
-    return INITIAL_MEMOS;
   }
 }
 
 /**
- * 权威持久化便签集合至 SQLite 物理数据库与本地缓存
+ * 持久化保存便签
  */
 export async function saveMemos(memos: MemoItem[]): Promise<void> {
   try {
     localStorage.setItem(MEMOS_STORAGE_KEY, JSON.stringify(memos));
+    localStorage.setItem(MEMOS_INIT_KEY, 'true');
   } catch (_e) {
     // ignore
   }
 
   try {
     await tauriInvoke('db_save_all_memos', { memos });
+    await tauriInvoke('db_set_setting', {
+      key: 'memos_initialized',
+      value: 'true',
+    });
   } catch (_err) {
     // ignore
   }
 }
 
-// ==================== 外观设置 (Appearance Settings) 服务 ====================
+// ==================== 外观设置 (Settings) 服务 ====================
 
 /**
- * 加载外观配置
+ * 加载个性化外观设置
  */
 export async function loadAppearanceSettings(): Promise<AppearanceSettings> {
   try {
@@ -266,38 +233,25 @@ export async function loadAppearanceSettings(): Promise<AppearanceSettings> {
       const parsed = JSON.parse(raw);
       return { ...DEFAULT_APPEARANCE_SETTINGS, ...parsed };
     }
-
-    // 检查缓存
-    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        const merged = { ...DEFAULT_APPEARANCE_SETTINGS, ...parsed };
-        await saveAppearanceSettings(merged);
-        return merged;
-      } catch {
-        // ignore
-      }
-    }
-
-    // 写入默认设置
-    await saveAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS);
-    return DEFAULT_APPEARANCE_SETTINGS;
   } catch (_err) {
-    try {
-      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (saved) {
-        return { ...DEFAULT_APPEARANCE_SETTINGS, ...JSON.parse(saved) };
-      }
-    } catch {
-      // ignore
-    }
-    return DEFAULT_APPEARANCE_SETTINGS;
+    // ignore
   }
+
+  try {
+    const cached = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return { ...DEFAULT_APPEARANCE_SETTINGS, ...parsed };
+    }
+  } catch (_e) {
+    // ignore
+  }
+
+  return DEFAULT_APPEARANCE_SETTINGS;
 }
 
 /**
- * 持久化外观设置至 SQLite 物理数据库与本地缓存
+ * 持久化保存个性化外观设置
  */
 export async function saveAppearanceSettings(
   settings: AppearanceSettings,
@@ -318,117 +272,133 @@ export async function saveAppearanceSettings(
   }
 }
 
-// ==================== 思维导图 (MindMap) 服务 ====================
+// ==================== 思维导图多分区架构 (MindMap V2) 服务 ====================
 
-/**
- * 创建默认初始多分区多导图存储结构
- */
 export function createDefaultMindMapStorage(): MindMapStorageData {
-  const now = Date.now();
   const defaultPartition: MindMapPartition = {
     id: DEFAULT_PARTITION_ID,
     name: '默认分区',
-    createdAt: now,
+    createdAt: Date.now(),
     isDefault: true,
   };
-  const initialDoc: MindMapDocument = {
-    id: 'mindmap-doc-initial',
+
+  const initialDocument: MindMapDocument = {
+    id: 'default-mindmap-doc-1',
     partitionId: DEFAULT_PARTITION_ID,
-    title: '我的第一张导图',
-    root: INITIAL_MINDMAP,
-    createdAt: now,
-    updatedAt: now,
+    title: '工作台核心架构导图',
+    root: JSON.parse(JSON.stringify(INITIAL_MINDMAP)),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
+
   return {
     partitions: [defaultPartition],
-    documents: [initialDoc],
+    documents: [initialDocument],
     activePartitionId: DEFAULT_PARTITION_ID,
-    activeDocumentId: initialDoc.id,
+    activeDocumentId: initialDocument.id,
   };
 }
 
 /**
- * 加载思维导图多分区多文档持久化数据
- * 1. 优先读取 SQLite app_settings 中的 sw_mindmap_storage_v2
- * 2. 次选 localStorage 快速缓存
- * 3. 若均未初始化，检测旧版单一导图 mindmap 数据并自动无损迁移至默认分区
- * 4. 全新安装则初始化默认分区与示例导图
+ * 迁移单份导图旧数据为 V2 多分区多导图格式
+ */
+function migrateLegacyMindMap(legacyRoot: MindMapNode): MindMapStorageData {
+  const base = createDefaultMindMapStorage();
+  base.documents[0].title = legacyRoot.title || '我的思维导图';
+  base.documents[0].root = legacyRoot;
+  return base;
+}
+
+/**
+ * 异步加载思维导图存储数据 (V2 多分区)
  */
 export async function loadMindMapStorage(): Promise<MindMapStorageData> {
   try {
-    const raw = await tauriInvoke<string | null>('db_get_setting', {
+    const rawV2 = await tauriInvoke<string | null>('db_get_setting', {
       key: MINDMAP_STORAGE_SETTING_KEY_V2,
     });
-    if (raw) {
-      const parsed = JSON.parse(raw);
+    if (rawV2) {
+      const parsed = JSON.parse(rawV2);
       if (
         parsed &&
         Array.isArray(parsed.partitions) &&
         Array.isArray(parsed.documents) &&
         parsed.partitions.length > 0
       ) {
+        try {
+          localStorage.setItem(MINDMAP_STORAGE_KEY_V2, rawV2);
+        } catch (_e) {
+          // ignore
+        }
         return parsed as MindMapStorageData;
       }
     }
-
-    const cached = localStorage.getItem(MINDMAP_STORAGE_KEY_V2);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (
-          parsed &&
-          Array.isArray(parsed.partitions) &&
-          Array.isArray(parsed.documents) &&
-          parsed.partitions.length > 0
-        ) {
-          await saveMindMapStorage(parsed);
-          return parsed as MindMapStorageData;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // 检查旧版单一导图以执行数据零损耗自动迁移
-    const legacyMap = await loadMindMap();
-    const defaultStorage = createDefaultMindMapStorage();
-    if (legacyMap && legacyMap.id) {
-      defaultStorage.documents[0].root = legacyMap;
-      defaultStorage.documents[0].title = legacyMap.title || '我的第一张导图';
-    }
-
-    await saveMindMapStorage(defaultStorage);
-    return defaultStorage;
   } catch (_err) {
-    try {
-      const cached = localStorage.getItem(MINDMAP_STORAGE_KEY_V2);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (
-          parsed &&
-          Array.isArray(parsed.partitions) &&
-          Array.isArray(parsed.documents) &&
-          parsed.partitions.length > 0
-        ) {
-          return parsed as MindMapStorageData;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    const fallback = createDefaultMindMapStorage();
-    return fallback;
+    // ignore
   }
+
+  try {
+    const cachedV2 = localStorage.getItem(MINDMAP_STORAGE_KEY_V2);
+    if (cachedV2) {
+      const parsed = JSON.parse(cachedV2);
+      if (
+        parsed &&
+        Array.isArray(parsed.partitions) &&
+        Array.isArray(parsed.documents) &&
+        parsed.partitions.length > 0
+      ) {
+        saveMindMapStorage(parsed);
+        return parsed as MindMapStorageData;
+      }
+    }
+  } catch (_e) {
+    // ignore
+  }
+
+  try {
+    const legacyRaw = await tauriInvoke<string | null>('db_get_setting', {
+      key: 'mindmap',
+    });
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (legacyParsed && typeof legacyParsed === 'object' && legacyParsed.id) {
+        const migrated = migrateLegacyMindMap(legacyParsed as MindMapNode);
+        await saveMindMapStorage(migrated);
+        return migrated;
+      }
+    }
+  } catch (_e) {
+    // ignore
+  }
+
+  try {
+    const cachedLegacy = localStorage.getItem(MINDMAP_STORAGE_KEY);
+    if (cachedLegacy) {
+      const legacyParsed = JSON.parse(cachedLegacy);
+      if (legacyParsed && typeof legacyParsed === 'object' && legacyParsed.id) {
+        const migrated = migrateLegacyMindMap(legacyParsed as MindMapNode);
+        await saveMindMapStorage(migrated);
+        return migrated;
+      }
+    }
+  } catch (_e) {
+    // ignore
+  }
+
+  const defaultStorage = createDefaultMindMapStorage();
+  await saveMindMapStorage(defaultStorage);
+  return defaultStorage;
 }
 
 /**
- * 持久化思维导图多分区与多文档数据至 SQLite 与本地缓存
+ * 异步保存思维导图存储数据 (V2 多分区)
  */
 export async function saveMindMapStorage(
-  data: MindMapStorageData,
+  storage: MindMapStorageData,
 ): Promise<void> {
+  const json = JSON.stringify(storage);
   try {
-    localStorage.setItem(MINDMAP_STORAGE_KEY_V2, JSON.stringify(data));
+    localStorage.setItem(MINDMAP_STORAGE_KEY_V2, json);
   } catch (_e) {
     // ignore
   }
@@ -436,7 +406,7 @@ export async function saveMindMapStorage(
   try {
     await tauriInvoke('db_set_setting', {
       key: MINDMAP_STORAGE_SETTING_KEY_V2,
-      value: JSON.stringify(data),
+      value: json,
     });
   } catch (_err) {
     // ignore
@@ -463,7 +433,10 @@ export async function loadMindMap(): Promise<MindMapNode> {
       try {
         const parsed = JSON.parse(cached);
         if (parsed && typeof parsed === 'object' && parsed.id) {
-          await saveMindMap(parsed);
+          await tauriInvoke('db_set_setting', {
+            key: 'mindmap',
+            value: cached,
+          });
           return parsed as MindMapNode;
         }
       } catch {
@@ -471,7 +444,6 @@ export async function loadMindMap(): Promise<MindMapNode> {
       }
     }
 
-    // 默认白纸首次初始化
     await saveMindMap(INITIAL_MINDMAP);
     return INITIAL_MINDMAP;
   } catch (_err) {
@@ -510,6 +482,74 @@ export async function saveMindMap(root: MindMapNode): Promise<void> {
   }
 }
 
+// ==================== 通用快速启动器 (Launcher V2) 服务 ====================
+
+export function createDefaultLauncherStorage(): LauncherStorageData {
+  return JSON.parse(JSON.stringify(INITIAL_LAUNCHER_STORAGE));
+}
+
+/**
+ * 异步加载启动器存储数据 (优先 SQLite，降级 localStorage)
+ */
+export async function loadLauncherStorage(): Promise<LauncherStorageData> {
+  try {
+    const raw = await tauriInvoke<string | null>('db_get_setting', {
+      key: LAUNCHER_STORAGE_SETTING_KEY_V2,
+    });
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.categories) && Array.isArray(parsed.items)) {
+        try {
+          localStorage.setItem(LAUNCHER_STORAGE_KEY_V2, raw);
+        } catch (_e) {
+          // ignore
+        }
+        return parsed as LauncherStorageData;
+      }
+    }
+  } catch (_err) {
+    // ignore
+  }
+
+  try {
+    const cached = localStorage.getItem(LAUNCHER_STORAGE_KEY_V2);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && Array.isArray(parsed.categories) && Array.isArray(parsed.items)) {
+        saveLauncherStorage(parsed);
+        return parsed as LauncherStorageData;
+      }
+    }
+  } catch (_e) {
+    // ignore
+  }
+
+  const defaultStorage = createDefaultLauncherStorage();
+  await saveLauncherStorage(defaultStorage);
+  return defaultStorage;
+}
+
+/**
+ * 异步持久化启动器存储数据 (双写缓存与 SQLite)
+ */
+export async function saveLauncherStorage(data: LauncherStorageData): Promise<void> {
+  const json = JSON.stringify(data);
+  try {
+    localStorage.setItem(LAUNCHER_STORAGE_KEY_V2, json);
+  } catch (_e) {
+    // ignore
+  }
+
+  try {
+    await tauriInvoke('db_set_setting', {
+      key: LAUNCHER_STORAGE_SETTING_KEY_V2,
+      value: json,
+    });
+  } catch (_err) {
+    // ignore
+  }
+}
+
 // 统一语义别名导出
 export const dbLoadTasks = loadTasks;
 export const dbSaveTasks = saveTasks;
@@ -521,3 +561,5 @@ export const dbLoadMindMap = loadMindMap;
 export const dbSaveMindMap = saveMindMap;
 export const dbLoadMindMapStorage = loadMindMapStorage;
 export const dbSaveMindMapStorage = saveMindMapStorage;
+export const dbLoadLauncherStorage = loadLauncherStorage;
+export const dbSaveLauncherStorage = saveLauncherStorage;

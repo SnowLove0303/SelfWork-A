@@ -2,6 +2,32 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.28] - 2026-11-11
+
+### Feature & Architecture (快速启动重构为通用灵活的跨设备桌面启动工作台与解耦 WSL)
+- **解耦环境绑定与通用跨设备 IPC 底座重构 (`src-tauri/src/lib.rs`)**:
+  - 响应用户“关于快速启动模块，我先做调整，考虑到后续该工作台的跨设备通用型问题，我觉得还是不要跟wll做绑定了，先去掉wll这个重新做吧，我的计划是 允许输入指定路径和名称设置快速启动项，允许这个添加或删除快速启动项，允许设置分类，允许捆绑启动，允许设置快速允许脚本之类的，总计就是我想要从操作层面上达到通用性和灵活性，明白我意思？”的明确指示；
+  - 彻底解耦原硬编码的 WSL 与外部特定目录 `Workflow-Launcher.ps1` 及固定集群端口探测；
+  - 在 Rust 微内核封装并暴露两大通用操作系统级 IPC：
+    - `launch_custom_target(target, args, working_dir)`：采用 Win32 `ShellExecuteW` 原生唤醒应用、文件夹或网页链接；
+    - `execute_custom_script(script_type, script_content, working_dir)`：采用静默管道驱动执行 PowerShell / CMD 快速脚本，Windows 平台注入 `CREATE_NO_WINDOW` 标志彻底杜绝控制台黑框瞬时闪烁；
+  - 增补 `test_execute_custom_script_contract` 单元测试，保证跨设备 Rust IPC 鲁棒性。
+- **动态启动器数据契约与 SQLite/本地双通道持久化 (`src/types/launcher.ts`, `src/services/db.ts`)**:
+  - 在 `src/types/launcher.ts` 定义 `LauncherCategory`、`LauncherItem` (支持 `app` / `script` / `web` / `folder` 4 种类型、命令行参数、工作目录、描述) 与 `LauncherStorageData`；
+  - 默认预设 Windows 跨设备 100% 具备的开箱即用小工具（计算器、记事本、CMD、GitHub 站点、连通性测试脚本、系统型号查询脚本）；
+  - 保留历史别名兼容旧版类型导出，杜绝破坏现有引用；
+  - 在 `src/services/db.ts` 实现 `loadLauncherStorage` 与 `saveLauncherStorage`，建立 SQLite `app_settings` 与本地快速缓存双写管线。
+- **通用工作台 UI 界面重塑与 49px 绝对基准线对齐 (`src/components/LauncherDashboard.tsx`)**:
+  - **左侧分类管理侧栏 (`w-64`)**：支持分类切换、实时统计项数徽标、一键新建自定义分类、双击/回车就地重命名分类、删除分类（关联启动项平滑迁移至默认分类）；
+  - **顶标行严密锁定为 `h-[49px]`**：图标与标题垂直居中于 Y=24.5px，横向底部分割线与待办清单、思维导图实现 1:1 绝对像素级贯穿；
+  - **一键捆绑启动 (Bundled Launch)**：顶栏集成“一键全启动”按键，以 150ms 优雅时间间隔并发/串行唤醒当前分类下全部启动项与脚本；
+  - **启动项晶体卡片大盘网格**：支持启动项点击响应唤醒、运行状态/错误即时反馈、单项编辑与删除；
+  - **新增/编辑极简模态框**：支持类型切换（应用/脚本/网页/文件夹），根据类型自适应切换目标路径、脚本编辑器与运行参数录入，并提供分类归属选择。
+- **工程质量与全栈验证**:
+  - `pnpm check` (tsc --noEmit) 零警告零错误（退出码 0）；
+  - `cargo test` 6/6 全绿（通过率 100%，退出码 0）；
+  - 全量打包产出最新单文件桌面端 `SelfWork.exe` (5.60 MB) 并经由 VS Code 原生 Diff 完成审查闭环。
+
 ## [0.1.27] - 2026-11-11
 
 ### Feature & Lifecycle (思维导图全生命周期回收站治理体系落地)
