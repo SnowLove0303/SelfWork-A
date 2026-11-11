@@ -1,18 +1,19 @@
 // ==================== 通用跨设备启动器数据契约 ====================
 
-export type LauncherItemType = 'app' | 'script' | 'url' | 'folder';
+export type LauncherItemType = 'app' | 'script' | 'url' | 'folder' | 'bundle';
 
 export interface LauncherItem {
   id: string;
   categoryId: string;
   name: string;
   type: LauncherItemType;
-  target: string; // 应用程序路径、文件夹路径、网址或脚本命令
+  target: string; // 应用程序路径、文件夹路径、网址或脚本命令 (bundle类型可填说明)
   args?: string; // 启动参数 (可选)
   workingDir?: string; // 工作目录 (可选)
   description?: string; // 辅助说明 (可选)
   iconName?: string; // 语义图标标识 (可选)
   icon?: string; // 提取的原生 Base64 Data URL 或外部图标路径 (可选)
+  bundleItemIds?: string[]; // 捆绑套件包含的子启动项 ID 列表 (仅 bundle 类型有效)
   createdAt: number;
   updatedAt: number;
 }

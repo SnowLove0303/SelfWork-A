@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Zap,
+  CheckSquare,
+  Layers,
 } from 'lucide-react';
 import {
   LauncherItem,
@@ -36,6 +38,12 @@ import {
 // 渲染启动项类型专属小徽章
 function renderTypeBadge(type: LauncherItemType) {
   switch (type) {
+    case 'bundle':
+      return {
+        label: '组合',
+        className: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+        Icon: Layers,
+      };
     case 'app':
       return {
         label: '应用',
@@ -87,6 +95,10 @@ export const LauncherDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isHydrated, setIsHydrated] = useState(false);
 
+  // 即时自由多选批量启动状态
+  const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+
   // 分区创建与重命名状态
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -103,6 +115,7 @@ export const LauncherDashboard: React.FC = () => {
   const [formWorkingDir, setFormWorkingDir] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formCategoryId, setFormCategoryId] = useState(activeCategoryId);
+  const [formBundleItemIds, setFormBundleItemIds] = useState<string[]>([]);
 
   // 卡片操作菜单与执行状态反馈
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
@@ -184,7 +197,7 @@ export const LauncherDashboard: React.FC = () => {
   // 提示反馈自动清除
   useEffect(() => {
     if (!feedback) return;
-    const timer = setTimeout(() => setFeedback(null), 3000);
+    const timer = setTimeout(() => setFeedback(null), 3500);
     return () => clearTimeout(timer);
   }, [feedback]);
 
@@ -226,23 +239,58 @@ export const LauncherDashboard: React.FC = () => {
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [storage.items, activeCategoryId, searchQuery]);
 
+  // 可用于组成 Bundle 套件的全部候选子项 (排除 bundle 自身以防死循环)
+  const candidateBundleItems = useMemo(() => {
+    return storage.items.filter(
+      (item) => item.type !== 'bundle' && item.id !== editingItem?.id
+    );
+  }, [storage.items, editingItem]);
+
   // ==================== 启动调度核心逻辑 ====================
 
-  const handleLaunchItem = useCallback(async (item: LauncherItem) => {
-    setRunningItemIds((prev) => ({ ...prev, [item.id]: true }));
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      if (item.type === 'script') {
-        const output = await invoke<string>('execute_custom_script', {
-          scriptType: 'powershell',
-          scriptContent: item.target,
-          workingDir: item.workingDir || undefined,
-        });
-        setFeedback({
-          type: 'success',
-          message: `脚本执行成功: ${item.name} (${output.slice(0, 30)}${output.length > 30 ? '...' : ''})`,
-        });
-      } else {
+  const handleLaunchItem = useCallback(
+    async (item: LauncherItem): Promise<boolean> => {
+      setRunningItemIds((prev) => ({ ...prev, [item.id]: true }));
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // 1. 如果是 Bundle 复合套件：依次唤起绑定的全部子项
+        if (item.type === 'bundle') {
+          const subItemIds = item.bundleItemIds || [];
+          const subItems = storage.items.filter((it) => subItemIds.includes(it.id));
+          if (subItems.length === 0) {
+            setFeedback({
+              type: 'error',
+              message: `【${item.name}】组合尚未配置或未找到关联子项`,
+            });
+            return false;
+          }
+          setFeedback({
+            type: 'success',
+            message: `正在并发唤起【${item.name}】套件共 ${subItems.length} 个项目...`,
+          });
+          for (const sub of subItems) {
+            await handleLaunchItem(sub);
+            await new Promise((r) => setTimeout(r, 150));
+          }
+          return true;
+        }
+
+        // 2. 如果是脚本
+        if (item.type === 'script') {
+          const output = await invoke<string>('execute_custom_script', {
+            scriptType: 'powershell',
+            scriptContent: item.target,
+            workingDir: item.workingDir || undefined,
+          });
+          setFeedback({
+            type: 'success',
+            message: `脚本执行成功: ${item.name} (${output.slice(0, 30)}${output.length > 30 ? '...' : ''})`,
+          });
+          return true;
+        }
+
+        // 3. 应用程序、快捷方式、网页或目录
         await invoke<string>('launch_custom_target', {
           target: item.target,
           args: item.args || undefined,
@@ -252,31 +300,66 @@ export const LauncherDashboard: React.FC = () => {
           type: 'success',
           message: `已成功拉起: ${item.name}`,
         });
+        return true;
+      } catch (err: unknown) {
+        setFeedback({
+          type: 'error',
+          message: `启动失败: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        return false;
+      } finally {
+        setRunningItemIds((prev) => ({ ...prev, [item.id]: false }));
       }
-    } catch (err: unknown) {
-      setFeedback({
-        type: 'error',
-        message: `启动失败: ${err instanceof Error ? err.message : String(err)}`,
-      });
-    } finally {
-      setRunningItemIds((prev) => ({ ...prev, [item.id]: false }));
-    }
-  }, []);
+    },
+    [storage.items]
+  );
 
-  // 一键全启动 (捆绑拉起当前分类下所有项目)
-  const handleBatchLaunch = useCallback(async () => {
+  // 一键全启动 (当前分类全部项目)
+  const handleBatchLaunchAll = useCallback(async () => {
     if (currentItems.length === 0) return;
     setFeedback({
       type: 'success',
-      message: `正在并发拉起【${activeCategory?.name}】全套 ${currentItems.length} 个启动项...`,
+      message: `正在拉起【${activeCategory?.name}】全套 ${currentItems.length} 个启动项...`,
     });
 
     for (const item of currentItems) {
-      handleLaunchItem(item);
-      // 微小间隔避免 Windows 进程瞬间竞争
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await handleLaunchItem(item);
+      await new Promise((resolve) => setTimeout(resolve, 150));
     }
   }, [currentItems, activeCategory, handleLaunchItem]);
+
+  // ==================== 即时多选批量启动交互 ====================
+
+  const handleToggleSelectItem = (id: string) => {
+    setSelectedItemIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedItemIds.length === currentItems.length) {
+      setSelectedItemIds([]);
+    } else {
+      setSelectedItemIds(currentItems.map((i) => i.id));
+    }
+  };
+
+  const handleLaunchSelected = async () => {
+    if (selectedItemIds.length === 0) return;
+    const itemsToLaunch = storage.items.filter((i) => selectedItemIds.includes(i.id));
+    setFeedback({
+      type: 'success',
+      message: `正在依次唤起所勾选的 ${itemsToLaunch.length} 个应用与脚本...`,
+    });
+
+    for (const item of itemsToLaunch) {
+      await handleLaunchItem(item);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    setIsSelectMode(false);
+    setSelectedItemIds([]);
+  };
 
   // ==================== 分类操作 ====================
 
@@ -352,6 +435,7 @@ export const LauncherDashboard: React.FC = () => {
     setFormWorkingDir('');
     setFormDescription('');
     setFormCategoryId(activeCategoryId);
+    setFormBundleItemIds([]);
     setIsItemModalOpen(true);
   };
 
@@ -364,14 +448,26 @@ export const LauncherDashboard: React.FC = () => {
     setFormWorkingDir(item.workingDir || '');
     setFormDescription(item.description || '');
     setFormCategoryId(item.categoryId);
+    setFormBundleItemIds(item.bundleItemIds || []);
     setIsItemModalOpen(true);
   };
 
   const handleSaveItem = async () => {
     const trimmedName = formName.trim();
     const trimmedTarget = formTarget.trim();
-    if (!trimmedName || !trimmedTarget) {
-      alert('请填写启动项名称与目标路径/指令！');
+
+    if (!trimmedName) {
+      alert('请填写启动项名称！');
+      return;
+    }
+
+    if (formType !== 'bundle' && !trimmedTarget) {
+      alert('请填写目标路径、网址或脚本指令！');
+      return;
+    }
+
+    if (formType === 'bundle' && formBundleItemIds.length === 0) {
+      alert('请至少勾选一个包含在捆绑套件中的应用或脚本！');
       return;
     }
 
@@ -403,12 +499,13 @@ export const LauncherDashboard: React.FC = () => {
                 ...i,
                 name: trimmedName,
                 type: formType,
-                target: trimmedTarget,
+                target: formType === 'bundle' ? '捆绑启动组合' : trimmedTarget,
                 args: formArgs.trim() || undefined,
                 workingDir: formWorkingDir.trim() || undefined,
                 description: formDescription.trim() || undefined,
                 categoryId: formCategoryId,
                 icon: targetIcon,
+                bundleItemIds: formType === 'bundle' ? formBundleItemIds : undefined,
                 updatedAt: now,
               }
             : i
@@ -421,11 +518,12 @@ export const LauncherDashboard: React.FC = () => {
         categoryId: formCategoryId || activeCategoryId,
         name: trimmedName,
         type: formType,
-        target: trimmedTarget,
+        target: formType === 'bundle' ? '捆绑启动组合' : trimmedTarget,
         args: formArgs.trim() || undefined,
         workingDir: formWorkingDir.trim() || undefined,
         description: formDescription.trim() || undefined,
         icon: targetIcon,
+        bundleItemIds: formType === 'bundle' ? formBundleItemIds : undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -513,7 +611,10 @@ export const LauncherDashboard: React.FC = () => {
             return (
               <div
                 key={cat.id}
-                onClick={() => setActiveCategoryId(cat.id)}
+                onClick={() => {
+                  setActiveCategoryId(cat.id);
+                  if (isSelectMode) setSelectedItemIds([]);
+                }}
                 className={`group relative flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
@@ -592,58 +693,124 @@ export const LauncherDashboard: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 bg-transparent overflow-hidden">
         {/* 顶部工具栏：高度严格对齐 h-[49px]，基准底线与左栏 100% 贯穿对齐 */}
         <div className="h-[49px] px-4 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
-              {activeCategory?.name || '默认工具'}
-            </h2>
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted border border-white/[0.06] shrink-0 whitespace-nowrap">
-              {currentItems.length} 项
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            {/* 搜索框：内嵌紧凑形态 */}
-            <div className="relative w-52 shrink-0">
-              <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="搜索名称或指令..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300 rounded"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-            {/* 一键全启动按钮 */}
-            {currentItems.length > 0 && (
+          {/* 左侧：常规分类信息 vs 多选控制状态 */}
+          {isSelectMode ? (
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>已选 {selectedItemIds.length} 项</span>
+              </span>
               <button
                 type="button"
-                onClick={handleBatchLaunch}
-                title="一键启动当前分类下全部项目"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                onClick={handleSelectAll}
+                className="px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
               >
-                <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
-                <span>一键全启动</span>
+                {selectedItemIds.length === currentItems.length ? '取消全选' : '全选本类'}
               </button>
-            )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
+                {activeCategory?.name || '默认工具'}
+              </h2>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted border border-white/[0.06] shrink-0 whitespace-nowrap">
+                {currentItems.length} 项
+              </span>
+            </div>
+          )}
 
-            {/* 添加启动项按钮 */}
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span>新建项</span>
-            </button>
+          {/* 右侧动作区：动态切换常规与多选操作 */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            {isSelectMode ? (
+              <>
+                <button
+                  type="button"
+                  disabled={selectedItemIds.length === 0}
+                  onClick={handleLaunchSelected}
+                  title="立即同时唤醒选中的应用或脚本"
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
+                    selectedItemIds.length > 0
+                      ? 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40 shadow-[0_0_14px_rgba(16,185,129,0.25)]'
+                      : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <span>启动所选项 ({selectedItemIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSelectMode(false);
+                    setSelectedItemIds([]);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-white/10 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>退出</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {/* 搜索框：内嵌紧凑形态 */}
+                <div className="relative w-48 shrink-0">
+                  <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="搜索名称或指令..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300 rounded"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* 自由多选启动按钮 */}
+                {currentItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSelectMode(true);
+                      setSelectedItemIds([]);
+                    }}
+                    title="自由勾选任意多个应用或脚本同时启动"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0" />
+                    <span>多选启动</span>
+                  </button>
+                )}
+
+                {/* 一键全启动按钮 */}
+                {currentItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBatchLaunchAll}
+                    title="一键启动当前分类下全部项目"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                    <span>全启动</span>
+                  </button>
+                )}
+
+                {/* 添加启动项按钮 */}
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span>新建项</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -668,89 +835,124 @@ export const LauncherDashboard: React.FC = () => {
         {/* 启动项卡片大盘网格 (自适应多列晶体网格) */}
         <div className="flex-1 overflow-y-auto p-4 min-w-0">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3.5">
-            {/* 首卡：+ 添加快速启动项 */}
-            <div
-              onClick={handleOpenAddModal}
-              className="group relative flex flex-col items-center justify-center h-36 rounded-2xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
-            >
-              <div className="p-2.5 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
-                <Plus className="w-4 h-4" />
+            {/* 首卡：+ 添加快速启动项 (多选模式下隐藏) */}
+            {!isSelectMode && (
+              <div
+                onClick={handleOpenAddModal}
+                className="group relative flex flex-col items-center justify-center h-36 rounded-2xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
+              >
+                <div className="p-2.5 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span className="mt-2 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
+                  添加启动项
+                </span>
               </div>
-              <span className="mt-2 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
-                添加启动项
-              </span>
-            </div>
+            )}
 
             {/* 启动项卡片列表 */}
             {currentItems.map((item) => {
               const badge = renderTypeBadge(item.type);
               const isRunning = runningItemIds[item.id];
               const isMenuOpen = activeMenuDocId === item.id;
+              const isSelected = selectedItemIds.includes(item.id);
 
               return (
                 <div
                   key={item.id}
-                  onClick={() => handleLaunchItem(item)}
+                  onClick={() => {
+                    if (isSelectMode) {
+                      handleToggleSelectItem(item.id);
+                    } else {
+                      handleLaunchItem(item);
+                    }
+                  }}
                   title={item.name}
-                  className="group relative flex flex-col justify-between h-36 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)] p-3 overflow-hidden select-none"
+                  className={`group relative flex flex-col justify-between h-36 rounded-2xl border cursor-pointer transition-all duration-200 p-3 overflow-hidden select-none ${
+                    isSelectMode && isSelected
+                      ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_18px_rgba(6,182,212,0.25)]'
+                      : 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
+                  }`}
                 >
-                  {/* 顶栏：极简类型 Badge 与下拉设置菜单 */}
+                  {/* 顶栏：多选复选框 / 类型 Badge 与下拉设置菜单 */}
                   <div className="flex items-center justify-between gap-1.5">
-                    <span
-                      className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded border ${badge.className}`}
-                    >
-                      <badge.Icon className="w-2.5 h-2.5" />
-                      <span>{badge.label}</span>
-                    </span>
-
-                    <div
-                      className="relative flex-shrink-0"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveMenuDocId(isMenuOpen ? null : item.id)
-                        }
-                        title="设置与更多"
-                        className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                    {isSelectMode ? (
+                      <div
+                        className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                          isSelected
+                            ? 'bg-cyan-500 border-cyan-400 text-black shadow-sm'
+                            : 'border-white/20 bg-black/40 group-hover:border-cyan-400/60'
+                        }`}
                       >
-                        <MoreVertical className="w-3.5 h-3.5" />
-                      </button>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                    ) : (
+                      <span
+                        className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded border ${badge.className}`}
+                      >
+                        <badge.Icon className="w-2.5 h-2.5" />
+                        <span>
+                          {item.type === 'bundle'
+                            ? `组合·${item.bundleItemIds?.length || 0}`
+                            : badge.label}
+                        </span>
+                      </span>
+                    )}
 
-                      {/* 下拉菜单浮层 */}
-                      {isMenuOpen && (
-                        <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
-                          <button
-                            onClick={() => {
-                              handleOpenEditModal(item);
-                              setActiveMenuDocId(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            <span>编辑设置</span>
-                          </button>
-                          <div className="h-px bg-white/5 my-1" />
-                          <button
-                            onClick={() => {
-                              handleDeleteItem(item.id);
-                              setActiveMenuDocId(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            <span>删除</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {!isSelectMode && (
+                      <div
+                        className="relative flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveMenuDocId(isMenuOpen ? null : item.id)
+                          }
+                          title="设置与更多"
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* 下拉菜单浮层 */}
+                        {isMenuOpen && (
+                          <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                            <button
+                              onClick={() => {
+                                handleOpenEditModal(item);
+                                setActiveMenuDocId(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>编辑设置</span>
+                            </button>
+                            <div className="h-px bg-white/5 my-1" />
+                            <button
+                              onClick={() => {
+                                handleDeleteItem(item.id);
+                                setActiveMenuDocId(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>删除</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 (完全纯净化，0暴露长路径与多余描述) */}
                   <div className="my-auto flex flex-col items-center justify-center min-w-0">
                     <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                      {item.icon && item.icon.startsWith('data:image/') ? (
+                      {item.type === 'bundle' ? (
+                        <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300 group-hover:scale-110 group-hover:bg-rose-500/25 transition-all duration-200 shadow-[0_0_12px_rgba(244,63,94,0.2)]">
+                          <Layers className="w-5 h-5" />
+                        </div>
+                      ) : item.icon && item.icon.startsWith('data:image/') ? (
                         <img
                           src={item.icon}
                           alt={item.name}
@@ -775,9 +977,13 @@ export const LauncherDashboard: React.FC = () => {
                         <Play className="w-2.5 h-2.5 fill-current" />
                         <span>唤起中...</span>
                       </span>
+                    ) : isSelectMode ? (
+                      <span className="text-slate-400 font-sans">
+                        {isSelected ? '已选中' : '点击选择'}
+                      </span>
                     ) : (
                       <span className="opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity">
-                        点击快速启动
+                        {item.type === 'bundle' ? '点击启动全套' : '点击快速启动'}
                       </span>
                     )}
                   </div>
@@ -791,7 +997,7 @@ export const LauncherDashboard: React.FC = () => {
       {/* ================= 启动项设置与编辑模态框 (收敛展示底层物理路径与参数) ================= */}
       {isItemModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-950/95 border border-white/10 shadow-2xl p-5 flex flex-col gap-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-950/95 border border-white/10 shadow-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-sm font-semibold text-slate-100 font-mono">
                 {editingItem ? '启动项设置' : '添加快速启动项'}
@@ -811,7 +1017,7 @@ export const LauncherDashboard: React.FC = () => {
                 <label className="block text-slate-400 mb-1 font-medium">名称 *</label>
                 <input
                   type="text"
-                  placeholder="例如: 微信 / 飞书 / Chrome / VS Code"
+                  placeholder="例如: 日常办公套餐 / 微信 / 飞书"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
@@ -821,8 +1027,8 @@ export const LauncherDashboard: React.FC = () => {
               {/* 启动类型选择器 */}
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">类型 *</label>
-                <div className="grid grid-cols-4 gap-1.5 bg-black/30 p-1 rounded-lg border border-white/[0.06]">
-                  {(['app', 'script', 'url', 'folder'] as LauncherItemType[]).map((t) => {
+                <div className="grid grid-cols-5 gap-1 bg-black/30 p-1 rounded-lg border border-white/[0.06]">
+                  {(['app', 'bundle', 'script', 'url', 'folder'] as LauncherItemType[]).map((t) => {
                     const b = renderTypeBadge(t);
                     return (
                       <button
@@ -843,46 +1049,123 @@ export const LauncherDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 目标路径 / 网址 / 脚本内容 */}
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">
-                  {formType === 'script'
-                    ? 'PowerShell 脚本指令 *'
-                    : formType === 'url'
-                    ? '目标网址 (URL) *'
-                    : formType === 'folder'
-                    ? '文件夹绝对路径 *'
-                    : '应用程序路径 / .lnk 快捷方式 / 命令 *'}
-                </label>
-                {formType === 'script' ? (
-                  <textarea
-                    rows={3}
-                    placeholder="例如: pnpm dev 或 Get-Process"
-                    value={formTarget}
-                    onChange={(e) => setFormTarget(e.target.value)}
-                    className="w-full p-2.5 rounded-lg bg-black/40 border border-white/10 text-slate-100 font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    placeholder={
-                      formType === 'url'
-                        ? '例如: https://github.com'
-                        : formType === 'folder'
-                        ? '例如: D:\\Project 或 C:\\Users'
-                        : '例如: D:\\APP\\weixin\\Weixin.exe 或 calc.exe'
-                    }
-                    value={formTarget}
-                    onChange={(e) => setFormTarget(e.target.value)}
-                    className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                  />
-                )}
-                {formType === 'app' && (
-                  <p className="mt-1 text-[10px] text-slate-500">
-                    支持可执行文件 (.exe)、桌面快捷方式 (.lnk) 或系统命令，系统将自动提取原生图标。
-                  </p>
-                )}
-              </div>
+              {/* 动态内容区：如果是 bundle 类型，展示包含子项复选列表；否则展示目标路径 */}
+              {formType === 'bundle' ? (
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium flex items-center justify-between">
+                    <span>捆绑包含的应用与脚本 ({formBundleItemIds.length} 项) *</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (formBundleItemIds.length === candidateBundleItems.length) {
+                          setFormBundleItemIds([]);
+                        } else {
+                          setFormBundleItemIds(candidateBundleItems.map((i) => i.id));
+                        }
+                      }}
+                      className="text-[10px] text-cyan-400 hover:underline"
+                    >
+                      {formBundleItemIds.length === candidateBundleItems.length ? '清空' : '全选'}
+                    </button>
+                  </label>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-2 space-y-1">
+                    {candidateBundleItems.length === 0 ? (
+                      <div className="py-4 text-center text-slate-500 text-[11px]">
+                        暂无可用应用或脚本，请先添加基础应用
+                      </div>
+                    ) : (
+                      candidateBundleItems.map((cItem) => {
+                        const isChecked = formBundleItemIds.includes(cItem.id);
+                        const cBadge = renderTypeBadge(cItem.type);
+                        return (
+                          <div
+                            key={cItem.id}
+                            onClick={() => {
+                              setFormBundleItemIds((prev) =>
+                                prev.includes(cItem.id)
+                                  ? prev.filter((id) => id !== cItem.id)
+                                  : [...prev, cItem.id]
+                              );
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                              isChecked
+                                ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-200'
+                                : 'hover:bg-white/5 border border-transparent text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                  isChecked
+                                    ? 'bg-cyan-500 border-cyan-400 text-black'
+                                    : 'border-white/20 bg-black/40'
+                                }`}
+                              >
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                              {cItem.icon ? (
+                                <img
+                                  src={cItem.icon}
+                                  alt={cItem.name}
+                                  className="w-4 h-4 object-contain rounded shrink-0"
+                                />
+                              ) : (
+                                <cBadge.Icon className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                              )}
+                              <span className="truncate text-xs font-medium">{cItem.name}</span>
+                            </div>
+                            <span
+                              className={`text-[9px] font-mono px-1 py-0.2 rounded border shrink-0 ${cBadge.className}`}
+                            >
+                              {cBadge.label}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">
+                    {formType === 'script'
+                      ? 'PowerShell 脚本指令 *'
+                      : formType === 'url'
+                      ? '目标网址 (URL) *'
+                      : formType === 'folder'
+                      ? '文件夹绝对路径 *'
+                      : '应用程序路径 / .lnk 快捷方式 / 命令 *'}
+                  </label>
+                  {formType === 'script' ? (
+                    <textarea
+                      rows={3}
+                      placeholder="例如: pnpm dev 或 Get-Process"
+                      value={formTarget}
+                      onChange={(e) => setFormTarget(e.target.value)}
+                      className="w-full p-2.5 rounded-lg bg-black/40 border border-white/10 text-slate-100 font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder={
+                        formType === 'url'
+                          ? '例如: https://github.com'
+                          : formType === 'folder'
+                          ? '例如: D:\\Project 或 C:\\Users'
+                          : '例如: D:\\APP\\weixin\\Weixin.exe 或 calc.exe'
+                      }
+                      value={formTarget}
+                      onChange={(e) => setFormTarget(e.target.value)}
+                      className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                    />
+                  )}
+                  {formType === 'app' && (
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      支持可执行文件 (.exe)、桌面快捷方式 (.lnk) 或系统命令，系统将自动提取原生图标。
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* 所属分类 */}
               <div>
@@ -900,7 +1183,7 @@ export const LauncherDashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* 启动参数 (应用与脚本可选) */}
+              {/* 启动参数 (仅应用与脚本可选) */}
               {(formType === 'app' || formType === 'script') && (
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">启动参数 (可选)</label>
@@ -914,17 +1197,19 @@ export const LauncherDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* 工作目录 (可选) */}
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">工作目录 (可选，默认自动推导为应用所在目录)</label>
-                <input
-                  type="text"
-                  placeholder="例如: D:\\APP\\weixin"
-                  value={formWorkingDir}
-                  onChange={(e) => setFormWorkingDir(e.target.value)}
-                  className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                />
-              </div>
+              {/* 工作目录 (仅应用与脚本可选) */}
+              {(formType === 'app' || formType === 'script') && (
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">工作目录 (可选，默认自动推导为应用所在目录)</label>
+                  <input
+                    type="text"
+                    placeholder="例如: D:\\APP\\weixin"
+                    value={formWorkingDir}
+                    onChange={(e) => setFormWorkingDir(e.target.value)}
+                    className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+              )}
 
               {/* 描述 */}
               <div>

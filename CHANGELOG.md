@@ -2,6 +2,27 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.30] - 2026-11-11
+
+### Feature & UX (快速启动即时自由多选批量启动与持久化自定义捆绑启动套件)
+- **即时自由多选启动模式 (`Multi-Selection Launch Mode`, `src/components/LauncherDashboard.tsx`)**:
+  - 响应用户“那个捆绑启动的功能呢，我需要能灵活选择同时启动我所选择的应用啊脚本啊之类，懂我意思吗？”的指示；
+  - 启动器顶栏右侧新增“多选启动”交互模式切换按钮，进入该模式后启动项卡片呈现优雅复选框与青蓝高亮选中态；
+  - 提供“全选本类 / 反选”与实时统计“已选 N 项”指标徽标；
+  - 提供“启动所选项 (N)”高亮主按钮，以 150ms 安全微时间间隔并发/串联拉起勾选项，未勾选项保持不动；
+  - 支持随时“退出多选”，操作轻盈，零配置负担。
+- **持久化自定义捆绑套件支持 (`Bundle Launch Presets`, `src/types/launcher.ts`, `src/components/LauncherDashboard.tsx`)**:
+  - 数据模型层在 `LauncherItemType` 扩充 `'bundle'` 类型，并在 `LauncherItem` 增补 `bundleItemIds?: string[]` 字段，实现类型与数据库透明持久化；
+  - 新建/编辑弹窗选择“捆绑套餐 (Bundle)”类型时，自适应渲染已有应用/脚本的复选列表，支持自由组合与勾选；
+  - 具备防套娃递归防护（候选列表自动排除自身与其他 bundle 套件）；
+  - 卡片大盘呈现专属 `Layers` 晶体卡片与“包含 N 项”徽标，点击该卡片即可一次性同时唤醒套件内所有关联成员；
+  - 套件数据无缝保存至 SQLite `app_settings`，重启客户端后依然完好可用。
+- **架构承重墙绝对保全与工程质量验真**:
+  - `src/components/Sidebar.tsx` 与 `src/components/Titlebar.tsx` 保持 0 修改，承重墙与 `h-[49px]` 基准线完好；
+  - `pnpm check` (tsc --noEmit) 零错误零告警（退出码 0）；
+  - `cargo test` 7/7 单元测试全部通过（退出码 0）；
+  - 构建产物单文件客户端 `SelfWork.exe` 更新至最新构建并在前台稳定运行。
+
 ## [0.1.29] - 2026-11-11
 
 ### Feature & Optimization (启动器原生可靠唤起、应用图标动态提取与极简卡片视觉纯净化)
