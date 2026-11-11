@@ -453,23 +453,24 @@ export const MindMapView: React.FC = () => {
     <div className="flex-1 flex flex-col h-full w-full overflow-hidden relative select-none min-w-0">
       {/* 二级画布主内容区：继承通透主画板 */}
       <div className="flex-1 relative overflow-hidden min-w-0 h-full w-full bg-transparent">
-        {/* 左上角极简悬浮返回导航栏与面包屑 */}
-        <div className="absolute top-4 left-4 z-40 flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-black/45 backdrop-blur-md border border-white/[0.08] shadow-lg text-xs">
+        {/* 左上角极简悬浮返回导航栏与面包屑：统一 L1/L5 字阶与毛玻璃材质 */}
+        <div className="absolute top-3.5 left-3.5 z-40 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/45 backdrop-blur-md border border-white/[0.08] shadow-lg text-xs">
           <button
+            type="button"
             onClick={handleBackToPartitions}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-slate-300 hover:text-cyan-300 hover:bg-white/10 transition-colors"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-slate-300 hover:text-cyan-300 hover:bg-white/10 transition-colors"
             title="返回分区管理大盘"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="font-medium">返回分区</span>
+            <span>返回分区</span>
           </button>
           <span className="text-white/20">|</span>
-          <div className="flex items-center gap-1.5 text-slate-400">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-fg-muted">
             <span className="truncate max-w-[120px]">
               {activePartition?.name || '默认分区'}
             </span>
             <span className="text-white/20">/</span>
-            <span className="text-slate-100 font-semibold truncate max-w-[160px]">
+            <span className="text-fg-primary font-semibold truncate max-w-[160px]">
               {activeDocument.title}
             </span>
           </div>

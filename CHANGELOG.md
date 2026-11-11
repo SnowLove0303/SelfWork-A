@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.24] - 2026-11-11
+
+### Design & Alignment (全局字体字号分类规范落地与跨模块布局基准线条严密对齐)
+- **全局 5 级字阶分类规范体系落地 (Typography Hierarchy Design Tokens)**:
+  - 响应用户“全局的字体字号要做统一一些，做些分类，比如模块标题啊模块内容啊之类的分别要用什么字体字号”的指示；
+  - 确立并全量收敛 5 级字阶标准：
+    - **L1 顶栏主标题**：统一为 `text-xs font-semibold text-fg-primary tracking-tight` (12px / 600)；
+    - **L2 统计徽标**：统一为 `text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted border border-white/[0.06]` (10px 等宽胶囊底)；
+    - **L3 分类与标签**：统一为 `text-xs font-medium` (12px / 500)；
+    - **L4 内容卡片标题**：统一为 `text-xs font-medium text-slate-200 truncate` (12px / 500 / 截断防溢)；
+    - **L5 辅助微文案**：统一为 `text-[10px] text-slate-500 font-mono` (10px 弱对比用于时间戳与节点数)；
+  - 彻底清理思维导图原先私自使用的放大字号（`text-base` 16px、`text-sm` 14px），与待办清单完全对齐。
+- **思维导图顶栏线条与栏目间高低差彻底抹平 (`MindMapPartitionView.tsx`)**:
+  - 响应用户“思维导图分区管理的栏目与栏目间的线条要对齐，这种线条问题之前有在其他地方强调过”的明确要求；
+  - 严格将左侧分区顶栏与右侧导图顶栏的高度均锁定为固定的 `h-[49px]`，保证横向分割线（`border-b border-white/[0.08]`）在水平整屏以 Y=49px 零落差连贯贯穿；
+  - 竖向分界线（`border-r`）与横向顶线（`border-b`）在交叉处实现严格垂直十字交汇，根除错位高低差与多重阴影线头。
+- **跨模块切换平滑过渡与呼吸间距对齐**:
+  - 消除从待办清单切到思维导图的突兀感：大盘卡片网格从过宽的 `px-8` 收敛至与任务面板一致的 `p-4 gap-4` 紧凑节奏；
+  - 二级画布悬浮返回药丸内嵌至 `top-3.5 left-3.5` 标准网格，文字样式统合为 L1/L5 字阶标准。
+- **工程产物交付**:
+  - `pnpm check` 零警告零错误退出码 0；
+  - `cargo test` 5/5 测试全绿退出码 0；
+  - 全量重新打包产出 5.35MB 单文件桌面程序 `SelfWork.exe` 并正常运行测试。
+
 ## [0.1.23] - 2026-11-11
 
 ### Style & Refactor (思维导图背景颜色与工作台全局暗色晶体风格统一对齐)
