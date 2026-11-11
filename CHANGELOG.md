@@ -4,6 +4,12 @@ All notable changes and architectural invariants for SelfWork will be documented
 
 ## [0.1.20] - 2026-11-11
 
+### Fixed (100% 物理回滚并保全侧边栏导航栏既有样式与流光呼吸指示柱)
+- **侧边栏导航栏既有样式 100% 物理回滚与防篡改对齐 (`src/components/Sidebar.tsx`)**:
+  - 穿透 5-Whys 根因：在挂载 `mindmap` 模块时发生误操作，重构覆盖了既有 JSX 结构，意外移除了侧边栏流光呼吸高亮条（`bg-gradient-to-b from-sky-400 via-cyan-300 to-indigo-400`）、折叠控制按钮微调尺寸、`font-mono` 微调字号及底部 `v0.1.0-alpha` 状态标识，并混入了多行 `shortDesc` 副标题；
+  - 严格根据《既有逻辑与业务规范不可否定公理 (防自以为是重构禁令)》执行物理回滚：100% 还原既有 HTML/CSS 类名、动画与布局结构，仅最小化挂载 `{ id: 'mindmap', name: '思维导图', ... }` 节点数据与 `GitFork` 图标分支；
+  - `git diff HEAD~1 src/components/Sidebar.tsx` 显示仅 3 行必要增量，零视觉降级、零样式篡改、零越界改动。
+
 ### Added (手脚层 REA 逆向 Xmind 工业实践与思维导图基础编辑模块落地)
 - **手脚层 REA 逆向 Xmind.exe 事实凭据沉淀 (REA Reverse Engineering Evidence)**:
   - 穿透本地 Xmind 核心包（`app.asar`），提取标准脑图树形模型（`centralTopic` 中心主题、`mainTopic` 主分支、`subTopic` 子分支、`id`/`title`/`children` 节点拓扑）与三次贝塞尔圆角连接线几何规范（`org.xmind.branchConnection.roundedElbow`）；
@@ -28,6 +34,12 @@ All notable changes and architectural invariants for SelfWork will be documented
   - `cargo test` 5/5 底层测试全绿退出码 0；
   - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
   - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.60MB）。
+
+### Root Cause & Engineering Defense (5-Whys 根因穿透与长效防线)
+1. **侧边栏样式意外篡改根因**:
+   - 施工 Agent 在修改 `src/components/Sidebar.tsx` 挂载新模块路由时，未遵循“微编辑最小因果集”原则，使用了全文件覆写模式引入了未经批准的旧模板结构，导致用户调校的流光呼吸高亮柱、无衬线字体与折叠动画被覆盖破坏。
+2. **长效防线下沉**:
+   - 任何涉及已有组件（尤其是导航栏、顶栏、状态栏等核心骨架）的模块增补，严禁整文件重写或重构样式；必须使用微补丁模式仅追加数据行（如 `MODULES` 数组项）与图标映射，所有既有 CSS 类名、DOM 层级、动画属性必须保持 100% 零修改。
 
 ## [0.1.19] - 2026-11-10
 
