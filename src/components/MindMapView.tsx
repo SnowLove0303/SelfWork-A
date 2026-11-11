@@ -451,10 +451,10 @@ export const MindMapView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full w-full overflow-hidden relative select-none min-w-0">
-      {/* 二级画布主内容区：全高全宽 */}
-      <div className="flex-1 relative overflow-hidden min-w-0 h-full w-full bg-slate-950">
+      {/* 二级画布主内容区：继承通透主画板 */}
+      <div className="flex-1 relative overflow-hidden min-w-0 h-full w-full bg-transparent">
         {/* 左上角极简悬浮返回导航栏与面包屑 */}
-        <div className="absolute top-4 left-4 z-40 flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-900/85 backdrop-blur-md border border-white/10 shadow-xl text-xs">
+        <div className="absolute top-4 left-4 z-40 flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-black/45 backdrop-blur-md border border-white/[0.08] shadow-lg text-xs">
           <button
             onClick={handleBackToPartitions}
             className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-slate-300 hover:text-cyan-300 hover:bg-white/10 transition-colors"

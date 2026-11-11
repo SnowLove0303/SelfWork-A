@@ -159,11 +159,11 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
   };
 
   return (
-    <div className="flex h-full w-full bg-slate-950/90 text-slate-200 select-none overflow-hidden">
+    <div className="flex h-full w-full bg-transparent text-slate-200 select-none overflow-hidden">
       {/* ================= 左侧分区管理侧栏 ================= */}
-      <div className="w-64 flex-shrink-0 flex flex-col border-r border-white/5 bg-slate-900/60 backdrop-blur-md">
+      <div className="w-64 flex-shrink-0 flex flex-col border-r border-white/[0.08] bg-black/20 backdrop-blur-md">
         {/* 侧栏顶标 */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-white/5">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-white/[0.08]">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-200 tracking-wide">
             <Layers className="w-4 h-4 text-cyan-400" />
             <span>分区管理</span>
@@ -174,7 +174,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
               setNewPartitionName('');
             }}
             title="新建分区"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-all"
           >
             <FolderPlus className="w-4 h-4" />
           </button>
@@ -183,7 +183,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
         {/* 分区创建输入框 */}
         {isCreatingPartition && (
           <div className="px-3 pt-3">
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-800/80 border border-cyan-500/40">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-black/40 border border-cyan-500/40">
               <input
                 ref={partitionInputRef}
                 type="text"
@@ -225,7 +225,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                 onClick={() => onSelectPartition(partition.id)}
                 className={`group relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-xs font-medium transition-all ${
                   isActive
-                    ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 shadow-[0_0_14px_rgba(6,182,212,0.18)]'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
                 }`}
               >
@@ -247,7 +247,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                         if (e.key === 'Escape') setRenamingPartitionId(null);
                       }}
                       onBlur={() => handleConfirmRenamePartition(partition.id)}
-                      className="bg-slate-800 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-32"
+                      className="bg-black/50 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-32"
                     />
                   ) : (
                     <span className="truncate">{partition.name}</span>
@@ -259,7 +259,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                   <span
                     className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                       isActive
-                        ? 'bg-cyan-500/20 text-cyan-300'
+                        ? 'bg-cyan-500/25 text-cyan-300 font-semibold'
                         : 'bg-white/5 text-slate-500 group-hover:text-slate-400'
                     }`}
                   >
@@ -298,9 +298,9 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
       </div>
 
       {/* ================= 右侧导图卡片大盘 ================= */}
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-950/60 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-transparent overflow-hidden">
         {/* 顶部工具栏 */}
-        <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 bg-slate-900/30 backdrop-blur-md">
+        <div className="flex items-center justify-between px-8 py-4 border-b border-white/[0.08] bg-black/10 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <h1 className="text-base font-semibold text-slate-100 tracking-wide">
               {activePartition?.name || '思维导图'}
@@ -318,7 +318,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
               placeholder="搜索当前分区导图..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
+              className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
             />
             {searchQuery && (
               <button
@@ -337,9 +337,9 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
             {/* 首卡：+ 新建导图 */}
             <div
               onClick={() => onCreateDocument(activePartitionId)}
-              className="group relative flex flex-col items-center justify-center h-48 rounded-2xl border-2 border-dashed border-white/10 hover:border-cyan-500/40 bg-slate-900/30 hover:bg-cyan-500/5 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-cyan-500/10"
+              className="group relative flex flex-col items-center justify-center h-48 rounded-2xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.15)]"
             >
-              <div className="p-3.5 rounded-full bg-cyan-500/10 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all duration-200 shadow-[0_0_16px_rgba(6,182,212,0.15)]">
+              <div className="p-3.5 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_16px_rgba(6,182,212,0.2)]">
                 <Plus className="w-6 h-6" />
               </div>
               <span className="mt-3 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
@@ -361,11 +361,11 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                 <div
                   key={doc.id}
                   onClick={() => onOpenDocument(doc.id)}
-                  className="group relative flex flex-col h-48 rounded-2xl border border-white/5 bg-slate-900/50 hover:bg-slate-800/60 hover:border-cyan-500/30 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-lg hover:shadow-cyan-500/5 overflow-hidden"
+                  className="group relative flex flex-col h-48 rounded-2xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)] overflow-hidden"
                 >
                   {/* 导图微缩结构示意预览区 */}
-                  <div className="flex-1 flex items-center justify-center bg-slate-950/40 relative border-b border-white/5 group-hover:bg-slate-950/20 transition-colors">
-                    <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                  <div className="flex-1 flex items-center justify-center bg-black/20 relative border-b border-white/[0.06] group-hover:bg-black/10 transition-colors">
+                    <div className="flex items-center gap-2 opacity-65 group-hover:opacity-100 transition-opacity">
                       {/* 中心主题微缩块 */}
                       <div className="px-2.5 py-1 rounded-md bg-cyan-500/20 border border-cyan-500/40 text-[10px] text-cyan-300 font-semibold shadow-[0_0_8px_rgba(6,182,212,0.2)]">
                         {doc.root.title || '中心主题'}
@@ -373,14 +373,14 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                       {/* 分支连线微缩 */}
                       <div className="w-3 h-px bg-cyan-500/40" />
                       <div className="flex flex-col gap-1.5">
-                        <div className="w-10 h-2 rounded bg-slate-800 border border-white/10" />
-                        <div className="w-8 h-2 rounded bg-slate-800 border border-white/10" />
+                        <div className="w-10 h-2 rounded bg-white/10 border border-white/10" />
+                        <div className="w-8 h-2 rounded bg-white/10 border border-white/10" />
                       </div>
                     </div>
                   </div>
 
                   {/* 卡片信息底栏 */}
-                  <div className="p-3.5 flex flex-col justify-between bg-slate-900/40">
+                  <div className="p-3.5 flex flex-col justify-between bg-black/25">
                     <div className="flex items-center justify-between gap-2">
                       {isRenaming ? (
                         <input
@@ -394,7 +394,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                             if (e.key === 'Escape') setRenamingDocId(null);
                           }}
                           onBlur={() => handleConfirmRenameDoc(doc.id)}
-                          className="bg-slate-800 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-full"
+                          className="bg-black/50 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-full"
                         />
                       ) : (
                         <h2 className="text-xs font-medium text-slate-200 group-hover:text-cyan-300 truncate transition-colors">
@@ -411,14 +411,14 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                           onClick={() =>
                             setActiveMenuDocId(isMenuOpen ? null : doc.id)
                           }
-                          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
                         >
                           <MoreVertical className="w-3.5 h-3.5" />
                         </button>
 
                         {/* 下拉菜单浮层 */}
                         {isMenuOpen && (
-                          <div className="absolute right-0 bottom-full mb-1 w-32 rounded-xl bg-slate-900/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                          <div className="absolute right-0 bottom-full mb-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
                             <button
                               onClick={() => {
                                 setRenamingDocId(doc.id);
@@ -456,7 +456,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
 
                         {/* 移动分区弹层 */}
                         {isMoving && (
-                          <div className="absolute right-0 bottom-full mb-1 w-40 rounded-xl bg-slate-900/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                          <div className="absolute right-0 bottom-full mb-1 w-40 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
                             <div className="px-3 py-1 text-[10px] text-slate-500 border-b border-white/5">
                               移动至目标分区
                             </div>

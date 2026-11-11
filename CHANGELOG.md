@@ -2,6 +2,26 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.23] - 2026-11-11
+
+### Style & Refactor (思维导图背景颜色与工作台全局暗色晶体风格统一对齐)
+- **根除思维导图实心底色，全景融入工作台晶体画板**:
+  - 响应用户“背景颜色有点不对，要不统一一下？，与主导航和其他页面有点不一致啊”的反馈；
+  - 穿透定位根因：此前思维导图硬编码实底 `bg-slate-950` 与 `bg-slate-900`，如死黑板遮挡了工作台主画板（`SlotContainer.tsx`）的 `rgba(12, 16, 26, opacity)` 半透明毛玻璃底与漂移折射流光（`animate-fluid`）；
+  - 全面改造根容器为 `bg-transparent`，让工作台统领的主画板毛玻璃背景与底层流光自然透出，达成视觉风格 100% 浑然一体。
+- **一级页面分区与网格质感对齐 (`MindMapPartitionView.tsx`)**:
+  - 左侧分区管理侧栏改为 `bg-black/20 border-white/[0.08] backdrop-blur-md`；
+  - 顶部搜索栏与工具栏采用 `bg-black/10 border-white/[0.08]`；
+  - “+ 新建导图”卡片采用 `border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06]`；
+  - 导图卡片网格采用与任务卡片一致的 `border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-cyan-500/40` 晶体通透卡片。
+- **二级画布与悬浮药丸视觉对齐 (`MindMapView.tsx`)**:
+  - 二级画布视口移除 `bg-slate-950` 实心底，透出主画板背景；
+  - 左上角 `[ ← 返回分区 ]` 悬浮药丸采用与左下角快捷键状态条完全相同的材质规范：`bg-black/45 backdrop-blur-md border border-white/[0.08] shadow-lg`，消除材质与高光反差。
+- **工程产物交付**:
+  - `pnpm check` 零警告零错误退出码 0；
+  - `cargo test` 5/5 测试全绿退出码 0；
+  - 全量重新打包产出 5.35MB 单文件桌面程序 `SelfWork.exe` 并正常运行测试。
+
 ## [0.1.22] - 2026-11-11
 
 ### Added (SW工作台思维导图一级分区大盘与二级沉浸画布双级架构改造)
