@@ -3,6 +3,7 @@ import { ModuleId } from '../types/workbench.ts';
 import { AppearanceSettings } from '../types/settings.ts';
 import { LauncherDashboard } from './LauncherDashboard.tsx';
 import { TasksView } from './TasksView.tsx';
+import { MindMapView } from './MindMapView.tsx';
 
 interface SlotContainerProps {
   activeModule: ModuleId;
@@ -51,10 +52,12 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
           </div>
         )}
 
-        {/* 内容展示区：根据激活模块渲染对应视图（收敛为快速启动与待办清单实体功能） */}
+        {/* 内容展示区：根据激活模块渲染对应视图 */}
         <div className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden min-w-0">
           {activeModule === 'launcher' ? (
             <LauncherDashboard />
+          ) : activeModule === 'mindmap' ? (
+            <MindMapView />
           ) : (
             <TasksView />
           )}

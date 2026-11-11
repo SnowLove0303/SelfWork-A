@@ -2,6 +2,33 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.20] - 2026-11-11
+
+### Added (手脚层 REA 逆向 Xmind 工业实践与思维导图基础编辑模块落地)
+- **手脚层 REA 逆向 Xmind.exe 事实凭据沉淀 (REA Reverse Engineering Evidence)**:
+  - 穿透本地 Xmind 核心包（`app.asar`），提取标准脑图树形模型（`centralTopic` 中心主题、`mainTopic` 主分支、`subTopic` 子分支、`id`/`title`/`children` 节点拓扑）与三次贝塞尔圆角连接线几何规范（`org.xmind.branchConnection.roundedElbow`）；
+  - 提炼出标准树形 JSON 与缩进式 Markdown 大纲的通用输入/输出序列化格式。
+- **思维导图基础树形画布与三次贝塞尔连线渲染 (`MindMapCanvas.tsx` & `layout.ts`)**:
+  - 实现基于递归子树边界测量的右向树形自适应排版算法，确保各级节点水平向右延展且垂直方向严格无重叠碰撞；
+  - 采用平滑三次贝塞尔曲线绘制父子连接线，选中时高亮青蓝辉光；
+  - 具备画布背景按住平移浏览与一键居中复位功能。
+- **键盘流转就地编辑与快捷键系统 (`MindMapView.tsx`)**:
+  - **Tab**：在选中节点下极速创建新子分支并自动原地获得焦点编辑；
+  - **Enter**：在选中节点旁插入同级兄弟分支并自动获得焦点编辑；
+  - **Delete / Backspace**：删除选中的非根分支节点，焦点自动回退到父级；
+  - **双击 / 空格 / F2**：直接就地开启节点文字编辑，Enter 保存，Esc 取消。
+- **基础输入/输出模态框与极简工具栏 (`MindMapToolbar.tsx` & `MindMapIOModal.tsx`)**:
+  - 严格遵循“先给普通的输入输出分支功能等就行了，先不要有其他的功能”的收敛禁令，不堆砌预设主题、色彩盘、复杂图标或装饰外框；
+  - 提供标准 Markdown 大纲与结构化 JSON 双格式互转导入与导出，支持一键复制到剪贴板与导入即时重绘画布。
+- **SQLite 自动防抖持久化与本地秒开 (`src/services/db.ts`)**:
+  - 新建/修改/删除节点后，300ms 防抖自动落盘至 SQLite 物理数据库；
+  - 冷启动时优先从本地同步缓存瞬时秒开，消除等待与白屏。
+- **工程产物交付**:
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误退出码 0；
+  - `cargo test` 5/5 底层测试全绿退出码 0；
+  - `pnpm tauri build --no-bundle` 全量 Release 编译通过；
+  - 同步更新根目录单文件可执行程序 `SelfWork.exe`（5.60MB）。
+
 ## [0.1.19] - 2026-11-10
 
 ### Added & Enhanced (待办清单与灵感便签拖拽重排、Tauri 底座解禁与全卡片长按拖拽)
@@ -118,35 +145,3 @@ All notable changes and architectural invariants for SelfWork will be documented
    - Webview 内部的 `startDragging()` 受限于 JavaScript 与原生 IPC 的异步通信及 DOM 事件捕获机制，且无法拥有 Windows 硬件级的 Aero Snap 边缘物理阻尼。用户真正反感的是“浅白色白条割裂”，而非原生标题栏本身。
 2. **长效防线下沉**:
    - 建立“保留操作系统原生外壳保障 100% 物理交互 + Win32 DWM 沉浸暗黑属性注入解决色彩割裂 + 前端顶栏专注业务去重”的标准工业级桌面沉浸式工程架构。
-
-## [0.1.14] - 2026-11-10
-
-### Fixed (物理修复桌面窗口拖拽移动功能与双通道事件流下沉)
-- **Tauri v2 官方权限沙箱解锁 (Capabilities ACL Unlocked)**:
-  - 彻底穿透 5-Whys 根因：Tauri v2 默认阻断未授权的 `start_dragging` 核心系统调用；
-  - 建立 `src-tauri/capabilities/default.json` 官方权限描述文件，显式授予 `core:window:allow-start-dragging` 等关键窗口交互权限，从底座消除权限拦截。
-- **Rust 微内核直通备用通道 (Kernel Drag IPC)**:
-  - 在 `src-tauri/src/lib.rs` 增补 `window_start_dragging` 原生指令并注册到 Handler，作为 Channel B 备用直通指令。
-- **前端顶栏全域智能鼠标按下拖拽流 (Smart Header OnMouseDown Stream)**:
-  - 在 `Header.tsx` 顶栏容器与 `Sidebar.tsx` Brand 顶栏挂载智能 `onMouseDown` 拖拽处理函数；
-  - **防吞没精准裁决**：当且仅当用户点击非按钮区域且非双击时，瞬时触发 `getCurrentWindow().startDragging()`；
-  - 侧栏折叠展开按钮、状态探测胶囊与右上角窗口控制三按键通过 `closest('button')` 严格隔离，点击事件 100% 独立响应；
-  - 保留双击顶栏空白区域切换最大化/还原的顺畅交互。
-- **工程产物交付**:
-  - `pnpm check` 零警告零错误退出码 0；
-  - `cargo test` 5/5 项单元测试全绿；
-  - 全量生产编译更新单文件可执行程序 `SelfWork.exe`（5.58MB，退出码 0，拖拽移动恢复如初）。
-
-### Root Cause & Engineering Defense (根因穿透与长效防线)
-1. **无边框窗口拖拽失效根因**:
-   - 无边框剥离了操作系统原生非客户区拖拽；而 Tauri v2 引入的权限沙箱在无 `capabilities/default.json` 授权下静默吞没了 Webview 内部的 `start_dragging` 调用。
-2. **长效防线下沉**:
-   - 确立“底层显式声明权限描述符 + 内核备用 IPC + 前端全域 `onMouseDown` 防吞没过滤”三位一体的无边框窗口拖拽工程防线。
-
-## [0.1.13] - 2026-11-10
-
-### Added & Refactored (无边框沉浸窗口与一体化自定义标题栏重构)
-- **消除浅色原生标题栏与全域深色视觉融合 (Unified Frameless Window)**:
-  - 在 `src-tauri/tauri.conf.json` 中配置 `"decorations": false` 与 `"shadow": true`，彻底消除 Windows 原生白灰色标题栏带来的上下视觉割裂；
-  - 窗口顶部与应用主体自然衔接，整体呈现浑然天成的深色暗夜亚克力磨砂科技质感；
-  - 根视口在普通窗口模式下自适应渲染 1px 细微暗调轮廓（`border border-white/[0.08]`），最大化时无缝贴边（`border-0`），兼顾桌面边界识别与全屏沉浸。

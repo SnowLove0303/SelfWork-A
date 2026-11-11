@@ -1,4 +1,4 @@
-export type ModuleId = 'launcher' | 'tasks';
+export type ModuleId = 'launcher' | 'tasks' | 'mindmap';
 
 export interface ModuleItem {
   id: ModuleId;
