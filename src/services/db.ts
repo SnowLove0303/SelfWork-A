@@ -4,7 +4,14 @@ import {
   DEFAULT_APPEARANCE_SETTINGS,
 } from '../types/settings.ts';
 import { INITIAL_TASKS, INITIAL_MEMOS } from '../components/tasks/initialData.ts';
-import { MindMapNode, INITIAL_MINDMAP } from '../types/mindmap.ts';
+import {
+  MindMapNode,
+  INITIAL_MINDMAP,
+  MindMapPartition,
+  MindMapDocument,
+  MindMapStorageData,
+  DEFAULT_PARTITION_ID,
+} from '../types/mindmap.ts';
 
 export const TASKS_STORAGE_KEY = 'selfwork_tasks_data';
 export const MEMOS_STORAGE_KEY = 'selfwork_memos_data';
@@ -13,6 +20,8 @@ export const TASKS_INIT_KEY = 'selfwork_tasks_initialized';
 export const MEMOS_INIT_KEY = 'selfwork_memos_initialized';
 export const MINDMAP_STORAGE_KEY = 'selfwork_mindmap_data';
 export const MINDMAP_INIT_KEY = 'selfwork_mindmap_initialized';
+export const MINDMAP_STORAGE_KEY_V2 = 'selfwork_mindmap_storage_v2';
+export const MINDMAP_STORAGE_SETTING_KEY_V2 = 'sw_mindmap_storage_v2';
 
 /**
  * 封装与 Tauri 原生 IPC 通信的底层调用器
@@ -193,7 +202,6 @@ export async function loadMemos(): Promise<MemoItem[]> {
       return [];
     }
 
-    // 真正白纸首次安装：播种 INITIAL_MEMOS 并永久锁定标记
     await saveMemos(INITIAL_MEMOS);
     await tauriInvoke('db_set_setting', {
       key: 'memos_initialized',
@@ -313,8 +321,130 @@ export async function saveAppearanceSettings(
 // ==================== 思维导图 (MindMap) 服务 ====================
 
 /**
- * 加载思维导图数据
- * 优先从 SQLite 读取，若未初始化则播种 INITIAL_MINDMAP，支持 localStorage 快速冷开
+ * 创建默认初始多分区多导图存储结构
+ */
+export function createDefaultMindMapStorage(): MindMapStorageData {
+  const now = Date.now();
+  const defaultPartition: MindMapPartition = {
+    id: DEFAULT_PARTITION_ID,
+    name: '默认分区',
+    createdAt: now,
+    isDefault: true,
+  };
+  const initialDoc: MindMapDocument = {
+    id: 'mindmap-doc-initial',
+    partitionId: DEFAULT_PARTITION_ID,
+    title: '我的第一张导图',
+    root: INITIAL_MINDMAP,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return {
+    partitions: [defaultPartition],
+    documents: [initialDoc],
+    activePartitionId: DEFAULT_PARTITION_ID,
+    activeDocumentId: initialDoc.id,
+  };
+}
+
+/**
+ * 加载思维导图多分区多文档持久化数据
+ * 1. 优先读取 SQLite app_settings 中的 sw_mindmap_storage_v2
+ * 2. 次选 localStorage 快速缓存
+ * 3. 若均未初始化，检测旧版单一导图 mindmap 数据并自动无损迁移至默认分区
+ * 4. 全新安装则初始化默认分区与示例导图
+ */
+export async function loadMindMapStorage(): Promise<MindMapStorageData> {
+  try {
+    const raw = await tauriInvoke<string | null>('db_get_setting', {
+      key: MINDMAP_STORAGE_SETTING_KEY_V2,
+    });
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        Array.isArray(parsed.partitions) &&
+        Array.isArray(parsed.documents) &&
+        parsed.partitions.length > 0
+      ) {
+        return parsed as MindMapStorageData;
+      }
+    }
+
+    const cached = localStorage.getItem(MINDMAP_STORAGE_KEY_V2);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (
+          parsed &&
+          Array.isArray(parsed.partitions) &&
+          Array.isArray(parsed.documents) &&
+          parsed.partitions.length > 0
+        ) {
+          await saveMindMapStorage(parsed);
+          return parsed as MindMapStorageData;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 检查旧版单一导图以执行数据零损耗自动迁移
+    const legacyMap = await loadMindMap();
+    const defaultStorage = createDefaultMindMapStorage();
+    if (legacyMap && legacyMap.id) {
+      defaultStorage.documents[0].root = legacyMap;
+      defaultStorage.documents[0].title = legacyMap.title || '我的第一张导图';
+    }
+
+    await saveMindMapStorage(defaultStorage);
+    return defaultStorage;
+  } catch (_err) {
+    try {
+      const cached = localStorage.getItem(MINDMAP_STORAGE_KEY_V2);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (
+          parsed &&
+          Array.isArray(parsed.partitions) &&
+          Array.isArray(parsed.documents) &&
+          parsed.partitions.length > 0
+        ) {
+          return parsed as MindMapStorageData;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const fallback = createDefaultMindMapStorage();
+    return fallback;
+  }
+}
+
+/**
+ * 持久化思维导图多分区与多文档数据至 SQLite 与本地缓存
+ */
+export async function saveMindMapStorage(
+  data: MindMapStorageData,
+): Promise<void> {
+  try {
+    localStorage.setItem(MINDMAP_STORAGE_KEY_V2, JSON.stringify(data));
+  } catch (_e) {
+    // ignore
+  }
+
+  try {
+    await tauriInvoke('db_set_setting', {
+      key: MINDMAP_STORAGE_SETTING_KEY_V2,
+      value: JSON.stringify(data),
+    });
+  } catch (_err) {
+    // ignore
+  }
+}
+
+/**
+ * 加载思维导图数据（兼容旧版单一导图读取）
  */
 export async function loadMindMap(): Promise<MindMapNode> {
   try {
@@ -361,7 +491,7 @@ export async function loadMindMap(): Promise<MindMapNode> {
 }
 
 /**
- * 持久化思维导图数据至 SQLite 与本地缓存
+ * 持久化思维导图数据（兼容旧版单一导图写入）
  */
 export async function saveMindMap(root: MindMapNode): Promise<void> {
   try {
@@ -389,3 +519,5 @@ export const dbLoadSettings = loadAppearanceSettings;
 export const dbSaveSettings = saveAppearanceSettings;
 export const dbLoadMindMap = loadMindMap;
 export const dbSaveMindMap = saveMindMap;
+export const dbLoadMindMapStorage = loadMindMapStorage;
+export const dbSaveMindMapStorage = saveMindMapStorage;

@@ -15,6 +15,31 @@ export interface NodeLayout {
   parentId?: string;
 }
 
+export interface MindMapPartition {
+  id: string;
+  name: string;
+  createdAt: number;
+  isDefault?: boolean;
+}
+
+export interface MindMapDocument {
+  id: string;
+  partitionId: string;
+  title: string;
+  root: MindMapNode;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MindMapStorageData {
+  partitions: MindMapPartition[];
+  documents: MindMapDocument[];
+  activePartitionId: string;
+  activeDocumentId: string | null;
+}
+
+export const DEFAULT_PARTITION_ID = 'default-partition-all';
+
 export const INITIAL_MINDMAP: MindMapNode = {
   id: 'root-mindmap-topic',
   title: '中心主题',
