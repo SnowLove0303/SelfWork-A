@@ -11,7 +11,8 @@ export interface LauncherItem {
   args?: string; // 启动参数 (可选)
   workingDir?: string; // 工作目录 (可选)
   description?: string; // 辅助说明 (可选)
-  iconName?: string; // 图标名称 (可选)
+  iconName?: string; // 语义图标标识 (可选)
+  icon?: string; // 提取的原生 Base64 Data URL 或外部图标路径 (可选)
   createdAt: number;
   updatedAt: number;
 }
@@ -66,8 +67,8 @@ export const INITIAL_LAUNCHER_STORAGE: LauncherStorageData = {
       name: '计算器',
       type: 'app',
       target: 'calc.exe',
-      description: 'Windows 快速数学运算工具',
-      iconName: 'Cpu',
+      description: 'Windows 原生科学计算工具',
+      iconName: 'Calculator',
       createdAt: 1700000000000,
       updatedAt: 1700000000000,
     },
@@ -77,8 +78,8 @@ export const INITIAL_LAUNCHER_STORAGE: LauncherStorageData = {
       name: '记事本',
       type: 'app',
       target: 'notepad.exe',
-      description: '轻量文本草稿记录',
-      iconName: 'Edit2',
+      description: '极速纯文本记录工具',
+      iconName: 'FileText',
       createdAt: 1700000000000,
       updatedAt: 1700000000000,
     },
@@ -88,7 +89,7 @@ export const INITIAL_LAUNCHER_STORAGE: LauncherStorageData = {
       name: '命令提示符',
       type: 'app',
       target: 'cmd.exe',
-      description: 'Windows 原生命令行控制台',
+      description: '标准系统命令行终端',
       iconName: 'Terminal',
       createdAt: 1700000000000,
       updatedAt: 1700000000000,
@@ -99,19 +100,19 @@ export const INITIAL_LAUNCHER_STORAGE: LauncherStorageData = {
       name: 'GitHub',
       type: 'url',
       target: 'https://github.com',
-      description: '代码托管与全球开源协同',
-      iconName: 'Globe',
+      description: '全球开源与代码托管平台',
+      iconName: 'Github',
       createdAt: 1700000001000,
       updatedAt: 1700000001000,
     },
     {
       id: 'item-ping',
       categoryId: 'cat-scripts',
-      name: '网络外网连通测试',
+      name: '测试网络延迟 (Bilibili/Github)',
       type: 'script',
-      target: 'Test-Connection -ComputerName 223.5.5.5 -Count 2 | Select-Object Address, ResponseTime',
-      description: '测试阿里 DNS 节点延迟 (PowerShell)',
-      iconName: 'Wifi',
+      target: 'ping www.bilibili.com -n 3',
+      description: '快速测试当前外网连通性与丢包率',
+      iconName: 'Activity',
       createdAt: 1700000002000,
       updatedAt: 1700000002000,
     },

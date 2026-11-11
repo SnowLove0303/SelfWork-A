@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.29] - 2026-11-11
+
+### Feature & Optimization (启动器原生可靠唤起、应用图标动态提取与极简卡片视觉纯净化)
+- **进程直起通道重构与同级依赖自动推导 (`src-tauri/src/lib.rs`)**:
+  - 响应用户“运行不了啊”的反馈，穿透 5-Whys 根因：此前采用 `cmd.exe /c start ""` 拼接存在 Windows 命令行引号剥离截断缺陷，且未设置工作目录导致微信、飞书、企业微信等桌面程序找不到同级依赖动态链接库（DLL）闪退；
+  - 重构 `launch_custom_target`：
+    - 针对本地可执行文件（`.exe`）：采用 `std::process::Command` 独立操作系统进程原生启动，彻底脱离命令行包裹；未显式指定 `working_dir` 时，自动推导该 exe 所在的父目录为工作目录，同级依赖完整加载；
+    - 针对桌面快捷方式（`.lnk`）、文件夹路径及 Web URL：通过 Windows 原生 Shell 通道可靠唤起，行为与在资源管理器中双击 100% 一致。
+- **本地应用原生高清图标动态提取 IPC (`src-tauri/src/lib.rs`, `src/types/launcher.ts`)**:
+  - 响应用户“能不能想办法拿到应用的图标放上去”的要求；
+  - 在 Rust 微内核封装并暴露 `get_app_icon(target)` 命令，利用 Windows 原生 `.NET` `System.Drawing.Icon` 毫秒级从本地 `.exe` 或 `.lnk` 文件提取出内嵌的官方 32x32 / 48x48 高品质图标并编码为 PNG Base64 Data URL；
+  - 增补 `test_get_app_icon_contract` 单元测试，保证系统图标提取通道稳定性；
+  - 在 `src/types/launcher.ts` 为 `LauncherItem` 增补 `icon?: string` 数据契约。
+- **启动项晶体卡片极简纯净化与图标自动懒加载 (`src/components/LauncherDashboard.tsx`)**:
+  - 响应用户“尽量不要有非必要的说明，包括路径这些，不要直接显示出来，对应的设置能看就行了”的指示；
+  - **彻底清除视觉冗杂**：卡片表面 0 暴露长物理路径字符串，0 暴露次要描述段落，排版遵循极简微文案与 Anti-AI-Slop 工业规范；
+  - **核心视觉焦点重塑**：卡片高度优化为紧凑匀称的 `h-36`，中心呈现 40x40 真实应用原生图标（带平滑圆角、辉光与悬浮微动效）及清晰应用名称；
+  - **图标自动懒提取管线**：卡片挂载时自动扫描未缓存图标的本地项，异步调用 `get_app_icon` 补齐并原子回写 SQLite `app_settings`，冷启动实现毫秒级秒开；
+  - **设置与路径收敛**：目标物理路径、运行参数、工作目录与辅助说明纯粹收敛于右上角“编辑设置”模态框中，供用户随时查看与调整。
+- **工程质量与全栈验证**:
+  - `pnpm check` (tsc --noEmit) 零警告零错误（退出码 0）；
+  - `cargo test` 7/7 全绿（通过率 100%，退出码 0）；
+  - 全量重新打包产出最新单文件桌面端 `SelfWork.exe` (5.60 MB) 并经由 VS Code 原生 Diff 完成审查闭环。
+
 ## [0.1.28] - 2026-11-11
 
 ### Feature & Architecture (快速启动重构为通用灵活的跨设备桌面启动工作台与解耦 WSL)

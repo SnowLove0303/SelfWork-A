@@ -31,8 +31,9 @@ fn workbench_ping(client_time_ms: Option<u64>) -> Result<PingResponse, String> {
     })
 }
 
-/// 通用桌面启动命令：支持启动本地可执行程序、目录、文件关联程序或 URL 网址
-/// 在 Windows 下配置 CREATE_NO_WINDOW 避免黑框闪烁
+/// 通用桌面启动命令：支持启动本地可执行程序、快捷方式 (.lnk)、目录或 URL 网址
+/// 针对 Windows 下本地 .exe 采用原生独立进程启动，未指定工作目录时自动继承其父目录以确保同级依赖加载
+/// 针对 .lnk 快捷方式、URL 网址与文件夹，通过 Windows 原生通道可靠唤起
 #[tauri::command]
 async fn launch_custom_target(
     target: String,
@@ -48,29 +49,63 @@ async fn launch_custom_target(
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            let mut cmd = std::process::Command::new("cmd.exe");
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            use std::path::Path;
 
-            let mut full_cmd = format!("start \"\" \"{}\"", trimmed_target);
-            if let Some(arg_str) = args {
-                let trimmed_args = arg_str.trim();
-                if !trimmed_args.is_empty() {
-                    full_cmd.push(' ');
-                    full_cmd.push_str(trimmed_args);
+            let target_path = Path::new(trimmed_target);
+            let is_exe = target_path
+                .extension()
+                .map_or(false, |ext| ext.eq_ignore_ascii_case("exe"));
+
+            if is_exe && target_path.exists() {
+                // 1. 本地可执行文件 (.exe): 直接原生独立进程启动，彻底规避 cmd.exe 引号截断
+                let mut cmd = std::process::Command::new(trimmed_target);
+                if let Some(arg_str) = args {
+                    let trimmed_args = arg_str.trim();
+                    if !trimmed_args.is_empty() {
+                        cmd.args(trimmed_args.split_whitespace());
+                    }
                 }
-            }
 
-            cmd.args(&["/c", &full_cmd]);
-
-            if let Some(dir) = working_dir {
-                let trimmed_dir = dir.trim();
-                if !trimmed_dir.is_empty() {
-                    cmd.current_dir(trimmed_dir);
+                // 工作目录自动推导：未显式指定时，自动设置为可执行文件所在的父目录，解决微信/飞书等找不到同级 DLL 闪退
+                if let Some(dir) = working_dir {
+                    let trimmed_dir = dir.trim();
+                    if !trimmed_dir.is_empty() {
+                        cmd.current_dir(trimmed_dir);
+                    } else if let Some(parent) = target_path.parent() {
+                        cmd.current_dir(parent);
+                    }
+                } else if let Some(parent) = target_path.parent() {
+                    cmd.current_dir(parent);
                 }
-            }
 
-            cmd.spawn().map_err(|e| format!("启动目标失败: {}", e))?;
-            Ok(format!("成功唤起: {}", trimmed_target))
+                cmd.spawn().map_err(|e| format!("启动应用程序失败: {}", e))?;
+                Ok(format!("成功唤起应用程序: {}", trimmed_target))
+            } else {
+                // 2. 快捷方式 (.lnk)、文件夹路径、网页 URL 或非直连文件：通过 Windows 原生通道唤起
+                let mut ps_script = format!("Start-Process -FilePath '{}'", trimmed_target.replace('\'', "''"));
+                if let Some(arg_str) = args {
+                    let trimmed_args = arg_str.trim();
+                    if !trimmed_args.is_empty() {
+                        ps_script.push_str(&format!(" -ArgumentList '{}'", trimmed_args.replace('\'', "''")));
+                    }
+                }
+                if let Some(dir) = working_dir {
+                    let trimmed_dir = dir.trim();
+                    if !trimmed_dir.is_empty() {
+                        ps_script.push_str(&format!(" -WorkingDirectory '{}'", trimmed_dir.replace('\'', "''")));
+                    }
+                } else if target_path.exists() {
+                    if let Some(parent) = target_path.parent() {
+                        ps_script.push_str(&format!(" -WorkingDirectory '{}'", parent.display().to_string().replace('\'', "''")));
+                    }
+                }
+
+                let mut cmd = std::process::Command::new("powershell.exe");
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                cmd.args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script]);
+                cmd.spawn().map_err(|e| format!("唤起目标失败: {}", e))?;
+                Ok(format!("成功唤起: {}", trimmed_target))
+            }
         }
 
         #[cfg(not(windows))]
@@ -83,6 +118,57 @@ async fn launch_custom_target(
     })
     .await
     .map_err(|e| format!("异步启动失败: {}", e))?
+}
+
+/// 提取本地可执行文件 (.exe) 或快捷方式 (.lnk) 的高品质原生图标，返回 Base64 Data URL
+#[tauri::command]
+async fn get_app_icon(target: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let trimmed = target.trim();
+        if trimmed.is_empty() {
+            return Err("目标路径不能为空".to_string());
+        }
+        let path = std::path::Path::new(trimmed);
+        if !path.exists() {
+            return Err(format!("文件不存在: {}", trimmed));
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // 利用 Windows 原生 System.Drawing.Icon 提取并转为 Base64 PNG
+            let script = format!(
+                "Add-Type -AssemblyName System.Drawing; \
+                 $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('{}'); \
+                 if ($icon) {{ \
+                     $ms = New-Object System.IO.MemoryStream; \
+                     $bitmap = $icon.ToBitmap(); \
+                     $bitmap.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); \
+                     [Convert]::ToBase64String($ms.ToArray()) \
+                 }}",
+                trimmed.replace('\'', "''")
+            );
+
+            let mut cmd = std::process::Command::new("powershell.exe");
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd.args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script]);
+            let output = cmd.output().map_err(|e| format!("提取图标进程失败: {}", e))?;
+            let base64_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+            if !base64_str.is_empty() {
+                Ok(format!("data:image/png;base64,{}", base64_str))
+            } else {
+                Err("无法从目标提取关联图标".to_string())
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            Err("非 Windows 平台暂不支持图标提取".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("异步提取图标失败: {}", e))?
 }
 
 /// 通用脚本执行命令：支持后台静默执行 PowerShell / CMD 脚本指令并返回输出
@@ -410,6 +496,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             workbench_ping,
             launch_custom_target,
+            get_app_icon,
             execute_custom_script,
             run_launcher_command,
             check_service_ports,
@@ -454,6 +541,19 @@ mod tests {
             ))
             .expect("execute_custom_script failed");
             assert!(res.contains("SelfWorkLauncherReady"));
+        }
+    }
+
+    #[test]
+    fn test_get_app_icon_contract() {
+        #[cfg(windows)]
+        {
+            let res = tauri::async_runtime::block_on(get_app_icon(
+                "C:\\Windows\\System32\\cmd.exe".to_string(),
+            ));
+            assert!(res.is_ok(), "提取 cmd.exe 图标失败: {:?}", res.err());
+            let data_url = res.unwrap();
+            assert!(data_url.starts_with("data:image/png;base64,"));
         }
     }
 

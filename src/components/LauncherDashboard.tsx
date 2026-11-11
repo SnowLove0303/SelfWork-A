@@ -136,6 +136,51 @@ export const LauncherDashboard: React.FC = () => {
     return () => clearTimeout(timer);
   }, [storage, activeCategoryId, isHydrated]);
 
+  // 自动为未缓存图标的本地 app 项异步提取原生高清图标并就地持久化
+  useEffect(() => {
+    let isMounted = true;
+    const itemsNeedingIcon = storage.items.filter(
+      (item) => item.type === 'app' && !item.icon && item.target.trim()
+    );
+    if (itemsNeedingIcon.length === 0) return;
+
+    const fetchIcons = async () => {
+      let hasUpdates = false;
+      const updatedItems = [...storage.items];
+
+      for (const item of itemsNeedingIcon) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const iconDataUrl = await invoke<string>('get_app_icon', {
+            target: item.target.trim(),
+          });
+          if (iconDataUrl && iconDataUrl.startsWith('data:image/')) {
+            const idx = updatedItems.findIndex((it) => it.id === item.id);
+            if (idx >= 0) {
+              updatedItems[idx] = { ...updatedItems[idx], icon: iconDataUrl };
+              hasUpdates = true;
+            }
+          }
+        } catch (_e) {
+          // 提取失败忽略，平滑回退语义图标
+        }
+      }
+
+      if (hasUpdates && isMounted) {
+        setStorage((prev) => {
+          const next = { ...prev, items: updatedItems };
+          saveLauncherStorage(next);
+          return next;
+        });
+      }
+    };
+
+    fetchIcons();
+    return () => {
+      isMounted = false;
+    };
+  }, [storage.items]);
+
   // 提示反馈自动清除
   useEffect(() => {
     if (!feedback) return;
@@ -322,7 +367,7 @@ export const LauncherDashboard: React.FC = () => {
     setIsItemModalOpen(true);
   };
 
-  const handleSaveItem = () => {
+  const handleSaveItem = async () => {
     const trimmedName = formName.trim();
     const trimmedTarget = formTarget.trim();
     if (!trimmedName || !trimmedTarget) {
@@ -331,6 +376,23 @@ export const LauncherDashboard: React.FC = () => {
     }
 
     const now = Date.now();
+    let targetIcon = editingItem?.icon;
+
+    // 若修改了目标且为应用，尝试提取新图标
+    if (formType === 'app' && (!targetIcon || editingItem?.target !== trimmedTarget)) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const iconDataUrl = await invoke<string>('get_app_icon', {
+          target: trimmedTarget,
+        });
+        if (iconDataUrl && iconDataUrl.startsWith('data:image/')) {
+          targetIcon = iconDataUrl;
+        }
+      } catch (_e) {
+        // ignore
+      }
+    }
+
     if (editingItem) {
       // 更新现有项
       setStorage((prev) => ({
@@ -346,6 +408,7 @@ export const LauncherDashboard: React.FC = () => {
                 workingDir: formWorkingDir.trim() || undefined,
                 description: formDescription.trim() || undefined,
                 categoryId: formCategoryId,
+                icon: targetIcon,
                 updatedAt: now,
               }
             : i
@@ -362,6 +425,7 @@ export const LauncherDashboard: React.FC = () => {
         args: formArgs.trim() || undefined,
         workingDir: formWorkingDir.trim() || undefined,
         description: formDescription.trim() || undefined,
+        icon: targetIcon,
         createdAt: now,
         updatedAt: now,
       };
@@ -543,7 +607,7 @@ export const LauncherDashboard: React.FC = () => {
               <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="搜索名称、路径或指令..."
+                placeholder="搜索名称或指令..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
@@ -601,22 +665,19 @@ export const LauncherDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* 启动项卡片大盘网格 */}
+        {/* 启动项卡片大盘网格 (自适应多列晶体网格) */}
         <div className="flex-1 overflow-y-auto p-4 min-w-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3.5">
             {/* 首卡：+ 添加快速启动项 */}
             <div
               onClick={handleOpenAddModal}
-              className="group relative flex flex-col items-center justify-center h-44 rounded-xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
+              className="group relative flex flex-col items-center justify-center h-36 rounded-2xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
             >
-              <div className="p-3 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
-                <Plus className="w-5 h-5" />
+              <div className="p-2.5 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
+                <Plus className="w-4 h-4" />
               </div>
-              <span className="mt-2.5 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
-                添加快速启动项
-              </span>
-              <span className="mt-0.5 text-[10px] text-slate-500 font-mono group-hover:text-slate-400 transition-colors">
-                配置应用程序、脚本或网址
+              <span className="mt-2 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
+                添加启动项
               </span>
             </div>
 
@@ -630,14 +691,15 @@ export const LauncherDashboard: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => handleLaunchItem(item)}
-                  className="group relative flex flex-col justify-between h-44 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_6px_20px_rgba(0,0,0,0.4)] p-3.5 overflow-hidden"
+                  title={item.name}
+                  className="group relative flex flex-col justify-between h-36 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)] p-3 overflow-hidden select-none"
                 >
-                  {/* 顶栏：类型 Badge 与下拉菜单 */}
-                  <div className="flex items-center justify-between gap-2">
+                  {/* 顶栏：极简类型 Badge 与下拉设置菜单 */}
+                  <div className="flex items-center justify-between gap-1.5">
                     <span
-                      className={`flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${badge.className}`}
+                      className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded border ${badge.className}`}
                     >
-                      <badge.Icon className="w-3 h-3" />
+                      <badge.Icon className="w-2.5 h-2.5" />
                       <span>{badge.label}</span>
                     </span>
 
@@ -650,6 +712,7 @@ export const LauncherDashboard: React.FC = () => {
                         onClick={() =>
                           setActiveMenuDocId(isMenuOpen ? null : item.id)
                         }
+                        title="设置与更多"
                         className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
@@ -666,7 +729,7 @@ export const LauncherDashboard: React.FC = () => {
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
                           >
                             <Edit2 className="w-3 h-3" />
-                            <span>编辑</span>
+                            <span>编辑设置</span>
                           </button>
                           <div className="h-px bg-white/5 my-1" />
                           <button
@@ -684,32 +747,39 @@ export const LauncherDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 核心名称与描述 */}
-                  <div className="my-1.5 flex flex-col justify-center flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-slate-100 group-hover:text-cyan-300 truncate transition-colors">
+                  {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 (完全纯净化，0暴露长路径与多余描述) */}
+                  <div className="my-auto flex flex-col items-center justify-center min-w-0">
+                    <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                      {item.icon && item.icon.startsWith('data:image/') ? (
+                        <img
+                          src={item.icon}
+                          alt={item.name}
+                          className="w-10 h-10 object-contain rounded-xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-200"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/15 group-hover:border-cyan-500/30 transition-all duration-200 shadow-inner">
+                          <badge.Icon className="w-5 h-5" />
+                        </div>
+                      )}
+                    </div>
+
+                    <h3 className="mt-2 text-xs font-semibold text-slate-200 group-hover:text-cyan-300 truncate max-w-full text-center tracking-tight px-1 transition-colors">
                       {item.name}
                     </h3>
-                    <p
-                      className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed"
-                      title={item.description || item.target}
-                    >
-                      {item.description || item.target}
-                    </p>
                   </div>
 
-                  {/* 底栏：运行状态按键与调用指引 */}
-                  <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-slate-500 font-mono truncate max-w-[120px]">
-                      {item.target}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={isRunning}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-500/15 group-hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all shrink-0"
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>{isRunning ? '唤起中' : '运行'}</span>
-                    </button>
+                  {/* 极简底栏交互：悬浮微光与运行响应 */}
+                  <div className="h-5 flex items-center justify-center text-[10px] text-slate-500 font-mono">
+                    {isRunning ? (
+                      <span className="flex items-center gap-1 text-cyan-400 font-medium animate-pulse">
+                        <Play className="w-2.5 h-2.5 fill-current" />
+                        <span>唤起中...</span>
+                      </span>
+                    ) : (
+                      <span className="opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity">
+                        点击快速启动
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -718,13 +788,13 @@ export const LauncherDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= 新建 / 编辑启动项弹窗 ================= */}
+      {/* ================= 启动项设置与编辑模态框 (收敛展示底层物理路径与参数) ================= */}
       {isItemModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-slate-950/95 border border-white/10 shadow-2xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-sm font-semibold text-slate-100 font-mono">
-                {editingItem ? '编辑快速启动项' : '添加快速启动项'}
+                {editingItem ? '启动项设置' : '添加快速启动项'}
               </h3>
               <button
                 type="button"
@@ -741,7 +811,7 @@ export const LauncherDashboard: React.FC = () => {
                 <label className="block text-slate-400 mb-1 font-medium">名称 *</label>
                 <input
                   type="text"
-                  placeholder="例如: VS Code / 前端构建 / 计算器"
+                  placeholder="例如: 微信 / 飞书 / Chrome / VS Code"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
@@ -782,7 +852,7 @@ export const LauncherDashboard: React.FC = () => {
                     ? '目标网址 (URL) *'
                     : formType === 'folder'
                     ? '文件夹绝对路径 *'
-                    : '应用程序路径 / 命令 *'}
+                    : '应用程序路径 / .lnk 快捷方式 / 命令 *'}
                 </label>
                 {formType === 'script' ? (
                   <textarea
@@ -800,12 +870,17 @@ export const LauncherDashboard: React.FC = () => {
                         ? '例如: https://github.com'
                         : formType === 'folder'
                         ? '例如: D:\\Project 或 C:\\Users'
-                        : '例如: calc.exe 或 D:\\Apps\\Code.exe'
+                        : '例如: D:\\APP\\weixin\\Weixin.exe 或 calc.exe'
                     }
                     value={formTarget}
                     onChange={(e) => setFormTarget(e.target.value)}
                     className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
                   />
+                )}
+                {formType === 'app' && (
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    支持可执行文件 (.exe)、桌面快捷方式 (.lnk) 或系统命令，系统将自动提取原生图标。
+                  </p>
                 )}
               </div>
 
@@ -841,10 +916,10 @@ export const LauncherDashboard: React.FC = () => {
 
               {/* 工作目录 (可选) */}
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">工作目录 (可选)</label>
+                <label className="block text-slate-400 mb-1 font-medium">工作目录 (可选，默认自动推导为应用所在目录)</label>
                 <input
                   type="text"
-                  placeholder="例如: D:\\Project"
+                  placeholder="例如: D:\\APP\\weixin"
                   value={formWorkingDir}
                   onChange={(e) => setFormWorkingDir(e.target.value)}
                   className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
@@ -877,7 +952,7 @@ export const LauncherDashboard: React.FC = () => {
                 onClick={handleSaveItem}
                 className="px-4 py-1.5 rounded-lg text-xs font-medium bg-brand-primary text-black hover:bg-brand-primary/90 transition-colors shadow-sm"
               >
-                {editingItem ? '保存修改' : '确认添加'}
+                {editingItem ? '保存设置' : '确认添加'}
               </button>
             </div>
           </div>
