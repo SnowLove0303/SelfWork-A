@@ -2,6 +2,23 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.25] - 2026-11-11
+
+### Motion & Alignment (工作台全局平滑切页动效与空间视觉落位对齐)
+- **模块级 180ms 硬件加速平滑淡入切页动效落地 (`SlotContainer.tsx`, `globals.css`)**:
+  - 响应用户“位置可能也要调整下，目前切起来还是位置跳移感比较重，然后调整切页动效”的明确指示；
+  - 在 `src/styles/globals.css` 确立 `@keyframes viewFadeIn` (180ms, `cubic-bezier(0.16, 1, 0.3, 1)`, Y轴 4px -> 0px) 与 `@keyframes canvasFadeIn` (200ms) 纯 CSS GPU 硬件合成动画；
+  - 在 `SlotContainer.tsx` 中引入以 `key={activeModule}` 为驱动的平滑过渡容器，彻底根除从“快速启动”/“待办清单”切到“思维导图”时的 DOM 瞬时硬切白闪与生硬感。
+- **思维导图两级页面切页动效与空间视觉锚定 (`MindMapView.tsx`, `MindMapPartitionView.tsx`)**:
+  - 在一级分区大盘与二级思维导图画布状态切换时挂载 `key={viewState}` 与 `.animate-canvas-fade` 动态展开动效，沉浸感大幅增强；
+  - 将一级分区管理侧栏宽度标准收敛为 `w-64` (256px)，消除从待办清单横向视觉重心突变产生的跳移感；
+  - 锁定横向与竖向顶部分割线基准（Y=49px）绝对连贯，实现跨模块无感过渡。
+- **工程产物与验证**:
+  - `pnpm check` (tsc --noEmit) 零警告零错误（退出码 0）；
+  - `cargo test` 5/5 测试全绿（退出码 0）；
+  - 全量重新打包产出 5.60MB 单文件桌面程序 `SelfWork.exe` 并正常调起测试；
+  - 变动文件均经由 `vscode-review:review_diff_in_vscode` 完成审查闭环。
+
 ## [0.1.24] - 2026-11-11
 
 ### Design & Alignment (全局字体字号分类规范落地与跨模块布局基准线条严密对齐)

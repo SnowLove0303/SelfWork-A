@@ -78,63 +78,16 @@ body {
     0 4px 24px -2px rgba(0, 0, 0, 0.5);
 }
 
-/* 触觉交互按钮：默认锁定 shrink-0 与 whitespace-nowrap，彻底消除挤压变形与文字断行 */
+/* 触觉按钮反馈动画 */
 .tactile-btn {
-  position: relative;
-  flex-shrink: 0;
-  white-space: nowrap;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  transition: transform 70ms cubic-bezier(0, 0, 0.2, 1), background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out;
 }
 
-.tactile-btn:hover {
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
-    0 2px 8px 0 rgba(0, 0, 0, 0.25);
-}
-
-/* 关键修复：绝对禁止 transform 缩放/位移，文字 100% 稳如磐石不晃动 */
 .tactile-btn:active {
-  transform: none !important;
-  background-color: rgba(255, 255, 255, 0.04);
-  box-shadow: 
-    inset 0 1px 3px 0 rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  transform: scale(0.985);
 }
 
-/* 激活选中态按钮：高透悬浮亚克力实体板效果 */
-.tactile-btn-active {
-  background-color: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
-    0 2px 10px 0 rgba(0, 0, 0, 0.35);
-}
-
-/* 触觉状态胶囊：锁定抗压缩 */
-.tactile-pill {
-  flex-shrink: 0;
-  white-space: nowrap;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
-    0 1px 2px 0 rgba(0, 0, 0, 0.3);
-}
-
-.tactile-pill:hover {
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
-    0 2px 6px 0 rgba(0, 0, 0, 0.45);
-}
-
-.tactile-pill:active {
-  transform: none !important;
-  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.7);
-}
-
-/* 隐藏滚动条但保留滚动能力 */
+/* 隐藏原生滚动条同时保持滚动 */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -143,98 +96,98 @@ body {
   scrollbar-width: none;
 }
 
-/* 流光漂移动画定义 */
-@keyframes fluidDriftA {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  50% {
-    transform: translate(50px, -30px) scale(1.15);
-  }
-}
-
-@keyframes fluidDriftB {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  50% {
-    transform: translate(-40px, 35px) scale(0.9);
-  }
-}
-
-@keyframes fluidSheenPulse {
-  0%, 100% {
-    opacity: 0.7;
-    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
-  }
-  50% {
-    opacity: 1;
-    filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.95));
-  }
-}
-
-.animate-fluid-a {
-  animation: fluidDriftA 16s ease-in-out infinite;
-}
-
-.animate-fluid-b {
-  animation: fluidDriftB 20s ease-in-out infinite;
-}
-
-.animate-sheen-pulse {
-  animation: fluidSheenPulse 3s ease-in-out infinite;
-}
-
-/* 兼容旧命名 */
-.chiseled-card {
-  border: 1px solid var(--color-border-default);
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
-    0 1px 2px 0 rgba(0, 0, 0, 0.3),
-    0 4px 16px -2px rgba(0, 0, 0, 0.4);
-}
-
-.chiseled-btn-active {
-  box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
-    0 1px 2px 0 rgba(0, 0, 0, 0.3);
-}
-
-/* 滚动条极简磨砂处理 */
+/* 现代化极细玻璃质感滚动条 */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 9999px;
+  transition: background 150ms ease-out;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.22);
 }
 
+/* 呼吸流光与动态渐变帧动画 */
+@keyframes fluidDriftA {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.08); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes fluidDriftB {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-30px, -40px) scale(0.95); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+.animate-fluid-a {
+  animation: fluidDriftA 25s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-fluid-b {
+  animation: fluidDriftB 30s ease-in-out infinite;
+  will-change: transform;
+}
+
 /* ==========================================================================
-   高透亚克力极简滑动条 (Acrylic Range Slider)
+   平滑切页与视口过渡硬件加速动效 (Hardware-Accelerated View Transitions)
    ========================================================================== */
+@keyframes viewFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.998);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-view-fade {
+  animation: viewFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}
+
+@keyframes canvasFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-canvas-fade {
+  animation: canvasFadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}
+
+/* 现代化玻璃滑块组件 (Glass Slider) */
 .glass-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 4px;
   border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.10);
   outline: none;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
-  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+  transition: background 150ms ease-out;
 }
 
 .glass-slider:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .glass-slider::-webkit-slider-thumb {
@@ -254,6 +207,7 @@ body {
 
 .glass-slider::-webkit-slider-thumb:hover {
   background: #ffffff;
+  transform: scale(1.15);
   box-shadow: 
     0 2px 6px rgba(0, 0, 0, 0.7),
     0 0 12px rgba(56, 189, 248, 0.6);

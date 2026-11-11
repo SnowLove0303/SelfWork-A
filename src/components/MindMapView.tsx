@@ -428,29 +428,31 @@ export const MindMapView: React.FC = () => {
     handleDeleteSelected,
   ]);
 
-  // ==================== 视图分流渲染 ====================
+  // ==================== 视图分流渲染 (挂载平滑切页动效包装) ====================
 
   if (currentView === 'partitions' || !activeDocument) {
     return (
-      <MindMapPartitionView
-        partitions={storage.partitions}
-        documents={storage.documents}
-        activePartitionId={storage.activePartitionId}
-        onSelectPartition={handleSelectPartition}
-        onCreatePartition={handleCreatePartition}
-        onRenamePartition={handleRenamePartition}
-        onDeletePartition={handleDeletePartition}
-        onCreateDocument={handleCreateDocument}
-        onOpenDocument={handleOpenDocument}
-        onRenameDocument={handleRenameDocument}
-        onDeleteDocument={handleDeleteDocument}
-        onMoveDocumentPartition={handleMoveDocumentPartition}
-      />
+      <div key="view-partitions" className="animate-view-fade flex-1 flex flex-col h-full w-full overflow-hidden min-w-0">
+        <MindMapPartitionView
+          partitions={storage.partitions}
+          documents={storage.documents}
+          activePartitionId={storage.activePartitionId}
+          onSelectPartition={handleSelectPartition}
+          onCreatePartition={handleCreatePartition}
+          onRenamePartition={handleRenamePartition}
+          onDeletePartition={handleDeletePartition}
+          onCreateDocument={handleCreateDocument}
+          onOpenDocument={handleOpenDocument}
+          onRenameDocument={handleRenameDocument}
+          onDeleteDocument={handleDeleteDocument}
+          onMoveDocumentPartition={handleMoveDocumentPartition}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full w-full overflow-hidden relative select-none min-w-0">
+    <div key="view-canvas" className="animate-canvas-fade flex-1 flex flex-col h-full w-full overflow-hidden relative select-none min-w-0">
       {/* 二级画布主内容区：继承通透主画板 */}
       <div className="flex-1 relative overflow-hidden min-w-0 h-full w-full bg-transparent">
         {/* 左上角极简悬浮返回导航栏与面包屑：统一 L1/L5 字阶与毛玻璃材质 */}

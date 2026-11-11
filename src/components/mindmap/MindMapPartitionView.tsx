@@ -160,8 +160,8 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
 
   return (
     <div className="flex h-full w-full bg-transparent text-slate-200 select-none overflow-hidden min-w-0">
-      {/* ================= 左侧分区管理侧栏 ================= */}
-      <div className="w-60 flex-shrink-0 flex flex-col border-r border-white/[0.08] bg-black/20 backdrop-blur-md min-w-0">
+      {/* ================= 左侧分区管理侧栏 (固定 w-64 黄金宽度) ================= */}
+      <div className="w-64 flex-shrink-0 flex flex-col border-r border-white/[0.08] bg-black/20 backdrop-blur-md min-w-0">
         {/* 侧栏顶标：高度严格对齐 h-[49px]，基准线零落差贯穿 */}
         <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
           <div className="flex items-center gap-2 shrink-0">

@@ -52,8 +52,11 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
           </div>
         )}
 
-        {/* 内容展示区：根据激活模块渲染对应视图 */}
-        <div className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden min-w-0">
+        {/* 内容展示区：根据激活模块渲染对应视图并应用 180ms 硬件加速平滑切页动效 */}
+        <div
+          key={activeModule}
+          className="animate-view-fade relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden min-w-0"
+        >
           {activeModule === 'launcher' ? (
             <LauncherDashboard />
           ) : activeModule === 'mindmap' ? (
