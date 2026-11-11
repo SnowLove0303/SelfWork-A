@@ -5,6 +5,7 @@ import {
   MindMapStorageData,
   MindMapDocument,
   DEFAULT_PARTITION_ID,
+  RECYCLE_BIN_PARTITION_ID,
   INITIAL_MINDMAP,
 } from '../types/mindmap.ts';
 import {
@@ -165,9 +166,16 @@ export const MindMapView: React.FC = () => {
   const handleCreateDocument = useCallback((partitionId: string) => {
     const now = Date.now();
     const newDocId = `doc-${now}-${Math.random().toString(36).slice(2, 6)}`;
+    const targetPartitionId =
+      partitionId && partitionId !== RECYCLE_BIN_PARTITION_ID
+        ? partitionId
+        : storage.activePartitionId !== RECYCLE_BIN_PARTITION_ID
+        ? storage.activePartitionId
+        : DEFAULT_PARTITION_ID;
+
     const newDoc: MindMapDocument = {
       id: newDocId,
-      partitionId: partitionId || storage.activePartitionId,
+      partitionId: targetPartitionId,
       title: '未命名导图',
       root: JSON.parse(JSON.stringify(INITIAL_MINDMAP)),
       createdAt: now,
@@ -178,6 +186,7 @@ export const MindMapView: React.FC = () => {
       ...prev,
       documents: [newDoc, ...prev.documents],
       activeDocumentId: newDocId,
+      activePartitionId: targetPartitionId,
     }));
 
     setActiveDocId(newDocId);
@@ -206,20 +215,62 @@ export const MindMapView: React.FC = () => {
     }));
   }, []);
 
-  const handleDeleteDocument = useCallback((id: string) => {
-    setStorage((prev) => {
-      const remaining = prev.documents.filter((d) => d.id !== id);
-      return {
-        ...prev,
-        documents: remaining,
-        activeDocumentId: prev.activeDocumentId === id ? null : prev.activeDocumentId,
-      };
-    });
+  // 软删除导图至回收站
+  const handleSoftDeleteDocument = useCallback((id: string) => {
+    setStorage((prev) => ({
+      ...prev,
+      documents: prev.documents.map((d) =>
+        d.id === id ? { ...d, isDeleted: true, deletedAt: Date.now() } : d
+      ),
+      activeDocumentId: prev.activeDocumentId === id ? null : prev.activeDocumentId,
+    }));
     if (activeDocId === id) {
       setActiveDocId(null);
       setCurrentView('partitions');
     }
   }, [activeDocId]);
+
+  // 从回收站恢复导图至原分区
+  const handleRestoreDocument = useCallback((id: string) => {
+    setStorage((prev) => {
+      const defaultPartId =
+        prev.partitions.find((p) => p.id === DEFAULT_PARTITION_ID)?.id ||
+        prev.partitions[0]?.id ||
+        DEFAULT_PARTITION_ID;
+
+      return {
+        ...prev,
+        documents: prev.documents.map((d) => {
+          if (d.id !== id) return d;
+          const partitionExists = prev.partitions.some((p) => p.id === d.partitionId);
+          return {
+            ...d,
+            isDeleted: false,
+            deletedAt: undefined,
+            partitionId: partitionExists ? d.partitionId : defaultPartId,
+            updatedAt: Date.now(),
+          };
+        }),
+      };
+    });
+  }, []);
+
+  // 彻底物理销毁单篇导图
+  const handlePermanentDeleteDocument = useCallback((id: string) => {
+    setStorage((prev) => ({
+      ...prev,
+      documents: prev.documents.filter((d) => d.id !== id),
+      activeDocumentId: prev.activeDocumentId === id ? null : prev.activeDocumentId,
+    }));
+  }, []);
+
+  // 一键清空回收站
+  const handleEmptyRecycleBin = useCallback(() => {
+    setStorage((prev) => ({
+      ...prev,
+      documents: prev.documents.filter((d) => !d.isDeleted),
+    }));
+  }, []);
 
   const handleMoveDocumentPartition = useCallback((docId: string, targetPartitionId: string) => {
     setStorage((prev) => ({
@@ -444,8 +495,11 @@ export const MindMapView: React.FC = () => {
           onCreateDocument={handleCreateDocument}
           onOpenDocument={handleOpenDocument}
           onRenameDocument={handleRenameDocument}
-          onDeleteDocument={handleDeleteDocument}
+          onDeleteDocument={handleSoftDeleteDocument}
           onMoveDocumentPartition={handleMoveDocumentPartition}
+          onRestoreDocument={handleRestoreDocument}
+          onPermanentDeleteDocument={handlePermanentDeleteDocument}
+          onEmptyRecycleBin={handleEmptyRecycleBin}
         />
       </div>
     );

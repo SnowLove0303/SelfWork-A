@@ -29,6 +29,8 @@ export interface MindMapDocument {
   root: MindMapNode;
   createdAt: number;
   updatedAt: number;
+  isDeleted?: boolean;
+  deletedAt?: number;
 }
 
 export interface MindMapStorageData {
@@ -39,6 +41,7 @@ export interface MindMapStorageData {
 }
 
 export const DEFAULT_PARTITION_ID = 'default-partition-all';
+export const RECYCLE_BIN_PARTITION_ID = '__recycle_bin__';
 
 export const INITIAL_MINDMAP: MindMapNode = {
   id: 'root-mindmap-topic',

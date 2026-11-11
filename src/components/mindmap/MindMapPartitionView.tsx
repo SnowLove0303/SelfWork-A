@@ -13,11 +13,13 @@ import {
   Network,
   X,
   Check,
+  RotateCcw,
 } from 'lucide-react';
 import {
   MindMapPartition,
   MindMapDocument,
   MindMapNode,
+  RECYCLE_BIN_PARTITION_ID,
 } from '../../types/mindmap.ts';
 
 interface MindMapPartitionViewProps {
@@ -33,6 +35,9 @@ interface MindMapPartitionViewProps {
   onRenameDocument: (id: string, newTitle: string) => void;
   onDeleteDocument: (id: string) => void;
   onMoveDocumentPartition: (docId: string, targetPartitionId: string) => void;
+  onRestoreDocument?: (id: string) => void;
+  onPermanentDeleteDocument?: (id: string) => void;
+  onEmptyRecycleBin?: () => void;
 }
 
 // 计算单份思维导图的总节点数
@@ -69,6 +74,9 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocumentPartition,
+  onRestoreDocument,
+  onPermanentDeleteDocument,
+  onEmptyRecycleBin,
 }) => {
   // 搜索关键字
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,30 +109,52 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
     }
   }, [renamingDocId]);
 
-  // 计算每个分区所含文档数
+  // 文档区分流：活跃文档 vs 已回收文档
+  const activeDocs = useMemo(() => documents.filter((d) => !d.isDeleted), [documents]);
+  const deletedDocs = useMemo(() => documents.filter((d) => Boolean(d.isDeleted)), [documents]);
+  const isViewingRecycleBin = activePartitionId === RECYCLE_BIN_PARTITION_ID;
+
+  // 分区 ID 到名称的映射
+  const partitionMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of partitions) {
+      map[p.id] = p.name;
+    }
+    return map;
+  }, [partitions]);
+
+  // 计算每个分区所含活跃文档数
   const partitionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const p of partitions) {
       counts[p.id] = 0;
     }
-    for (const doc of documents) {
+    for (const doc of activeDocs) {
       if (counts[doc.partitionId] !== undefined) {
         counts[doc.partitionId] += 1;
       }
     }
     return counts;
-  }, [partitions, documents]);
+  }, [partitions, activeDocs]);
 
-  // 过滤当前分区下的文档
+  // 过滤当前展示的文档集
   const currentDocs = useMemo(() => {
-    return documents
+    if (isViewingRecycleBin) {
+      return deletedDocs
+        .filter((doc) => {
+          if (!searchQuery.trim()) return true;
+          return doc.title.toLowerCase().includes(searchQuery.trim().toLowerCase());
+        })
+        .sort((a, b) => (b.deletedAt || b.updatedAt) - (a.deletedAt || a.updatedAt));
+    }
+    return activeDocs
       .filter((doc) => doc.partitionId === activePartitionId)
       .filter((doc) => {
         if (!searchQuery.trim()) return true;
         return doc.title.toLowerCase().includes(searchQuery.trim().toLowerCase());
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [documents, activePartitionId, searchQuery]);
+  }, [activeDocs, deletedDocs, isViewingRecycleBin, activePartitionId, searchQuery]);
 
   const activePartition = useMemo(() => {
     return partitions.find((p) => p.id === activePartitionId) || partitions[0];
@@ -219,7 +249,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
         {/* 分区列表：L3 分类层级规范 */}
         <div className="flex-1 overflow-y-auto px-2 py-2.5 space-y-1">
           {partitions.map((partition) => {
-            const isActive = partition.id === activePartitionId;
+            const isActive = !isViewingRecycleBin && partition.id === activePartitionId;
             const count = partitionCounts[partition.id] || 0;
             const isRenaming = renamingPartitionId === partition.id;
 
@@ -299,6 +329,36 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
             );
           })}
         </div>
+
+        {/* 底部独立回收站入口 */}
+        <div className="p-2 border-t border-white/[0.08] bg-black/10 shrink-0">
+          <div
+            onClick={() => onSelectPartition(RECYCLE_BIN_PARTITION_ID)}
+            className={`group relative flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer text-xs font-medium transition-all ${
+              isViewingRecycleBin
+                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/35 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <Trash2
+                className={`w-3.5 h-3.5 flex-shrink-0 ${
+                  isViewingRecycleBin ? 'text-rose-400' : 'text-slate-500 group-hover:text-slate-400'
+                }`}
+              />
+              <span className="truncate">回收站</span>
+            </div>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono border transition-all ${
+                isViewingRecycleBin
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/30 font-semibold'
+                  : 'bg-white/[0.06] text-fg-muted border-white/[0.06] group-hover:text-slate-300'
+              }`}
+            >
+              {deletedDocs.length}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* ================= 右侧导图卡片大盘 ================= */}
@@ -306,206 +366,320 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
         {/* 顶部工具栏：高度严格对齐 h-[49px]，基准底线与左栏 100% 贯穿对齐 */}
         <div className="h-[49px] px-4 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
-              {activePartition?.name || '思维导图'}
+            <h2
+              className={`text-xs font-semibold tracking-tight font-mono shrink-0 whitespace-nowrap ${
+                isViewingRecycleBin ? 'text-rose-300' : 'text-fg-primary'
+              }`}
+            >
+              {isViewingRecycleBin ? '回收站' : activePartition?.name || '思维导图'}
             </h2>
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted border border-white/[0.06] shrink-0 whitespace-nowrap">
-              {currentDocs.length} 篇导图
+            <span
+              className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full border shrink-0 whitespace-nowrap ${
+                isViewingRecycleBin
+                  ? 'bg-rose-500/10 text-rose-300/80 border-rose-500/20'
+                  : 'bg-white/[0.06] text-fg-muted border-white/[0.06]'
+              }`}
+            >
+              {currentDocs.length} 篇{isViewingRecycleBin ? '已废弃导图' : '导图'}
             </span>
           </div>
 
-          {/* 搜索框：内嵌紧凑形态 */}
-          <div className="relative w-56 shrink-0">
-            <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="搜索当前分区导图..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
-            />
-            {searchQuery && (
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* 搜索框：内嵌紧凑形态 */}
+            <div className="relative w-52 shrink-0">
+              <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={isViewingRecycleBin ? '搜索已废弃导图...' : '搜索当前分区导图...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300 rounded"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* 回收站专属操作：清空回收站 */}
+            {isViewingRecycleBin && deletedDocs.length > 0 && onEmptyRecycleBin && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300 rounded"
+                type="button"
+                onClick={() => {
+                  if (window.confirm('确定要清空回收站吗？此操作将永久彻底销毁所有已废弃导图，不可撤销。')) {
+                    onEmptyRecycleBin();
+                  }
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
               >
-                <X className="w-3 h-3" />
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span>清空回收站</span>
               </button>
             )}
           </div>
         </div>
 
         {/* 导图卡片网格容器：收敛至与 Tasks 一致的精细呼吸间距 (p-4 gap-4) */}
-        <div className="flex-1 overflow-y-auto p-4 min-w-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
-            {/* 首卡：+ 新建导图 */}
-            <div
-              onClick={() => onCreateDocument(activePartitionId)}
-              className="group relative flex flex-col items-center justify-center h-44 rounded-xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
-            >
-              <div className="p-3 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
-                <Plus className="w-5 h-5" />
-              </div>
-              <span className="mt-2.5 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
-                新建导图
-              </span>
-              <span className="mt-0.5 text-[10px] text-slate-500 font-mono group-hover:text-slate-400 transition-colors">
-                创建空白导图并进入画布
-              </span>
+        {isViewingRecycleBin && currentDocs.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 min-w-0">
+            <div className="p-4 rounded-full bg-white/[0.02] border border-white/[0.06] mb-3">
+              <Trash2 className="w-8 h-8 text-slate-600 opacity-60" />
             </div>
-
-            {/* 已有思维导图卡片 */}
-            {currentDocs.map((doc) => {
-              const nodeTotal = countNodes(doc.root);
-              const isRenaming = renamingDocId === doc.id;
-              const isMenuOpen = activeMenuDocId === doc.id;
-              const isMoving = movingDocId === doc.id;
-
-              return (
-                <div
-                  key={doc.id}
-                  onClick={() => onOpenDocument(doc.id)}
-                  className="group relative flex flex-col h-44 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_6px_20px_rgba(0,0,0,0.4)] overflow-hidden"
-                >
-                  {/* 导图微缩结构示意预览区 */}
-                  <div className="flex-1 flex items-center justify-center bg-black/20 relative border-b border-white/[0.06] group-hover:bg-black/10 transition-colors">
-                    <div className="flex items-center gap-2 opacity-65 group-hover:opacity-100 transition-opacity">
-                      {/* 中心主题微缩块 */}
-                      <div className="px-2 py-0.5 rounded-md bg-cyan-500/20 border border-cyan-500/40 text-[10px] text-cyan-300 font-semibold shadow-[0_0_8px_rgba(6,182,212,0.2)]">
-                        {doc.root.title || '中心主题'}
-                      </div>
-                      {/* 分支连线微缩 */}
-                      <div className="w-2.5 h-px bg-cyan-500/40" />
-                      <div className="flex flex-col gap-1">
-                        <div className="w-8 h-1.5 rounded bg-white/10 border border-white/10" />
-                        <div className="w-6 h-1.5 rounded bg-white/10 border border-white/10" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 卡片信息底栏：L4/L5 字阶标准 */}
-                  <div className="p-3 flex flex-col justify-between bg-black/25">
-                    <div className="flex items-center justify-between gap-2">
-                      {isRenaming ? (
-                        <input
-                          ref={docInputRef}
-                          type="text"
-                          value={editingDocTitle}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setEditingDocTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleConfirmRenameDoc(doc.id);
-                            if (e.key === 'Escape') setRenamingDocId(null);
-                          }}
-                          onBlur={() => handleConfirmRenameDoc(doc.id)}
-                          className="bg-black/50 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-full"
-                        />
-                      ) : (
-                        <h3 className="text-xs font-medium text-slate-200 group-hover:text-cyan-300 truncate transition-colors">
-                          {doc.title}
-                        </h3>
-                      )}
-
-                      {/* 卡片菜单操作 */}
-                      <div
-                        className="relative flex-shrink-0"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          onClick={() =>
-                            setActiveMenuDocId(isMenuOpen ? null : doc.id)
-                          }
-                          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* 下拉菜单浮层 */}
-                        {isMenuOpen && (
-                          <div className="absolute right-0 bottom-full mb-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
-                            <button
-                              onClick={() => {
-                                setRenamingDocId(doc.id);
-                                setEditingDocTitle(doc.title);
-                                setActiveMenuDocId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                              <span>重命名</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setMovingDocId(doc.id);
-                                setActiveMenuDocId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
-                            >
-                              <FolderInput className="w-3 h-3" />
-                              <span>移动分区</span>
-                            </button>
-                            <div className="h-px bg-white/5 my-1" />
-                            <button
-                              onClick={() => {
-                                onDeleteDocument(doc.id);
-                                setActiveMenuDocId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              <span>删除导图</span>
-                            </button>
-                          </div>
-                        )}
-
-                        {/* 移动分区弹层 */}
-                        {isMoving && (
-                          <div className="absolute right-0 bottom-full mb-1 w-40 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
-                            <div className="px-3 py-1 text-[10px] text-slate-500 border-b border-white/5">
-                              移动至目标分区
-                            </div>
-                            {partitions.map((targetP) => (
-                              <button
-                                key={targetP.id}
-                                disabled={targetP.id === doc.partitionId}
-                                onClick={() => {
-                                  onMoveDocumentPartition(doc.id, targetP.id);
-                                  setMovingDocId(null);
-                                }}
-                                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs ${
-                                  targetP.id === doc.partitionId
-                                    ? 'text-slate-600 cursor-not-allowed'
-                                    : 'text-slate-300 hover:text-cyan-300 hover:bg-white/5'
-                                }`}
-                              >
-                                <span className="truncate">{targetP.name}</span>
-                                {targetP.id === doc.partitionId && (
-                                  <span className="text-[10px] text-slate-600">当前</span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 卡片状态：L5 辅助微文案标准 */}
-                    <div className="flex items-center justify-between mt-1.5 text-[10px] text-slate-500 font-mono">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{formatTime(doc.updatedAt)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Network className="w-3 h-3" />
-                        <span>{nodeTotal} 节点</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            <span className="text-xs text-slate-400 font-medium font-mono">回收站暂无内容</span>
+            <span className="text-[10px] text-slate-600 mt-1 font-mono">
+              在分区大盘删除的思维导图将暂存于此，支持原位还原与彻底粉碎
+            </span>
           </div>
-        </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-4 min-w-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+              {/* 常规模式首卡：+ 新建导图 */}
+              {!isViewingRecycleBin && (
+                <div
+                  onClick={() => onCreateDocument(activePartitionId)}
+                  className="group relative flex flex-col items-center justify-center h-44 rounded-xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
+                >
+                  <div className="p-3 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                  <span className="mt-2.5 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
+                    新建导图
+                  </span>
+                  <span className="mt-0.5 text-[10px] text-slate-500 font-mono group-hover:text-slate-400 transition-colors">
+                    创建空白导图并进入画布
+                  </span>
+                </div>
+              )}
+
+              {/* 回收站专属卡片网格 */}
+              {isViewingRecycleBin &&
+                currentDocs.map((doc) => {
+                  const nodeTotal = countNodes(doc.root);
+                  const origPartitionName = partitionMap[doc.partitionId] || '默认分区';
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className="group relative flex flex-col h-48 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] hover:border-rose-500/30 transition-all duration-200 shadow-sm overflow-hidden"
+                    >
+                      {/* 微缩结构示意预览区 */}
+                      <div className="flex-1 flex items-center justify-center bg-black/35 relative border-b border-white/[0.06]">
+                        <div className="flex items-center gap-2 opacity-40">
+                          <div className="px-2 py-0.5 rounded-md bg-white/10 border border-white/20 text-[10px] text-slate-300 font-semibold">
+                            {doc.root.title || '中心主题'}
+                          </div>
+                          <div className="w-2.5 h-px bg-white/20" />
+                          <div className="flex flex-col gap-1">
+                            <div className="w-8 h-1.5 rounded bg-white/10" />
+                            <div className="w-6 h-1.5 rounded bg-white/10" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 卡片信息底栏 */}
+                      <div className="p-3 flex flex-col justify-between bg-black/30">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-xs font-medium text-slate-300 truncate" title={doc.title}>
+                            {doc.title}
+                          </h3>
+                          <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-white/[0.05] text-slate-400 border border-white/[0.06] shrink-0 truncate max-w-[80px]">
+                            {origPartitionName}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-1 text-[10px] text-slate-500 font-mono">
+                          <span>删除于 {formatTime(doc.deletedAt || doc.updatedAt)}</span>
+                          <span>{nodeTotal} 节点</span>
+                        </div>
+
+                        {/* 操作按键栏 */}
+                        <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-white/[0.06]">
+                          <button
+                            type="button"
+                            onClick={() => onRestoreDocument?.(doc.id)}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 rounded text-[11px] font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/25 transition-colors tactile-btn"
+                            title="还原至原分区"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>恢复</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`确定要彻底删除导图“${doc.title}”吗？此操作不可撤销。`)) {
+                                onPermanentDeleteDocument?.(doc.id);
+                              }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 rounded text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition-colors tactile-btn"
+                            title="彻底物理删除"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>彻底删除</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* 常规已有思维导图卡片 */}
+              {!isViewingRecycleBin &&
+                currentDocs.map((doc) => {
+                  const nodeTotal = countNodes(doc.root);
+                  const isRenaming = renamingDocId === doc.id;
+                  const isMenuOpen = activeMenuDocId === doc.id;
+                  const isMoving = movingDocId === doc.id;
+
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => onOpenDocument(doc.id)}
+                      className="group relative flex flex-col h-44 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-cyan-500/40 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_6px_20px_rgba(0,0,0,0.4)] overflow-hidden"
+                    >
+                      {/* 导图微缩结构示意预览区 */}
+                      <div className="flex-1 flex items-center justify-center bg-black/20 relative border-b border-white/[0.06] group-hover:bg-black/10 transition-colors">
+                        <div className="flex items-center gap-2 opacity-65 group-hover:opacity-100 transition-opacity">
+                          {/* 中心主题微缩块 */}
+                          <div className="px-2 py-0.5 rounded-md bg-cyan-500/20 border border-cyan-500/40 text-[10px] text-cyan-300 font-semibold shadow-[0_0_8px_rgba(6,182,212,0.2)]">
+                            {doc.root.title || '中心主题'}
+                          </div>
+                          {/* 分支连线微缩 */}
+                          <div className="w-2.5 h-px bg-cyan-500/40" />
+                          <div className="flex flex-col gap-1">
+                            <div className="w-8 h-1.5 rounded bg-white/10 border border-white/10" />
+                            <div className="w-6 h-1.5 rounded bg-white/10 border border-white/10" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 卡片信息底栏：L4/L5 字阶标准 */}
+                      <div className="p-3 flex flex-col justify-between bg-black/25">
+                        <div className="flex items-center justify-between gap-2">
+                          {isRenaming ? (
+                            <input
+                              ref={docInputRef}
+                              type="text"
+                              value={editingDocTitle}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setEditingDocTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleConfirmRenameDoc(doc.id);
+                                if (e.key === 'Escape') setRenamingDocId(null);
+                              }}
+                              onBlur={() => handleConfirmRenameDoc(doc.id)}
+                              className="bg-black/50 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none w-full"
+                            />
+                          ) : (
+                            <h3 className="text-xs font-medium text-slate-200 group-hover:text-cyan-300 truncate transition-colors">
+                              {doc.title}
+                            </h3>
+                          )}
+
+                          {/* 卡片菜单操作 */}
+                          <div
+                            className="relative flex-shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() =>
+                                setActiveMenuDocId(isMenuOpen ? null : doc.id)
+                              }
+                              className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* 下拉菜单浮层 */}
+                            {isMenuOpen && (
+                              <div className="absolute right-0 bottom-full mb-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                                <button
+                                  onClick={() => {
+                                    setRenamingDocId(doc.id);
+                                    setEditingDocTitle(doc.title);
+                                    setActiveMenuDocId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                  <span>重命名</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setMovingDocId(doc.id);
+                                    setActiveMenuDocId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                                >
+                                  <FolderInput className="w-3 h-3" />
+                                  <span>移动分区</span>
+                                </button>
+                                <div className="h-px bg-white/5 my-1" />
+                                <button
+                                  onClick={() => {
+                                    onDeleteDocument(doc.id);
+                                    setActiveMenuDocId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>移入回收站</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {/* 移动分区弹层 */}
+                            {isMoving && (
+                              <div className="absolute right-0 bottom-full mb-1 w-40 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                                <div className="px-3 py-1 text-[10px] text-slate-500 border-b border-white/5">
+                                  移动至目标分区
+                                </div>
+                                {partitions.map((targetP) => (
+                                  <button
+                                    key={targetP.id}
+                                    disabled={targetP.id === doc.partitionId}
+                                    onClick={() => {
+                                      onMoveDocumentPartition(doc.id, targetP.id);
+                                      setMovingDocId(null);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs ${
+                                      targetP.id === doc.partitionId
+                                        ? 'text-slate-600 cursor-not-allowed'
+                                        : 'text-slate-300 hover:text-cyan-300 hover:bg-white/5'
+                                    }`}
+                                  >
+                                    <span className="truncate">{targetP.name}</span>
+                                    {targetP.id === doc.partitionId && (
+                                      <span className="text-[10px] text-slate-600">当前</span>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 卡片状态：L5 辅助微文案标准 */}
+                        <div className="flex items-center justify-between mt-1.5 text-[10px] text-slate-500 font-mono">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{formatTime(doc.updatedAt)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Network className="w-3 h-3" />
+                            <span>{nodeTotal} 节点</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

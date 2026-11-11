@@ -2,6 +2,25 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.27] - 2026-11-11
+
+### Feature & Lifecycle (思维导图全生命周期回收站治理体系落地)
+- **软删除防误删生命周期模型 (`MindMapDocument`, `MindMapView.tsx`)**:
+  - 响应用户“思维导图管理增加回收站”的明确指示；
+  - 扩展 `MindMapDocument` 增补 `isDeleted?: boolean` 与 `deletedAt?: number` 契约；
+  - 将常规大盘卡片菜单中的“删除导图”变更为软删除移入回收站，记录精确删除时间戳与原所属分区，导图节点树及构思成果 100% 零损耗保留；
+  - 在 `MindMapView.tsx` 构建恢复导图 (`handleRestoreDocument`)、单篇彻底物理粉碎 (`handlePermanentDeleteDocument`) 与一键清空回收站 (`handleEmptyRecycleBin`) 原子状态机。
+- **侧栏独立回收站入口与专属管理大盘 (`MindMapPartitionView.tsx`)**:
+  - 在左侧分区侧栏底部独立固定渲染“回收站”入口，配有 `Trash2` 图标与已废弃导图数实时徽标；
+  - 右侧大盘接入回收站专属视图：
+    - 顶标行严格锁定为标准 `h-[49px]`，包含回收站标题、篇数统计、废弃导图搜索框及一键“清空回收站”动作按键；
+    - 废弃导图卡片具备原所属分区标识、删除时间戳、节点数及单篇“恢复”（原位还原原分区，原分区不存在则回退至默认分区）与“彻底删除”按钮；
+    - 包含回收站为空时的空状态占位提示。
+- **工程质量与全栈验证**:
+  - `pnpm check` (tsc --noEmit) 零警告零错误（退出码 0）；
+  - `cargo test` 5/5 全绿（退出码 0）；
+  - 全量打包产出最新单文件桌面端 `SelfWork.exe` (5.60 MB) 并经由 VS Code 原生 Diff 完成审查闭环。
+
 ## [0.1.26] - 2026-11-11
 
 ### Design & Alignment (待办清单与思维导图模块顶栏标题像素级物理对齐与全局 49px 基准线统合)
