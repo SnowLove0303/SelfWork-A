@@ -117,6 +117,14 @@ export const LauncherDashboard: React.FC = () => {
   const [formCategoryId, setFormCategoryId] = useState(activeCategoryId);
   const [formBundleItemIds, setFormBundleItemIds] = useState<string[]>([]);
 
+  // 组合专属创建与编辑模态框状态
+  const [isComboModalOpen, setIsComboModalOpen] = useState(false);
+  const [editingComboItem, setEditingComboItem] = useState<LauncherItem | null>(null);
+  const [comboFormName, setComboFormName] = useState('');
+  const [comboFormCategoryId, setComboFormCategoryId] = useState(activeCategoryId);
+  const [comboFormItemIds, setComboFormItemIds] = useState<string[]>([]);
+  const [comboItemSearch, setComboItemSearch] = useState('');
+
   // 卡片操作菜单与执行状态反馈
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -158,33 +166,33 @@ export const LauncherDashboard: React.FC = () => {
     if (itemsNeedingIcon.length === 0) return;
 
     const fetchIcons = async () => {
-      let hasUpdates = false;
-      const updatedItems = [...storage.items];
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const iconUpdates: Record<string, string> = {};
 
-      for (const item of itemsNeedingIcon) {
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          const iconDataUrl = await invoke<string>('get_app_icon', {
-            target: item.target.trim(),
-          });
-          if (iconDataUrl && iconDataUrl.startsWith('data:image/')) {
-            const idx = updatedItems.findIndex((it) => it.id === item.id);
-            if (idx >= 0) {
-              updatedItems[idx] = { ...updatedItems[idx], icon: iconDataUrl };
-              hasUpdates = true;
+        for (const item of itemsNeedingIcon) {
+          try {
+            const iconDataUrl = await invoke<string>('get_app_icon', {
+              target: item.target,
+            });
+            if (iconDataUrl && iconDataUrl.startsWith('data:image/')) {
+              iconUpdates[item.id] = iconDataUrl;
             }
+          } catch {
+            // 文件不存在或暂不可提取
           }
-        } catch (_e) {
-          // 提取失败忽略，平滑回退语义图标
         }
-      }
 
-      if (hasUpdates && isMounted) {
-        setStorage((prev) => {
-          const next = { ...prev, items: updatedItems };
-          saveLauncherStorage(next);
-          return next;
-        });
+        if (isMounted && Object.keys(iconUpdates).length > 0) {
+          setStorage((prev) => ({
+            ...prev,
+            items: prev.items.map((it) =>
+              iconUpdates[it.id] ? { ...it, icon: iconUpdates[it.id] } : it
+            ),
+          }));
+        }
+      } catch {
+        // Tauri 环境未就绪
       }
     };
 
@@ -194,7 +202,7 @@ export const LauncherDashboard: React.FC = () => {
     };
   }, [storage.items]);
 
-  // 提示反馈自动清除
+  // 自动淡出提示消息 (3.5秒)
   useEffect(() => {
     if (!feedback) return;
     const timer = setTimeout(() => setFeedback(null), 3500);
@@ -246,6 +254,22 @@ export const LauncherDashboard: React.FC = () => {
     );
   }, [storage.items, editingItem]);
 
+  // 可用于组成 Combo 组合的全部基础项 (排除 bundle 自身以防死循环)
+  const candidateComboItems = useMemo(() => {
+    return storage.items.filter(
+      (item) => item.type !== 'bundle' && item.id !== editingComboItem?.id
+    );
+  }, [storage.items, editingComboItem]);
+
+  // 候选项目带搜索过滤
+  const filteredCandidateComboItems = useMemo(() => {
+    if (!comboItemSearch.trim()) return candidateComboItems;
+    const q = comboItemSearch.toLowerCase();
+    return candidateComboItems.filter(
+      (item) => item.name.toLowerCase().includes(q) || item.target.toLowerCase().includes(q)
+    );
+  }, [candidateComboItems, comboItemSearch]);
+
   // ==================== 启动调度核心逻辑 ====================
 
   const handleLaunchItem = useCallback(
@@ -267,12 +291,19 @@ export const LauncherDashboard: React.FC = () => {
           }
           setFeedback({
             type: 'success',
-            message: `正在并发唤起【${item.name}】套件共 ${subItems.length} 个项目...`,
+            message: `正在启动【${item.name}】组合共 ${subItems.length} 个项目: ${subItems.map((s) => s.name).join(', ')}...`,
           });
-          for (const sub of subItems) {
+          for (let i = 0; i < subItems.length; i++) {
+            const sub = subItems[i];
             await handleLaunchItem(sub);
-            await new Promise((r) => setTimeout(r, 150));
+            if (i < subItems.length - 1) {
+              await new Promise((r) => setTimeout(r, 150));
+            }
           }
+          setFeedback({
+            type: 'success',
+            message: `【${item.name}】组合已全部唤起成功 (共 ${subItems.length} 项)`,
+          });
           return true;
         }
 
@@ -319,23 +350,36 @@ export const LauncherDashboard: React.FC = () => {
     if (currentItems.length === 0) return;
     setFeedback({
       type: 'success',
-      message: `正在拉起【${activeCategory?.name}】全套 ${currentItems.length} 个启动项...`,
+      message: `正在一键唤起【${activeCategory.name}】分类下全部 ${currentItems.length} 个项目...`,
     });
-
     for (const item of currentItems) {
       await handleLaunchItem(item);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await new Promise((r) => setTimeout(r, 150));
     }
   }, [currentItems, activeCategory, handleLaunchItem]);
 
-  // ==================== 即时多选批量启动交互 ====================
+  // 启动多选模式下勾选的所选项
+  const handleLaunchSelected = useCallback(async () => {
+    const selectedItems = currentItems.filter((i) => selectedItemIds.includes(i.id));
+    if (selectedItems.length === 0) return;
+    setFeedback({
+      type: 'success',
+      message: `正在启动勾选的 ${selectedItems.length} 个项目...`,
+    });
+    for (const item of selectedItems) {
+      await handleLaunchItem(item);
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }, [currentItems, selectedItemIds, handleLaunchItem]);
 
+  // 多选切换勾选
   const handleToggleSelectItem = (id: string) => {
     setSelectedItemIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
+  // 全选 / 取消全选
   const handleSelectAll = () => {
     if (selectedItemIds.length === currentItems.length) {
       setSelectedItemIds([]);
@@ -344,72 +388,57 @@ export const LauncherDashboard: React.FC = () => {
     }
   };
 
-  const handleLaunchSelected = async () => {
-    if (selectedItemIds.length === 0) return;
-    const itemsToLaunch = storage.items.filter((i) => selectedItemIds.includes(i.id));
-    setFeedback({
-      type: 'success',
-      message: `正在依次唤起所勾选的 ${itemsToLaunch.length} 个应用与脚本...`,
-    });
-
-    for (const item of itemsToLaunch) {
-      await handleLaunchItem(item);
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
-
-    setIsSelectMode(false);
-    setSelectedItemIds([]);
-  };
-
-  // ==================== 分类操作 ====================
+  // ==================== 分类增删改 ====================
 
   const handleConfirmCreateCategory = () => {
     const trimmed = newCategoryName.trim();
-    if (trimmed) {
-      const newId = `cat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const newCat: LauncherCategory = {
-        id: newId,
-        name: trimmed,
-        createdAt: Date.now(),
-      };
-      setStorage((prev) => ({
-        ...prev,
-        categories: [...prev.categories, newCat],
-        activeCategoryId: newId,
-      }));
-      setActiveCategoryId(newId);
-      setNewCategoryName('');
-      setIsCreatingCategory(false);
-    }
+    if (!trimmed) return;
+    const newCatId = `cat-${Date.now()}`;
+    const newCat: LauncherCategory = {
+      id: newCatId,
+      name: trimmed,
+      createdAt: Date.now(),
+    };
+    setStorage((prev) => ({
+      ...prev,
+      categories: [...prev.categories, newCat],
+      activeCategoryId: newCatId,
+    }));
+    setActiveCategoryId(newCatId);
+    setNewCategoryName('');
+    setIsCreatingCategory(false);
   };
 
   const handleConfirmRenameCategory = (id: string) => {
     const trimmed = editingCategoryName.trim();
-    if (trimmed) {
-      setStorage((prev) => ({
-        ...prev,
-        categories: prev.categories.map((c) =>
-          c.id === id ? { ...c, name: trimmed } : c
-        ),
-      }));
+    if (!trimmed) {
+      setRenamingCategoryId(null);
+      return;
     }
+    setStorage((prev) => ({
+      ...prev,
+      categories: prev.categories.map((c) =>
+        c.id === id ? { ...c, name: trimmed } : c
+      ),
+    }));
     setRenamingCategoryId(null);
+    setEditingCategoryName('');
   };
 
   const handleDeleteCategory = (id: string) => {
-    if (storage.categories.length <= 1) {
-      alert('至少需要保留一个分类！');
+    const cat = storage.categories.find((c) => c.id === id);
+    if (!cat) return;
+    if (cat.isDefault) {
+      alert('系统默认分类不可删除！');
       return;
     }
     const defaultCat =
       storage.categories.find((c) => c.isDefault)?.id ||
-      storage.categories.find((c) => c.id !== id)?.id ||
       DEFAULT_LAUNCHER_CATEGORY_ID;
 
     setStorage((prev) => {
-      // 被删除分类的启动项平移到默认分类
-      const updatedItems = prev.items.map((item) =>
-        item.categoryId === id ? { ...item, categoryId: defaultCat } : item
+      const updatedItems = prev.items.map((i) =>
+        i.categoryId === id ? { ...i, categoryId: defaultCat } : i
       );
       return {
         ...prev,
@@ -450,6 +479,92 @@ export const LauncherDashboard: React.FC = () => {
     setFormCategoryId(item.categoryId);
     setFormBundleItemIds(item.bundleItemIds || []);
     setIsItemModalOpen(true);
+  };
+
+  // 打开组合创建模态框 (支持传入预设选中的子项 ID 列表)
+  const handleOpenCreateComboModal = (initialItemIds: string[] = []) => {
+    setEditingComboItem(null);
+    setComboFormName('');
+    setComboFormCategoryId(activeCategoryId);
+    setComboFormItemIds(initialItemIds);
+    setComboItemSearch('');
+    setIsComboModalOpen(true);
+  };
+
+  // 打开现有组合编辑模态框
+  const handleOpenEditComboModal = (item: LauncherItem) => {
+    setEditingComboItem(item);
+    setComboFormName(item.name);
+    setComboFormCategoryId(item.categoryId);
+    setComboFormItemIds(item.bundleItemIds || []);
+    setComboItemSearch('');
+    setIsComboModalOpen(true);
+  };
+
+  // 组合保存逻辑
+  const handleSaveCombo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = comboFormName.trim();
+    if (!trimmedName) {
+      alert('请输入组合名称！');
+      return;
+    }
+    if (comboFormItemIds.length === 0) {
+      alert('请至少勾选一个包含在组合中的应用或脚本！');
+      return;
+    }
+
+    const now = Date.now();
+    if (editingComboItem) {
+      // 更新现有组合
+      setStorage((prev) => ({
+        ...prev,
+        items: prev.items.map((i) =>
+          i.id === editingComboItem.id
+            ? {
+                ...i,
+                name: trimmedName,
+                type: 'bundle',
+                target: '启动组合套件',
+                categoryId: comboFormCategoryId,
+                bundleItemIds: comboFormItemIds,
+                updatedAt: now,
+              }
+            : i
+        ),
+      }));
+      setFeedback({
+        type: 'success',
+        message: `组合【${trimmedName}】更新成功 (包含 ${comboFormItemIds.length} 项)`,
+      });
+    } else {
+      // 新建组合
+      const newComboItem: LauncherItem = {
+        id: `combo-${now}-${Math.random().toString(36).slice(2, 6)}`,
+        categoryId: comboFormCategoryId || activeCategoryId,
+        name: trimmedName,
+        type: 'bundle',
+        target: '启动组合套件',
+        bundleItemIds: comboFormItemIds,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setStorage((prev) => ({
+        ...prev,
+        items: [newComboItem, ...prev.items],
+      }));
+      setFeedback({
+        type: 'success',
+        message: `组合【${trimmedName}】创建成功 (包含 ${comboFormItemIds.length} 项)`,
+      });
+    }
+
+    setIsComboModalOpen(false);
+    setEditingComboItem(null);
+    if (isSelectMode) {
+      setIsSelectMode(false);
+      setSelectedItemIds([]);
+    }
   };
 
   const handleSaveItem = async () => {
@@ -527,6 +642,7 @@ export const LauncherDashboard: React.FC = () => {
         createdAt: now,
         updatedAt: now,
       };
+
       setStorage((prev) => ({
         ...prev,
         items: [newItem, ...prev.items],
@@ -544,9 +660,9 @@ export const LauncherDashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full w-full bg-transparent text-slate-200 select-none overflow-hidden min-w-0">
-      {/* ================= 左侧分类管理侧栏 (固定 w-64 黄金宽度) ================= */}
-      <div className="w-64 flex-shrink-0 flex flex-col border-r border-white/[0.08] bg-black/20 backdrop-blur-md min-w-0">
+    <div className="flex-1 flex overflow-hidden bg-transparent select-none">
+      {/* ================= 左侧分类管理侧栏 ================= */}
+      <div className="w-64 border-r border-white/[0.08] bg-black/20 backdrop-blur-md flex flex-col shrink-0">
         {/* 侧栏顶标：高度严格对齐 h-[49px]，基准线与思维导图/待办清单 100% 贯穿对齐 */}
         <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
@@ -648,19 +764,12 @@ export const LauncherDashboard: React.FC = () => {
 
                 {/* 数量标记：L2 统计徽标规范 */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono border ${
-                      isActive
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30 font-semibold'
-                        : 'bg-white/[0.06] text-fg-muted border-white/[0.06] group-hover:text-slate-300'
-                    }`}
-                  >
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.06]">
                     {count}
                   </span>
-
                   {!cat.isDefault && (
                     <div
-                      className="hidden group-hover:flex items-center gap-0.5"
+                      className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
@@ -720,9 +829,25 @@ export const LauncherDashboard: React.FC = () => {
           )}
 
           {/* 右侧动作区：动态切换常规与多选操作 */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {isSelectMode ? (
               <>
+                {/* 多选模式下：一键保存为新组合通道 */}
+                <button
+                  type="button"
+                  disabled={selectedItemIds.length === 0}
+                  onClick={() => handleOpenCreateComboModal(selectedItemIds)}
+                  title="将当前已勾选的项目保存为一个新组合"
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
+                    selectedItemIds.length > 0
+                      ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]'
+                      : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 shrink-0" />
+                  <span>保存为组合</span>
+                </button>
+
                 <button
                   type="button"
                   disabled={selectedItemIds.length === 0}
@@ -737,6 +862,7 @@ export const LauncherDashboard: React.FC = () => {
                   <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
                   <span>启动所选项 ({selectedItemIds.length})</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -752,7 +878,7 @@ export const LauncherDashboard: React.FC = () => {
             ) : (
               <>
                 {/* 搜索框：内嵌紧凑形态 */}
-                <div className="relative w-48 shrink-0">
+                <div className="relative w-44 shrink-0">
                   <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -800,7 +926,18 @@ export const LauncherDashboard: React.FC = () => {
                   </button>
                 )}
 
-                {/* 添加启动项按钮 */}
+                {/* 显式独立的新建组合按钮 (REQ-COMBO-01) */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateComboModal()}
+                  title="创建多项目组合套餐"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(244,63,94,0.12)]"
+                >
+                  <Layers className="w-3.5 h-3.5 shrink-0" />
+                  <span>+ 组合</span>
+                </button>
+
+                {/* 添加单项启动项按钮 */}
                 <button
                   type="button"
                   onClick={handleOpenAddModal}
@@ -819,14 +956,14 @@ export const LauncherDashboard: React.FC = () => {
           <div
             className={`px-4 py-2 text-xs flex items-center gap-2 shrink-0 transition-all ${
               feedback.type === 'success'
-                ? 'bg-emerald-500/15 text-emerald-300 border-b border-emerald-500/30'
-                : 'bg-rose-500/15 text-rose-300 border-b border-rose-500/30'
+                ? 'bg-emerald-500/15 border-b border-emerald-500/30 text-emerald-300'
+                : 'bg-rose-500/15 border-b border-rose-500/30 text-rose-300'
             }`}
           >
             {feedback.type === 'success' ? (
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
             ) : (
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             )}
             <span className="truncate">{feedback.message}</span>
           </div>
@@ -856,6 +993,14 @@ export const LauncherDashboard: React.FC = () => {
               const isRunning = runningItemIds[item.id];
               const isMenuOpen = activeMenuDocId === item.id;
               const isSelected = selectedItemIds.includes(item.id);
+              const isBundle = item.type === 'bundle';
+
+              // 获取该组合包含的子项目对象集合
+              const subItems = isBundle
+                ? (item.bundleItemIds || [])
+                    .map((subId) => storage.items.find((it) => it.id === subId))
+                    .filter(Boolean) as LauncherItem[]
+                : [];
 
               return (
                 <div
@@ -871,6 +1016,8 @@ export const LauncherDashboard: React.FC = () => {
                   className={`group relative flex flex-col justify-between h-36 rounded-2xl border cursor-pointer transition-all duration-200 p-3 overflow-hidden select-none ${
                     isSelectMode && isSelected
                       ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_18px_rgba(6,182,212,0.25)]'
+                      : isBundle
+                      ? 'border-rose-500/30 bg-rose-500/[0.03] hover:bg-rose-500/[0.08] hover:border-rose-500/50 shadow-[0_0_16px_rgba(244,63,94,0.12)]'
                       : 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
                   }`}
                 >
@@ -892,9 +1039,7 @@ export const LauncherDashboard: React.FC = () => {
                       >
                         <badge.Icon className="w-2.5 h-2.5" />
                         <span>
-                          {item.type === 'bundle'
-                            ? `组合·${item.bundleItemIds?.length || 0}`
-                            : badge.label}
+                          {isBundle ? `组合·${subItems.length}项` : badge.label}
                         </span>
                       </span>
                     )}
@@ -920,13 +1065,17 @@ export const LauncherDashboard: React.FC = () => {
                           <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
                             <button
                               onClick={() => {
-                                handleOpenEditModal(item);
+                                if (isBundle) {
+                                  handleOpenEditComboModal(item);
+                                } else {
+                                  handleOpenEditModal(item);
+                                }
                                 setActiveMenuDocId(null);
                               }}
                               className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
                             >
                               <Edit2 className="w-3 h-3" />
-                              <span>编辑设置</span>
+                              <span>{isBundle ? '编辑组合' : '编辑设置'}</span>
                             </button>
                             <div className="h-px bg-white/5 my-1" />
                             <button
@@ -945,11 +1094,11 @@ export const LauncherDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 (完全纯净化，0暴露长路径与多余描述) */}
+                  {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 / 组合层叠 */}
                   <div className="my-auto flex flex-col items-center justify-center min-w-0">
                     <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                      {item.type === 'bundle' ? (
-                        <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300 group-hover:scale-110 group-hover:bg-rose-500/25 transition-all duration-200 shadow-[0_0_12px_rgba(244,63,94,0.2)]">
+                      {isBundle ? (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-purple-500/20 border border-rose-500/35 flex items-center justify-center text-rose-300 group-hover:scale-110 group-hover:bg-rose-500/30 transition-all duration-200 shadow-[0_0_14px_rgba(244,63,94,0.25)]">
                           <Layers className="w-5 h-5" />
                         </div>
                       ) : item.icon && item.icon.startsWith('data:image/') ? (
@@ -965,9 +1114,45 @@ export const LauncherDashboard: React.FC = () => {
                       )}
                     </div>
 
-                    <h3 className="mt-2 text-xs font-semibold text-slate-200 group-hover:text-cyan-300 truncate max-w-full text-center tracking-tight px-1 transition-colors">
+                    <h3
+                      className={`mt-2 text-xs font-semibold truncate max-w-full text-center tracking-tight px-1 transition-colors ${
+                        isBundle
+                          ? 'text-slate-100 group-hover:text-rose-200'
+                          : 'text-slate-200 group-hover:text-cyan-300'
+                      }`}
+                    >
                       {item.name}
                     </h3>
+
+                    {/* 组合内含成员微缩图标堆叠预览 (Avatar Stack) */}
+                    {isBundle && subItems.length > 0 && (
+                      <div className="flex items-center justify-center -space-x-1 mt-1">
+                        {subItems.slice(0, 4).map((sItem) => (
+                          <div
+                            key={sItem.id}
+                            title={sItem.name}
+                            className="w-3.5 h-3.5 rounded-full border border-black/80 bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 shadow-sm"
+                          >
+                            {sItem.icon && sItem.icon.startsWith('data:image/') ? (
+                              <img
+                                src={sItem.icon}
+                                alt={sItem.name}
+                                className="w-3 h-3 object-contain"
+                              />
+                            ) : (
+                              <span className="text-[6px] text-slate-400 font-mono font-bold leading-none">
+                                {sItem.name.slice(0, 1)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {subItems.length > 4 && (
+                          <span className="text-[8px] font-mono text-slate-400 pl-1 font-semibold leading-none">
+                            +{subItems.length - 4}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* 极简底栏交互：悬浮微光与运行响应 */}
@@ -981,9 +1166,14 @@ export const LauncherDashboard: React.FC = () => {
                       <span className="text-slate-400 font-sans">
                         {isSelected ? '已选中' : '点击选择'}
                       </span>
+                    ) : isBundle ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 group-hover:bg-rose-500/25 text-rose-300 font-medium text-[9px] border border-rose-500/30 group-hover:scale-105 transition-all shadow-sm">
+                        <Play className="w-2 h-2 fill-current" />
+                        <span>启动组合</span>
+                      </span>
                     ) : (
                       <span className="opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity">
-                        {item.type === 'bundle' ? '点击启动全套' : '点击快速启动'}
+                        点击快速启动
                       </span>
                     )}
                   </div>
@@ -994,30 +1184,203 @@ export const LauncherDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= 启动项设置与编辑模态框 (收敛展示底层物理路径与参数) ================= */}
-      {isItemModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-950/95 border border-white/10 shadow-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      {/* ================= 专属启动组合创建与编辑模态框 (REQ-COMBO-01 & REK-COMBO-02) ================= */}
+      {isComboModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950/95 p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="text-sm font-semibold text-slate-100 font-mono">
-                {editingItem ? '启动项设置' : '添加快速启动项'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-100">
+                  {editingComboItem ? '编辑启动组合' : '创建启动组合'}
+                </h3>
+              </div>
               <button
-                type="button"
-                onClick={() => setIsItemModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10"
+                onClick={() => {
+                  setIsComboModalOpen(false);
+                  setEditingComboItem(null);
+                }}
+                className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-white/10"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 text-xs">
+            <form onSubmit={handleSaveCombo} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">组合名称 *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="例如：每日办公全套、开发调试环境、会议演示套件..."
+                  value={comboFormName}
+                  onChange={(e) => setComboFormName(e.target.value)}
+                  className="w-full h-8 bg-black/40 border border-white/10 rounded-lg px-2.5 text-slate-100 outline-none focus:border-rose-500/50 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">归属分类</label>
+                <select
+                  value={comboFormCategoryId}
+                  onChange={(e) => setComboFormCategoryId(e.target.value)}
+                  className="w-full h-8 bg-black/40 border border-white/10 rounded-lg px-2 text-slate-200 outline-none focus:border-rose-500/50"
+                >
+                  {storage.categories.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-slate-900 text-slate-100">
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-slate-400 mb-1.5 font-medium">
+                  <span>
+                    选择包含的应用与脚本 ({comboFormItemIds.length} / {candidateComboItems.length} 项) *
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (comboFormItemIds.length === candidateComboItems.length) {
+                        setComboFormItemIds([]);
+                      } else {
+                        setComboFormItemIds(candidateComboItems.map((i) => i.id));
+                      }
+                    }}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 hover:underline"
+                  >
+                    {comboFormItemIds.length === candidateComboItems.length ? '清空' : '全选'}
+                  </button>
+                </div>
+
+                {/* 候选项目快捷搜索过滤 */}
+                {candidateComboItems.length > 5 && (
+                  <div className="relative mb-2">
+                    <Search className="w-3 h-3 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="过滤候选应用或脚本..."
+                      value={comboItemSearch}
+                      onChange={(e) => setComboItemSearch(e.target.value)}
+                      className="w-full h-7 bg-black/40 border border-white/10 rounded-lg pl-7 pr-2 text-[11px] text-slate-200 placeholder-slate-500 outline-none focus:border-rose-500/40"
+                    />
+                  </div>
+                )}
+
+                {/* 成员穿梭多选列表 */}
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-2 space-y-1">
+                  {candidateComboItems.length === 0 ? (
+                    <div className="py-6 text-center text-slate-500 text-xs">
+                      暂无基础启动项，请先添加应用或脚本
+                    </div>
+                  ) : filteredCandidateComboItems.length === 0 ? (
+                    <div className="py-4 text-center text-slate-500 text-xs">
+                      未匹配到包含 “{comboItemSearch}” 的项目
+                    </div>
+                  ) : (
+                    filteredCandidateComboItems.map((cItem) => {
+                      const isChecked = comboFormItemIds.includes(cItem.id);
+                      const cBadge = renderTypeBadge(cItem.type);
+                      return (
+                        <div
+                          key={cItem.id}
+                          onClick={() => {
+                            setComboFormItemIds((prev) =>
+                              prev.includes(cItem.id)
+                                ? prev.filter((id) => id !== cItem.id)
+                                : [...prev, cItem.id]
+                            );
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-rose-500/15 border border-rose-500/35 text-slate-100'
+                              : 'hover:bg-white/5 border border-transparent text-slate-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                                isChecked
+                                  ? 'bg-rose-500 border-rose-400 text-white'
+                                  : 'border-white/20 bg-black/40'
+                              }`}
+                            >
+                              {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                            <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                              {cItem.icon && cItem.icon.startsWith('data:image/') ? (
+                                <img
+                                  src={cItem.icon}
+                                  alt={cItem.name}
+                                  className="w-5 h-5 object-contain rounded"
+                                />
+                              ) : (
+                                <cBadge.Icon className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </div>
+                            <span className="text-xs font-medium truncate">{cItem.name}</span>
+                          </div>
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${cBadge.className}`}
+                          >
+                            {cBadge.label}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsComboModalOpen(false);
+                    setEditingComboItem(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg font-semibold bg-rose-500/25 hover:bg-rose-500/35 text-rose-200 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.25)] transition-all tactile-btn"
+                >
+                  {editingComboItem ? '保存组合修改' : '确认创建组合'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 常规单项启动项新增/编辑模态框 ================= */}
+      {isItemModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950/95 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-semibold text-slate-100">
+                {editingItem ? '编辑启动项设置' : '添加新的启动项'}
+              </h3>
+              <button
+                onClick={() => setIsItemModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
               {/* 名称 */}
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">名称 *</label>
                 <input
                   type="text"
-                  placeholder="例如: 日常办公套餐 / 微信 / 飞书"
+                  placeholder="例如: 微信 / 飞书 / 浏览器"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
@@ -1053,7 +1416,7 @@ export const LauncherDashboard: React.FC = () => {
               {formType === 'bundle' ? (
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium flex items-center justify-between">
-                    <span>捆绑包含的应用与脚本 ({formBundleItemIds.length} 项) *</span>
+                    <span>组合包含的应用与脚本 ({formBundleItemIds.length} 项) *</span>
                     <button
                       type="button"
                       onClick={() => {
