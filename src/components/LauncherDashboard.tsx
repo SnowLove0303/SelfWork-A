@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Rocket,
   Plus,
@@ -27,13 +27,26 @@ import {
   LauncherStorageData,
   LauncherItemType,
   DEFAULT_LAUNCHER_CATEGORY_ID,
+  TelemetryLogEntry,
+  TelemetryLogLevel,
 } from '../types/launcher.ts';
+import { TelemetryPanel } from './launcher/TelemetryPanel.tsx';
 import {
   loadLauncherStorage,
   saveLauncherStorage,
   createDefaultLauncherStorage,
   LAUNCHER_STORAGE_KEY_V2,
 } from '../services/db.ts';
+
+// 格式化当前时间为 HH:mm:ss.SSS
+function formatTimestamp(): string {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
 
 // 渲染启动项类型专属小徽章
 function renderTypeBadge(type: LauncherItemType) {
@@ -129,6 +142,36 @@ export const LauncherDashboard: React.FC = () => {
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [runningItemIds, setRunningItemIds] = useState<Record<string, boolean>>({});
+
+  // 执行报文终端控制台状态 (REQ-01 & REQ-02)
+  const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(true);
+  const [logs, setLogs] = useState<TelemetryLogEntry[]>([
+    {
+      id: 'init-1',
+      timestamp: formatTimestamp(),
+      target: '系统',
+      level: 'info',
+      message: '快速启动执行报文终端已就绪，实时指令响应与脚本输出将在此呈现...',
+    },
+  ]);
+  const logCounterRef = useRef<number>(2);
+
+  // 追加结构化报文
+  const appendLog = useCallback((target: string, level: TelemetryLogLevel, message: string) => {
+    const entry: TelemetryLogEntry = {
+      id: `log-${Date.now()}-${logCounterRef.current++}`,
+      timestamp: formatTimestamp(),
+      target,
+      level,
+      message,
+    };
+    setLogs((prev) => [...prev, entry]);
+  }, []);
+
+  // 清空报文
+  const handleClearLogs = useCallback(() => {
+    setLogs([]);
+  }, []);
 
   // 从 SQLite 异步水合加载
   useEffect(() => {
@@ -275,6 +318,7 @@ export const LauncherDashboard: React.FC = () => {
   const handleLaunchItem = useCallback(
     async (item: LauncherItem): Promise<boolean> => {
       setRunningItemIds((prev) => ({ ...prev, [item.id]: true }));
+      const t0 = performance.now();
       try {
         const { invoke } = await import('@tauri-apps/api/core');
 
@@ -283,16 +327,24 @@ export const LauncherDashboard: React.FC = () => {
           const subItemIds = item.bundleItemIds || [];
           const subItems = storage.items.filter((it) => subItemIds.includes(it.id));
           if (subItems.length === 0) {
+            appendLog(item.name, 'error', `组合【${item.name}】尚未配置或未找到关联子项`);
             setFeedback({
               type: 'error',
               message: `【${item.name}】组合尚未配置或未找到关联子项`,
             });
             return false;
           }
+
+          appendLog(
+            item.name,
+            'info',
+            `正在启动组合【${item.name}】共 ${subItems.length} 个项目: ${subItems.map((s) => s.name).join(', ')}...`
+          );
           setFeedback({
             type: 'success',
             message: `正在启动【${item.name}】组合共 ${subItems.length} 个项目: ${subItems.map((s) => s.name).join(', ')}...`,
           });
+
           for (let i = 0; i < subItems.length; i++) {
             const sub = subItems[i];
             await handleLaunchItem(sub);
@@ -300,6 +352,13 @@ export const LauncherDashboard: React.FC = () => {
               await new Promise((r) => setTimeout(r, 150));
             }
           }
+
+          const duration = Math.round(performance.now() - t0);
+          appendLog(
+            item.name,
+            'success',
+            `【${item.name}】组合已全部唤起成功 (共 ${subItems.length} 项，总耗时 ${duration}ms)`
+          );
           setFeedback({
             type: 'success',
             message: `【${item.name}】组合已全部唤起成功 (共 ${subItems.length} 项)`,
@@ -309,45 +368,82 @@ export const LauncherDashboard: React.FC = () => {
 
         // 2. 如果是脚本
         if (item.type === 'script') {
+          appendLog(
+            item.name,
+            'info',
+            `下发 PowerShell 脚本指令:\n${item.target}${item.workingDir ? `\n[工作目录]: ${item.workingDir}` : ''}`
+          );
+
           const output = await invoke<string>('execute_custom_script', {
             scriptType: 'powershell',
             scriptContent: item.target,
             workingDir: item.workingDir || undefined,
           });
+
+          const duration = Math.round(performance.now() - t0);
+          appendLog(
+            item.name,
+            'success',
+            `脚本执行成功 (耗时 ${duration}ms):\n${output}`
+          );
           setFeedback({
             type: 'success',
-            message: `脚本执行成功: ${item.name} (${output.slice(0, 30)}${output.length > 30 ? '...' : ''})`,
+            message: `脚本执行成功: ${item.name}`,
           });
           return true;
         }
 
         // 3. 应用程序、快捷方式、网页或目录
+        appendLog(
+          item.name,
+          'info',
+          `下发启动目标: ${item.target}${item.args ? ` [参数]: ${item.args}` : ''}`
+        );
         await invoke<string>('launch_custom_target', {
           target: item.target,
           args: item.args || undefined,
           workingDir: item.workingDir || undefined,
         });
+
+        const duration = Math.round(performance.now() - t0);
+        appendLog(
+          item.name,
+          'success',
+          `已成功拉起: ${item.name} (耗时 ${duration}ms)`
+        );
         setFeedback({
           type: 'success',
           message: `已成功拉起: ${item.name}`,
         });
         return true;
       } catch (err: unknown) {
+        const duration = Math.round(performance.now() - t0);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        appendLog(
+          item.name,
+          'error',
+          `启动失败 (耗时 ${duration}ms):\n${errMsg}`
+        );
         setFeedback({
           type: 'error',
-          message: `启动失败: ${err instanceof Error ? err.message : String(err)}`,
+          message: `启动失败: ${errMsg}`,
         });
         return false;
       } finally {
         setRunningItemIds((prev) => ({ ...prev, [item.id]: false }));
       }
     },
-    [storage.items]
+    [storage.items, appendLog]
   );
 
   // 一键全启动 (当前分类全部项目)
   const handleBatchLaunchAll = useCallback(async () => {
     if (currentItems.length === 0) return;
+    appendLog(
+      activeCategory.name,
+      'info',
+      `正在一键唤起【${activeCategory.name}】分类下全部 ${currentItems.length} 个项目...`
+    );
     setFeedback({
       type: 'success',
       message: `正在一键唤起【${activeCategory.name}】分类下全部 ${currentItems.length} 个项目...`,
@@ -356,12 +452,22 @@ export const LauncherDashboard: React.FC = () => {
       await handleLaunchItem(item);
       await new Promise((r) => setTimeout(r, 150));
     }
-  }, [currentItems, activeCategory, handleLaunchItem]);
+    appendLog(
+      activeCategory.name,
+      'success',
+      `【${activeCategory.name}】分类下 ${currentItems.length} 个项目批次调度完成`
+    );
+  }, [currentItems, activeCategory, handleLaunchItem, appendLog]);
 
   // 启动多选模式下勾选的所选项
   const handleLaunchSelected = useCallback(async () => {
     const selectedItems = currentItems.filter((i) => selectedItemIds.includes(i.id));
     if (selectedItems.length === 0) return;
+    appendLog(
+      '多选启动',
+      'info',
+      `正在启动勾选的 ${selectedItems.length} 个项目: ${selectedItems.map((s) => s.name).join(', ')}...`
+    );
     setFeedback({
       type: 'success',
       message: `正在启动勾选的 ${selectedItems.length} 个项目...`,
@@ -370,7 +476,12 @@ export const LauncherDashboard: React.FC = () => {
       await handleLaunchItem(item);
       await new Promise((r) => setTimeout(r, 150));
     }
-  }, [currentItems, selectedItemIds, handleLaunchItem]);
+    appendLog(
+      '多选启动',
+      'success',
+      `勾选的 ${selectedItems.length} 个项目批次调度完成`
+    );
+  }, [currentItems, selectedItemIds, handleLaunchItem, appendLog]);
 
   // 多选切换勾选
   const handleToggleSelectItem = (id: string) => {
@@ -946,6 +1057,24 @@ export const LauncherDashboard: React.FC = () => {
                   <Plus className="w-3.5 h-3.5 shrink-0" />
                   <span>新建项</span>
                 </button>
+
+                {/* 专职执行报文控制台切换按钮 (REQ-01) */}
+                <button
+                  type="button"
+                  onClick={() => setIsTelemetryOpen((prev) => !prev)}
+                  title={isTelemetryOpen ? '收起执行报文面板' : '展开执行报文面板'}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
+                    isTelemetryOpen
+                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.2)]'
+                      : 'bg-white/[0.04] text-fg-muted hover:text-fg-secondary border-white/[0.08]'
+                  }`}
+                >
+                  <Terminal className="w-3.5 h-3.5 shrink-0" />
+                  <span>执行报文</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.08] text-fg-muted">
+                    {logs.length}
+                  </span>
+                </button>
               </>
             )}
           </div>
@@ -1183,6 +1312,17 @@ export const LauncherDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ================= 右侧专职执行报文控制台 (REQ-01 & REQ-02) ================= */}
+      {isTelemetryOpen && (
+        <div className="w-[380px] xl:w-[420px] shrink-0 h-full flex flex-col overflow-hidden animate-in fade-in duration-150">
+          <TelemetryPanel
+            logs={logs}
+            onClearLogs={handleClearLogs}
+            onClose={() => setIsTelemetryOpen(false)}
+          />
+        </div>
+      )}
 
       {/* ================= 专属启动组合创建与编辑模态框 (REQ-COMBO-01 & REK-COMBO-02) ================= */}
       {isComboModalOpen && (

@@ -11,15 +11,17 @@ import {
   Info,
   Clock,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { TelemetryLogEntry, TelemetryLogLevel } from '../../types/launcher.ts';
 
 interface TelemetryPanelProps {
   logs: TelemetryLogEntry[];
   onClearLogs: () => void;
+  onClose?: () => void;
 }
 
-export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLogs }) => {
+export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLogs, onClose }) => {
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const [filterLevel, setFilterLevel] = useState<'all' | TelemetryLogLevel>('all');
   const [copied, setCopied] = useState<boolean>(false);
@@ -165,6 +167,18 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
             <Trash2 className="w-3 h-3 shrink-0" />
             <span className="hidden xl:inline">清空</span>
           </button>
+
+          {/* 收起面板 */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              title="收起报文面板"
+              className="h-7 w-7 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-muted hover:text-fg-primary flex items-center justify-center tactile-btn shrink-0"
+            >
+              <X className="w-3.5 h-3.5 shrink-0" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -183,7 +197,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
                 &gt;_ TELEMETRY READY
               </p>
               <p className="text-[11px]">
-                点击左侧开关或总控下发指令，系统实时执行回显与输出将在此呈现
+                点击卡片或执行指令，系统实时执行回显与输出将在此呈现
               </p>
             </div>
           </div>
