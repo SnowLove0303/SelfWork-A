@@ -510,7 +510,18 @@ pub fn run() {
             db::db_get_all_memos,
             db::db_save_all_memos,
             db::db_get_setting,
-            db::db_set_setting
+            db::db_set_setting,
+            db::db_get_all_pages,
+            db::db_save_page,
+            db::db_delete_page,
+            db::db_get_blocks_for_page,
+            db::db_save_blocks_for_page,
+            db::db_get_all_collections,
+            db::db_save_collection,
+            db::db_delete_collection,
+            db::db_get_collection_rows,
+            db::db_save_collection_row,
+            db::db_delete_collection_row
         ])
         .run(tauri::generate_context!())
         .expect("error while running SelfWork desktop core");

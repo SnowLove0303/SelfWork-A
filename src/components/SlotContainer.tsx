@@ -4,6 +4,7 @@ import { AppearanceSettings } from '../types/settings.ts';
 import { LauncherDashboard } from './LauncherDashboard.tsx';
 import { TasksView } from './TasksView.tsx';
 import { MindMapView } from './MindMapView.tsx';
+import { DocsView } from './DocsView.tsx';
 
 interface SlotContainerProps {
   activeModule: ModuleId;
@@ -61,6 +62,8 @@ export const SlotContainer: React.FC<SlotContainerProps> = ({
             <LauncherDashboard />
           ) : activeModule === 'mindmap' ? (
             <MindMapView />
+          ) : activeModule === 'docs' ? (
+            <DocsView />
           ) : (
             <TasksView />
           )}

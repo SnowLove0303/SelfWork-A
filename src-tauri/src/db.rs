@@ -19,6 +19,59 @@ pub struct TaskItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct DocPageItem {
+    pub id: String,
+    pub title: String,
+    pub icon: Option<String>,
+    pub cover: Option<String>,
+    pub parent_id: Option<String>,
+    pub is_favorite: bool,
+    pub is_archived: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocBlockItem {
+    pub id: String,
+    pub page_id: String,
+    pub parent_id: Option<String>,
+    pub block_type: String,
+    pub content: String,
+    pub properties_json: Option<String>,
+    pub format_json: Option<String>,
+    pub sort_order: f64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DbCollectionItem {
+    pub id: String,
+    pub page_id: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub schema_json: String,
+    pub format_json: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DbCollectionRowItem {
+    pub id: String,
+    pub collection_id: String,
+    pub cells_json: String,
+    pub sort_order: f64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct MemoItem {
     pub id: String,
     pub title: Option<String>,
@@ -70,6 +123,47 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
          CREATE TABLE IF NOT EXISTS app_settings (
              key TEXT PRIMARY KEY,
              value TEXT NOT NULL,
+             updated_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS doc_pages (
+             id TEXT PRIMARY KEY,
+             title TEXT NOT NULL,
+             icon TEXT,
+             cover TEXT,
+             parent_id TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             is_favorite INTEGER NOT NULL DEFAULT 0,
+             is_archived INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE TABLE IF NOT EXISTS doc_blocks (
+             id TEXT PRIMARY KEY,
+             page_id TEXT NOT NULL,
+             parent_id TEXT,
+             block_type TEXT NOT NULL,
+             content TEXT NOT NULL,
+             properties_json TEXT,
+             format_json TEXT,
+             sort_order REAL NOT NULL,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS db_collections (
+             id TEXT PRIMARY KEY,
+             page_id TEXT,
+             name TEXT NOT NULL,
+             description TEXT,
+             schema_json TEXT NOT NULL,
+             format_json TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS db_collection_rows (
+             id TEXT PRIMARY KEY,
+             collection_id TEXT NOT NULL,
+             cells_json TEXT NOT NULL,
+             sort_order REAL NOT NULL,
+             created_at INTEGER NOT NULL,
              updated_at INTEGER NOT NULL
          );",
     )?;
@@ -232,6 +326,211 @@ pub fn save_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rus
     Ok(())
 }
 
+// ==================== 文档页面 (DocPages) CRUD ====================
+
+pub fn query_all_doc_pages(conn: &Connection) -> Result<Vec<DocPageItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, icon, cover, parent_id, is_favorite, is_archived, created_at, updated_at
+         FROM doc_pages
+         ORDER BY updated_at DESC",
+    )?;
+    let page_iter = stmt.query_map([], |row| {
+        let is_fav_int: i64 = row.get(5)?;
+        let is_arc_int: i64 = row.get(6)?;
+        Ok(DocPageItem {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            icon: row.get(2)?,
+            cover: row.get(3)?,
+            parent_id: row.get(4)?,
+            is_favorite: is_fav_int != 0,
+            is_archived: is_arc_int != 0,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    })?;
+    let mut pages = Vec::new();
+    for p in page_iter {
+        pages.push(p?);
+    }
+    Ok(pages)
+}
+
+pub fn save_doc_page_atomic(conn: &Connection, page: &DocPageItem) -> Result<(), rusqlite::Error> {
+    let is_fav: i64 = if page.is_favorite { 1 } else { 0 };
+    let is_arc: i64 = if page.is_archived { 1 } else { 0 };
+    conn.execute(
+        "INSERT INTO doc_pages (id, title, icon, cover, parent_id, is_favorite, is_archived, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            icon = excluded.icon,
+            cover = excluded.cover,
+            parent_id = excluded.parent_id,
+            is_favorite = excluded.is_favorite,
+            is_archived = excluded.is_archived,
+            updated_at = excluded.updated_at;",
+        params![page.id, page.title, page.icon, page.cover, page.parent_id, is_fav, is_arc, page.created_at, page.updated_at],
+    )?;
+    Ok(())
+}
+
+pub fn delete_doc_page_atomic(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute("DELETE FROM doc_blocks WHERE page_id = ?1;", params![id])?;
+    conn.execute("DELETE FROM doc_pages WHERE id = ?1;", params![id])?;
+    Ok(())
+}
+
+// ==================== 块级节点 (DocBlocks) CRUD ====================
+
+pub fn query_blocks_for_page(conn: &Connection, page_id: &str) -> Result<Vec<DocBlockItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, page_id, parent_id, block_type, content, properties_json, format_json, sort_order, created_at, updated_at
+         FROM doc_blocks
+         WHERE page_id = ?1
+         ORDER BY sort_order ASC, rowid ASC",
+    )?;
+    let block_iter = stmt.query_map(params![page_id], |row| {
+        Ok(DocBlockItem {
+            id: row.get(0)?,
+            page_id: row.get(1)?,
+            parent_id: row.get(2)?,
+            block_type: row.get(3)?,
+            content: row.get(4)?,
+            properties_json: row.get(5)?,
+            format_json: row.get(6)?,
+            sort_order: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
+        })
+    })?;
+    let mut blocks = Vec::new();
+    for b in block_iter {
+        blocks.push(b?);
+    }
+    Ok(blocks)
+}
+
+pub fn save_all_blocks_for_page_atomic(conn: &mut Connection, page_id: &str, blocks: &[DocBlockItem]) -> Result<(), rusqlite::Error> {
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM doc_blocks WHERE page_id = ?1;", params![page_id])?;
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO doc_blocks (id, page_id, parent_id, block_type, content, properties_json, format_json, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        )?;
+        for b in blocks {
+            stmt.execute(params![
+                b.id,
+                b.page_id,
+                b.parent_id,
+                b.block_type,
+                b.content,
+                b.properties_json,
+                b.format_json,
+                b.sort_order,
+                b.created_at,
+                b.updated_at
+            ])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+// ==================== 多维表格集合 (Collections) CRUD ====================
+
+pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, page_id, name, description, schema_json, format_json, created_at, updated_at
+         FROM db_collections
+         ORDER BY updated_at DESC",
+    )?;
+    let col_iter = stmt.query_map([], |row| {
+        Ok(DbCollectionItem {
+            id: row.get(0)?,
+            page_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            schema_json: row.get(4)?,
+            format_json: row.get(5)?,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
+        })
+    })?;
+    let mut cols = Vec::new();
+    for c in col_iter {
+        cols.push(c?);
+    }
+    Ok(cols)
+}
+
+pub fn save_collection_atomic(conn: &Connection, col: &DbCollectionItem) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO db_collections (id, page_id, name, description, schema_json, format_json, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(id) DO UPDATE SET
+            page_id = excluded.page_id,
+            name = excluded.name,
+            description = excluded.description,
+            schema_json = excluded.schema_json,
+            format_json = excluded.format_json,
+            updated_at = excluded.updated_at;",
+        params![col.id, col.page_id, col.name, col.description, col.schema_json, col.format_json, col.created_at, col.updated_at],
+    )?;
+    Ok(())
+}
+
+pub fn delete_collection_atomic(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute("DELETE FROM db_collection_rows WHERE collection_id = ?1;", params![id])?;
+    conn.execute("DELETE FROM db_collections WHERE id = ?1;", params![id])?;
+    Ok(())
+}
+
+// ==================== 多维表格记录行 (Collection Rows) CRUD ====================
+
+pub fn query_rows_for_collection(conn: &Connection, col_id: &str) -> Result<Vec<DbCollectionRowItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, collection_id, cells_json, sort_order, created_at, updated_at
+         FROM db_collection_rows
+         WHERE collection_id = ?1
+         ORDER BY sort_order ASC, rowid ASC",
+    )?;
+    let row_iter = stmt.query_map(params![col_id], |row| {
+        Ok(DbCollectionRowItem {
+            id: row.get(0)?,
+            collection_id: row.get(1)?,
+            cells_json: row.get(2)?,
+            sort_order: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })?;
+    let mut rows = Vec::new();
+    for r in row_iter {
+        rows.push(r?);
+    }
+    Ok(rows)
+}
+
+pub fn save_collection_row_atomic(conn: &Connection, r: &DbCollectionRowItem) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO db_collection_rows (id, collection_id, cells_json, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(id) DO UPDATE SET
+            cells_json = excluded.cells_json,
+            sort_order = excluded.sort_order,
+            updated_at = excluded.updated_at;",
+        params![r.id, r.collection_id, r.cells_json, r.sort_order, r.created_at, r.updated_at],
+    )?;
+    Ok(())
+}
+
+pub fn delete_collection_row_atomic(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute("DELETE FROM db_collection_rows WHERE id = ?1;", params![id])?;
+    Ok(())
+}
+
 // ==================== Tauri 异步 IPC 命令封装 ====================
 
 #[tauri::command]
@@ -294,10 +593,203 @@ pub async fn db_set_setting(key: String, value: String) -> Result<(), String> {
     .map_err(|e| format!("执行异步任务失败: {}", e))?
 }
 
+
+#[tauri::command]
+pub async fn db_get_all_pages() -> Result<Vec<DocPageItem>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let conn = get_db_connection()?;
+        query_all_doc_pages(&conn).map_err(|e| format!("查询文档页面失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_save_page(page: DocPageItem) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        save_doc_page_atomic(&conn, &page).map_err(|e| format!("保存文档页面失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_delete_page(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        delete_doc_page_atomic(&conn, &id).map_err(|e| format!("删除文档页面失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_get_blocks_for_page(page_id: String) -> Result<Vec<DocBlockItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        query_blocks_for_page(&conn, &page_id).map_err(|e| format!("查询块列表失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_save_blocks_for_page(page_id: String, blocks: Vec<DocBlockItem>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut conn = get_db_connection()?;
+        save_all_blocks_for_page_atomic(&mut conn, &page_id, &blocks).map_err(|e| format!("保存块列表失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_get_all_collections() -> Result<Vec<DbCollectionItem>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let conn = get_db_connection()?;
+        query_all_collections(&conn).map_err(|e| format!("查询多维表格失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_save_collection(collection: DbCollectionItem) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        save_collection_atomic(&conn, &collection).map_err(|e| format!("保存多维表格失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_delete_collection(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        delete_collection_atomic(&conn, &id).map_err(|e| format!("删除多维表格失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_get_collection_rows(collection_id: String) -> Result<Vec<DbCollectionRowItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        query_rows_for_collection(&conn, &collection_id).map_err(|e| format!("查询记录行失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_save_collection_row(row: DbCollectionRowItem) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        save_collection_row_atomic(&conn, &row).map_err(|e| format!("保存记录行失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_delete_collection_row(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        delete_collection_row_atomic(&conn, &id).map_err(|e| format!("删除记录行失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
 // ==================== 单元测试验证 ====================
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_doc_and_collection_crud() {
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        init_db_schema(&conn).expect("init schema");
+
+        // 1. 文档页面 CRUD 测试
+        let page = DocPageItem {
+            id: "page-1".to_string(),
+            title: "Notion 风格架构文档".to_string(),
+            icon: Some("📝".to_string()),
+            cover: None,
+            parent_id: None,
+            is_favorite: true,
+            is_archived: false,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+        save_doc_page_atomic(&conn, &page).expect("save page");
+        let pages = query_all_doc_pages(&conn).expect("query pages");
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].title, "Notion 风格架构文档");
+
+        // 2. 块级节点 CRUD 测试
+        let blocks = vec![
+            DocBlockItem {
+                id: "b-1".to_string(),
+                page_id: "page-1".to_string(),
+                parent_id: None,
+                block_type: "h1".to_string(),
+                content: "核心架构全景".to_string(),
+                properties_json: None,
+                format_json: None,
+                sort_order: 1.0,
+                created_at: 1000,
+                updated_at: 1000,
+            },
+            DocBlockItem {
+                id: "b-2".to_string(),
+                page_id: "page-1".to_string(),
+                parent_id: None,
+                block_type: "todo".to_string(),
+                content: "完成单元测试".to_string(),
+                properties_json: Some(r#"{"checked":true}"#.to_string()),
+                format_json: None,
+                sort_order: 2.0,
+                created_at: 1001,
+                updated_at: 1001,
+            },
+        ];
+        save_all_blocks_for_page_atomic(&mut conn, "page-1", &blocks).expect("save blocks");
+        let fetched_blocks = query_blocks_for_page(&conn, "page-1").expect("query blocks");
+        assert_eq!(fetched_blocks.len(), 2);
+        assert_eq!(fetched_blocks[1].block_type, "todo");
+
+        // 3. 多维表格与数据行 CRUD 测试
+        let col = DbCollectionItem {
+            id: "col-1".to_string(),
+            page_id: Some("page-1".to_string()),
+            name: "项目进度管理表".to_string(),
+            description: Some("多维属性测试".to_string()),
+            schema_json: r#"{"title":{"id":"title","name":"任务名称","type":"text"}}"#.to_string(),
+            format_json: None,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+        save_collection_atomic(&conn, &col).expect("save col");
+        assert_eq!(query_all_collections(&conn).expect("query cols").len(), 1);
+
+        let row = DbCollectionRowItem {
+            id: "row-1".to_string(),
+            collection_id: "col-1".to_string(),
+            cells_json: r#"{"title":"第一行数据"}"#.to_string(),
+            sort_order: 1.0,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+        save_collection_row_atomic(&conn, &row).expect("save row");
+        let rows = query_rows_for_collection(&conn, "col-1").expect("query rows");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].cells_json, r#"{"title":"第一行数据"}"#);
+    }
+
     use super::*;
 
     #[test]

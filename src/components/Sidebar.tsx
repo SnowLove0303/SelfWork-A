@@ -3,6 +3,7 @@ import {
   Rocket,
   CheckSquare,
   GitFork,
+  FileText,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ export const MODULES: ModuleItem[] = [
   { id: 'launcher', name: '快速启动', shortDesc: '本地应用调度', iconName: 'Rocket', category: 'workspace' },
   { id: 'tasks', name: '待办清单', shortDesc: '任务管理', iconName: 'CheckSquare', category: 'workspace' },
   { id: 'mindmap', name: '思维导图', shortDesc: '灵感脑图构思', iconName: 'GitFork', category: 'workspace' },
+  { id: 'docs', name: '文档表格', shortDesc: '知识库与多维表', iconName: 'FileText', category: 'workspace' },
 ];
 
 /**
@@ -39,6 +41,7 @@ const renderIcon = (name: string, className: string): React.JSX.Element => {
     case 'Rocket': return <Rocket className={className} />;
     case 'CheckSquare': return <CheckSquare className={className} />;
     case 'GitFork': return <GitFork className={className} />;
+    case 'FileText': return <FileText className={className} />;
     default: return <Rocket className={className} />;
   }
 };
