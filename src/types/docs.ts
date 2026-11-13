@@ -25,12 +25,13 @@ export interface DocBlock {
 }
 
 // 分区类型定义 (Notion Partition System)
-export type PartitionType = 'private' | 'favorite' | 'workspace';
+export type PartitionType = 'private' | 'favorite' | 'recent' | 'workspace';
 
 export interface DocPartition {
   id: string;
   name: string;
   type: PartitionType;
+  parentId?: string | null;
   sortOrder: number;
   isCollapsed: boolean;
   createdAt: number;
@@ -98,6 +99,7 @@ export interface DbCollection {
   format?: {
     tableProperties?: Array<{ property: string; width: number; visible: boolean }>;
   };
+  isFavorite?: boolean;
   createdAt: number;
   updatedAt: number;
 }

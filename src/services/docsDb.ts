@@ -35,18 +35,18 @@ export const INITIAL_PARTITIONS: DocPartition[] = [
     updatedAt: Date.now() - 86400000,
   },
   {
-    id: 'part_favorite',
-    name: '最爱',
-    type: 'favorite',
+    id: 'part_recent',
+    name: '最近',
+    type: 'recent',
     sortOrder: 2,
     isCollapsed: false,
     createdAt: Date.now() - 86400000,
     updatedAt: Date.now() - 86400000,
   },
   {
-    id: 'part_workspace',
-    name: 'Jr Forever 的工作空间 总部',
-    type: 'workspace',
+    id: 'part_favorite',
+    name: '收藏',
+    type: 'favorite',
     sortOrder: 3,
     isCollapsed: false,
     createdAt: Date.now() - 86400000,
@@ -347,33 +347,75 @@ export const INITIAL_DOC_PAGES: DocPage[] = [
 
 // ==================== 分区服务 (Partitions) ====================
 
+function normalizePartitions(raw: any[]): DocPartition[] {
+  const list: DocPartition[] = raw.map((p) => ({
+    id: p.id,
+    name: p.name,
+    type: p.partitionType || p.type || 'private',
+    parentId: p.parentId || null,
+    sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : 1,
+    isCollapsed: Boolean(p.isCollapsed),
+    createdAt: p.createdAt || Date.now(),
+    updatedAt: p.updatedAt || Date.now(),
+  }));
+
+  // 保证三大核心模块根节点完备存在 (私人/最近/收藏)，过滤旧的假工作空间
+  const filtered = list.filter((p) => p.id !== 'part_workspace');
+  for (const defaultP of INITIAL_PARTITIONS) {
+    const exist = filtered.find((p) => p.id === defaultP.id);
+    if (!exist) {
+      filtered.push(defaultP);
+    } else {
+      // 纠正名称 (例如旧的'最爱'升级为'收藏')
+      exist.name = defaultP.name;
+      exist.type = defaultP.type;
+    }
+  }
+  return filtered.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
 export async function loadDocPartitions(): Promise<DocPartition[]> {
   try {
     const raw = await tauriInvoke<any[]>('db_get_all_partitions');
     if (raw && raw.length > 0) {
-      localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(raw));
-      return raw;
+      const normalized = normalizePartitions(raw);
+      localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
     }
 
     const saved = localStorage.getItem(DOC_PARTITIONS_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = normalizePartitions(JSON.parse(saved));
+      return parsed;
+    }
 
-    // 播种默认分区
+    // 首次播种三大默认根分区
     for (const p of INITIAL_PARTITIONS) {
-      await tauriInvoke('db_save_partition', { partition: p });
+      await saveDocPartition(p);
     }
     localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(INITIAL_PARTITIONS));
     return INITIAL_PARTITIONS;
   } catch (err) {
     const saved = localStorage.getItem(DOC_PARTITIONS_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizePartitions(JSON.parse(saved));
     return INITIAL_PARTITIONS;
   }
 }
 
 export async function saveDocPartition(partition: DocPartition): Promise<void> {
+  const payload = {
+    id: partition.id,
+    name: partition.name,
+    partitionType: partition.type,
+    parentId: partition.parentId || null,
+    sortOrder: partition.sortOrder,
+    isCollapsed: partition.isCollapsed,
+    createdAt: partition.createdAt,
+    updatedAt: partition.updatedAt,
+  };
+
   try {
-    await tauriInvoke('db_save_partition', { partition });
+    await tauriInvoke('db_save_partition', { partition: payload });
   } catch (err) {
     console.warn('[DocPartition] Tauri IPC save failed, using fallback', err);
   }
@@ -395,6 +437,21 @@ export async function deleteDocPartition(id: string): Promise<void> {
   }
   const partitions = (await loadDocPartitions()).filter((p) => p.id !== id);
   localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(partitions));
+}
+
+export async function createSubPartition(parentId: string, name: string): Promise<DocPartition> {
+  const sub: DocPartition = {
+    id: `subpart_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    name: name.trim() || '未命名分区',
+    type: 'private',
+    parentId,
+    sortOrder: Date.now(),
+    isCollapsed: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  await saveDocPartition(sub);
+  return sub;
 }
 
 // ==================== 文档页面服务 (DocPages) ====================
@@ -566,6 +623,7 @@ export async function loadDbCollections(): Promise<DbCollection[]> {
         description: c.description,
         schema: typeof c.schemaJson === 'string' ? JSON.parse(c.schemaJson) : c.schemaJson,
         format: c.formatJson ? JSON.parse(c.formatJson) : undefined,
+        isFavorite: Boolean(c.isFavorite),
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
       }));
@@ -600,6 +658,7 @@ export async function saveDbCollection(col: DbCollection): Promise<void> {
     description: col.description || null,
     schemaJson: JSON.stringify(col.schema),
     formatJson: col.format ? JSON.stringify(col.format) : null,
+    isFavorite: Boolean(col.isFavorite),
     createdAt: col.createdAt,
     updatedAt: col.updatedAt,
   };

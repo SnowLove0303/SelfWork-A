@@ -22,7 +22,8 @@ pub struct TaskItem {
 pub struct DocPartitionItem {
     pub id: String,
     pub name: String,
-    pub partition_type: String, // "private" | "favorite" | "workspace"
+    pub partition_type: String, // "private" | "favorite" | "recent" | "workspace"
+    pub parent_id: Option<String>,
     pub sort_order: f64,
     pub is_collapsed: bool,
     pub created_at: i64,
@@ -71,6 +72,7 @@ pub struct DbCollectionItem {
     pub description: Option<String>,
     pub schema_json: String,
     pub format_json: Option<String>,
+    pub is_favorite: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -145,6 +147,7 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
              id TEXT PRIMARY KEY,
              name TEXT NOT NULL,
              partition_type TEXT NOT NULL,
+             parent_id TEXT,
              sort_order REAL NOT NULL,
              is_collapsed INTEGER NOT NULL DEFAULT 0,
              created_at INTEGER NOT NULL,
@@ -184,6 +187,7 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
              description TEXT,
              schema_json TEXT NOT NULL,
              format_json TEXT,
+             is_favorite INTEGER NOT NULL DEFAULT 0,
              created_at INTEGER NOT NULL,
              updated_at INTEGER NOT NULL
          );
@@ -201,6 +205,8 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
     let _ = conn.execute("ALTER TABLE doc_pages ADD COLUMN collection_id TEXT;", []);
     let _ = conn.execute("ALTER TABLE doc_pages ADD COLUMN properties_json TEXT;", []);
     let _ = conn.execute("ALTER TABLE db_collections ADD COLUMN partition_id TEXT DEFAULT 'private';", []);
+    let _ = conn.execute("ALTER TABLE doc_partitions ADD COLUMN parent_id TEXT;", []);
+    let _ = conn.execute("ALTER TABLE db_collections ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", []);
     Ok(())
 }
 
@@ -364,7 +370,7 @@ pub fn save_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rus
 
 pub fn query_all_doc_partitions(conn: &Connection) -> Result<Vec<DocPartitionItem>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, partition_type, sort_order, is_collapsed, created_at, updated_at
+        "SELECT id, name, partition_type, sort_order, is_collapsed, created_at, updated_at, parent_id
          FROM doc_partitions
          ORDER BY sort_order ASC, created_at ASC",
     )?;
@@ -378,6 +384,7 @@ pub fn query_all_doc_partitions(conn: &Connection) -> Result<Vec<DocPartitionIte
             is_collapsed: is_col_int != 0,
             created_at: row.get(5)?,
             updated_at: row.get(6)?,
+            parent_id: row.get(7)?,
         })
     })?;
     let mut partitions = Vec::new();
@@ -390,15 +397,16 @@ pub fn query_all_doc_partitions(conn: &Connection) -> Result<Vec<DocPartitionIte
 pub fn save_doc_partition_atomic(conn: &Connection, p: &DocPartitionItem) -> Result<(), rusqlite::Error> {
     let is_col: i64 = if p.is_collapsed { 1 } else { 0 };
     conn.execute(
-        "INSERT INTO doc_partitions (id, name, partition_type, sort_order, is_collapsed, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO doc_partitions (id, name, partition_type, sort_order, is_collapsed, created_at, updated_at, parent_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             partition_type = excluded.partition_type,
             sort_order = excluded.sort_order,
             is_collapsed = excluded.is_collapsed,
-            updated_at = excluded.updated_at;",
-        params![p.id, p.name, p.partition_type, p.sort_order, is_col, p.created_at, p.updated_at],
+            updated_at = excluded.updated_at,
+            parent_id = excluded.parent_id;",
+        params![p.id, p.name, p.partition_type, p.sort_order, is_col, p.created_at, p.updated_at, p.parent_id],
     )?;
     Ok(())
 }
@@ -530,11 +538,12 @@ pub fn save_all_blocks_for_page_atomic(conn: &mut Connection, page_id: &str, blo
 
 pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, page_id, name, description, schema_json, format_json, created_at, updated_at, partition_id
+        "SELECT id, page_id, name, description, schema_json, format_json, created_at, updated_at, partition_id, is_favorite
          FROM db_collections
          ORDER BY updated_at DESC",
     )?;
     let col_iter = stmt.query_map([], |row| {
+        let is_fav_int: i64 = row.get(9).unwrap_or(0);
         Ok(DbCollectionItem {
             id: row.get(0)?,
             page_id: row.get(1)?,
@@ -545,6 +554,7 @@ pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>,
             created_at: row.get(6)?,
             updated_at: row.get(7)?,
             partition_id: row.get(8)?,
+            is_favorite: is_fav_int != 0,
         })
     })?;
     let mut cols = Vec::new();
@@ -555,9 +565,10 @@ pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>,
 }
 
 pub fn save_collection_atomic(conn: &Connection, col: &DbCollectionItem) -> Result<(), rusqlite::Error> {
+    let is_fav: i64 = if col.is_favorite { 1 } else { 0 };
     conn.execute(
-        "INSERT INTO db_collections (id, page_id, name, description, schema_json, format_json, created_at, updated_at, partition_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO db_collections (id, page_id, name, description, schema_json, format_json, created_at, updated_at, partition_id, is_favorite)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(id) DO UPDATE SET
             page_id = excluded.page_id,
             name = excluded.name,
@@ -565,8 +576,9 @@ pub fn save_collection_atomic(conn: &Connection, col: &DbCollectionItem) -> Resu
             schema_json = excluded.schema_json,
             format_json = excluded.format_json,
             updated_at = excluded.updated_at,
-            partition_id = excluded.partition_id;",
-        params![col.id, col.page_id, col.name, col.description, col.schema_json, col.format_json, col.created_at, col.updated_at, col.partition_id],
+            partition_id = excluded.partition_id,
+            is_favorite = excluded.is_favorite;",
+        params![col.id, col.page_id, col.name, col.description, col.schema_json, col.format_json, col.created_at, col.updated_at, col.partition_id, is_fav],
     )?;
     Ok(())
 }
@@ -837,6 +849,7 @@ mod tests {
             id: "part-private".to_string(),
             name: "私人空间".to_string(),
             partition_type: "private".to_string(),
+            parent_id: None,
             sort_order: 1.0,
             is_collapsed: false,
             created_at: 1000,
@@ -917,6 +930,7 @@ mod tests {
             description: Some("多维属性测试".to_string()),
             schema_json: r#"{"title":{"id":"title","name":"任务名称","type":"text"}}"#.to_string(),
             format_json: None,
+            is_favorite: true,
             created_at: 1000,
             updated_at: 1000,
         };
