@@ -11,7 +11,7 @@ import {
   loadDbCollections,
   saveDbCollection,
   deleteDbCollection,
-  INITIAL_COLLECTION_SCHEMA,
+  DEFAULT_BLANK_COLLECTION_SCHEMA,
 } from '../services/docsDb.ts';
 import { BlockEditor } from './docs/editor/BlockEditor.tsx';
 import { TableDatabaseView } from './docs/database/TableDatabaseView.tsx';
@@ -170,7 +170,7 @@ export const DocsView: React.FC = () => {
       id: 'col_' + Date.now(),
       partitionId,
       name: '未命名笔记数据库',
-      schema: { ...INITIAL_COLLECTION_SCHEMA },
+      schema: { ...DEFAULT_BLANK_COLLECTION_SCHEMA },
       views: [{ id: 'v_' + Date.now(), name: '所有笔记', type: 'table' }],
       isFavorite: false,
       createdAt: Date.now(),

@@ -57,70 +57,18 @@ export const INITIAL_PARTITIONS: DocPartition[] = [
   },
 ];
 
-// ==================== PLM 流程调研 多维数据库种子 (完全对齐用户 Notion 截图 1 & 3) ====================
+// ==================== 默认空白多维数据库表头 (通用单主列) ====================
 
-export const PLM_COLLECTION_SCHEMA: CollectionSchemaMap = {
+export const DEFAULT_BLANK_COLLECTION_SCHEMA: CollectionSchemaMap = {
   col_title: {
     id: 'col_title',
-    name: '调查问题',
+    name: '名称',
     type: 'text',
-    width: 320,
+    width: 280,
   },
-  col_seq: {
-    id: 'col_seq',
-    name: '序号',
-    type: 'number',
-    width: 80,
-  },
-  col_module: {
-    id: 'col_module',
-    name: '模块',
-    type: 'select',
-    width: 140,
-    options: [
-      { id: 'opt_u2', label: 'U2 项目管理', color: 'amber' },
-      { id: 'opt_u3', label: 'U3 研发管理', color: 'sky' },
-      { id: 'opt_u1', label: 'U1 需求管理', color: 'purple' },
-    ],
-  },
-  col_topic: {
-    id: 'col_topic',
-    name: '调查专题',
-    type: 'select',
-    width: 220,
-    options: [
-      { id: 't_u2_01', label: 'U2-01 项目启动与负责人管理', color: 'amber' },
-      { id: 't_u2_02', label: 'U2-02 研发项目计划管理', color: 'emerald' },
-      { id: 't_u2_03', label: 'U2-03 项目任务分解与责任分配管理', color: 'amber' },
-      { id: 't_u2_04', label: 'U2-04 项目任务延期与计划偏差管理', color: 'sky' },
-      { id: 't_u2_05', label: 'U2-05 项目生命周期与阶段流转管理', color: 'rose' },
-      { id: 't_u2_06', label: 'U2-06 项目目标与范围变更管理', color: 'amber' },
-      { id: 't_u2_07', label: 'U2-07 跨项目资源协调与优先级管理', color: 'sky' },
-      { id: 't_u2_08', label: 'U2-08 研发项目暂停与恢复管理', color: 'rose' },
-      { id: 't_u2_09', label: 'U2-09 研发项目正常结项管理', color: 'emerald' },
-    ],
-  },
-  col_status: {
-    id: 'col_status',
-    name: '确认状态',
-    type: 'status',
-    width: 130,
-    options: [
-      { id: 'st_partial', label: '部分确认', color: 'amber' },
-      { id: 'st_confirmed', label: '已确认', color: 'emerald' },
-      { id: 'st_pending', label: '待调研', color: 'slate' },
-    ],
-  },
-  col_kw1: { id: 'col_kw1', name: '关键词1', type: 'text', width: 120 },
-  col_kw2: { id: 'col_kw2', name: '关键词2', type: 'text', width: 120 },
-  col_kw3: { id: 'col_kw3', name: '关键词3', type: 'text', width: 120 },
-  col_kw4: { id: 'col_kw4', name: '关键词4', type: 'text', width: 120 },
-  col_kw5: { id: 'col_kw5', name: '关键词5', type: 'text', width: 120 },
-  col_kw6: { id: 'col_kw6', name: '关键词6', type: 'text', width: 120 },
-  col_notes: { id: 'col_notes', name: '待核实事项', type: 'text', width: 260 },
 };
 
-export const INITIAL_COLLECTION_SCHEMA = PLM_COLLECTION_SCHEMA;
+export const INITIAL_COLLECTION_SCHEMA = DEFAULT_BLANK_COLLECTION_SCHEMA;
 
 export const INITIAL_COLLECTIONS: DbCollection[] = [];
 export const INITIAL_COLLECTION_ROWS: DbCollectionRow[] = [];
