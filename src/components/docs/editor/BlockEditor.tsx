@@ -4,9 +4,6 @@ import { BlockItem } from './BlockItem.tsx';
 import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
 import {
   FileText,
-  Heading1,
-  CheckSquare,
-  Code,
   ListTree,
 } from 'lucide-react';
 
@@ -33,7 +30,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [, setLoading] = useState(true);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showOutline, setShowOutline] = useState(true);
+  const [showOutline] = useState(true);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // 1. 加载块流
@@ -187,59 +184,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0a0d14] text-slate-100 overflow-hidden select-text">
-      {/* 顶部状态与快速插块工具栏 (49px 高度对齐基准线) */}
+      {/* 顶部状态与面包屑栏 (49px 高度对齐基准线，清理冗余右上角按钮) */}
       <div className="h-[49px] border-b border-white/5 px-6 flex items-center justify-between bg-black/20 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <FileText size={14} className="text-sky-400" />
           <span className="truncate font-medium text-slate-200">{page.title || '无标题文档'}</span>
           <span className="text-slate-600">·</span>
           <span className="text-[11px] text-slate-500">{blocks.length} 个块</span>
-        </div>
-
-        {/* 快捷操作条：大纲切换 + 块类型插入 */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setShowOutline(!showOutline)}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-              showOutline
-                ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white'
-            }`}
-            title={showOutline ? '隐藏大纲目录' : '显示大纲目录'}
-          >
-            <ListTree size={13} />
-            <span>目录</span>
-            {outlineHeadings.length > 0 && (
-              <span className="text-[10px] font-mono opacity-80">({outlineHeadings.length})</span>
-            )}
-          </button>
-
-          <div className="w-[1px] h-3.5 bg-white/10 mx-1" />
-
-          <button
-            onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'h1')}
-            className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded text-xs transition-colors"
-            title="插入一级标题"
-          >
-            <Heading1 size={13} />
-            <span>标题</span>
-          </button>
-          <button
-            onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'todo')}
-            className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded text-xs transition-colors"
-            title="插入待办清单"
-          >
-            <CheckSquare size={13} />
-            <span>待办</span>
-          </button>
-          <button
-            onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'code')}
-            className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded text-xs transition-colors"
-            title="插入代码块"
-          >
-            <Code size={13} />
-            <span>代码</span>
-          </button>
         </div>
       </div>
 
