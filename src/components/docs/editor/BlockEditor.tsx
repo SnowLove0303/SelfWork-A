@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DocPage, DocBlock, BlockType } from '../../../types/docs.ts';
 import { BlockItem } from './BlockItem.tsx';
 import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
@@ -7,6 +7,7 @@ import {
   Heading1,
   CheckSquare,
   Code,
+  ListTree,
 } from 'lucide-react';
 
 interface BlockEditorProps {
@@ -17,6 +18,12 @@ interface BlockEditorProps {
 
 const EMOJI_OPTIONS = ['📝', '🚀', '🎯', '💡', '📌', '⚡', '📊', '🔥', '💻', '✨'];
 
+interface OutlineItem {
+  id: string;
+  type: BlockType;
+  text: string;
+}
+
 export const BlockEditor: React.FC<BlockEditorProps> = ({
   page,
   onUpdatePageTitle,
@@ -26,6 +33,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [, setLoading] = useState(true);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showOutline, setShowOutline] = useState(true);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // 1. 加载块流
@@ -64,7 +72,27 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     };
   }, [page.id]);
 
-  // 2. 更新块内容与属性
+  // 2. 动态自动提取文档标题大纲索引 (Notion / 飞书风格)
+  const outlineHeadings = useMemo<OutlineItem[]>(() => {
+    return blocks
+      .filter((b) => ['h1', 'h2', 'h3'].includes(b.blockType) && b.content.trim() !== '')
+      .map((b) => ({
+        id: b.id,
+        type: b.blockType,
+        text: b.content.trim(),
+      }));
+  }, [blocks]);
+
+  // 3. 点击大纲平滑滚动至对应锚点
+  const handleScrollToHeading = (blockId: string) => {
+    const el = document.getElementById(`block-${blockId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setFocusedBlockId(blockId);
+    }
+  };
+
+  // 4. 更新块内容与属性
   const handleUpdateBlock = async (
     blockId: string,
     content: string,
@@ -85,7 +113,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     await saveDocBlocks(page.id, nextBlocks);
   };
 
-  // 3. 在指定块下方插入新块
+  // 5. 在指定块下方插入新块
   const handleInsertBelow = async (currentBlockId: string, blockType: BlockType = 'p') => {
     const idx = blocks.findIndex((b) => b.id === currentBlockId);
     const newBlockId = 'b_' + Date.now();
@@ -112,7 +140,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     await saveDocBlocks(page.id, nextBlocks);
   };
 
-  // 4. 删除块
+  // 6. 删除块
   const handleDeleteBlock = async (blockId: string) => {
     if (blocks.length <= 1) {
       // 保持至少一个空块
@@ -142,7 +170,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     await saveDocBlocks(page.id, nextBlocks);
   };
 
-  // 5. 焦点移动
+  // 7. 焦点移动
   const handleFocusPrev = (currentBlockId: string) => {
     const idx = blocks.findIndex((b) => b.id === currentBlockId);
     if (idx > 0 && blocks[idx - 1]) {
@@ -168,8 +196,26 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <span className="text-[11px] text-slate-500">{blocks.length} 个块</span>
         </div>
 
-        {/* 快速快捷插入条 */}
+        {/* 快捷操作条：大纲切换 + 块类型插入 */}
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setShowOutline(!showOutline)}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+              showOutline
+                ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white'
+            }`}
+            title={showOutline ? '隐藏大纲目录' : '显示大纲目录'}
+          >
+            <ListTree size={13} />
+            <span>目录</span>
+            {outlineHeadings.length > 0 && (
+              <span className="text-[10px] font-mono opacity-80">({outlineHeadings.length})</span>
+            )}
+          </button>
+
+          <div className="w-[1px] h-3.5 bg-white/10 mx-1" />
+
           <button
             onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'h1')}
             className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded text-xs transition-colors"
@@ -197,72 +243,122 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       </div>
 
-      {/* 页面内容区域 (居中优雅版心) */}
-      <div className="flex-1 overflow-y-auto px-6 py-8">
-        <div className="max-w-3xl mx-auto space-y-4">
-          {/* 文档图标与大标题 */}
-          <div className="space-y-3 mb-6">
-            <div className="relative inline-block">
-              <button
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="text-3xl hover:bg-white/5 p-2 rounded-xl transition-colors cursor-pointer select-none"
-                title="更换图标"
-              >
-                {page.icon || '📝'}
-              </button>
-
-              {showEmojiPicker && (
-                <div className="absolute left-0 top-full mt-1 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex gap-1.5 animate-in fade-in duration-100">
-                  {EMOJI_OPTIONS.map((emo) => (
-                    <button
-                      key={emo}
-                      onClick={() => {
-                        onUpdatePageIcon?.(emo);
-                        setShowEmojiPicker(false);
-                      }}
-                      className="text-xl p-1.5 hover:bg-white/10 rounded-lg transition-transform hover:scale-110"
-                    >
-                      {emo}
-                    </button>
-                  ))}
-                </div>
-              )}
+      {/* 主工作区：左侧大纲目录栏 + 右侧正文滚动区 */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* 左侧大纲目录栏 (响应用户红框标注区域：自动提取标题形成飞书/Notion目录树) */}
+        {showOutline && (
+          <div className="w-56 lg:w-64 border-r border-white/5 bg-black/10 flex flex-col shrink-0 overflow-y-auto p-4 select-none animate-in fade-in duration-150">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-medium pb-3 border-b border-white/5 mb-3">
+              <div className="flex items-center gap-1.5">
+                <ListTree size={14} className="text-sky-400" />
+                <span className="text-slate-200 font-semibold tracking-wide">目录大纲</span>
+                <span className="text-[11px] text-slate-500 font-mono">({outlineHeadings.length})</span>
+              </div>
             </div>
 
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={page.title}
-              onChange={(e) => onUpdatePageTitle(e.target.value)}
-              placeholder="无标题文档"
-              className="w-full text-3xl font-bold text-white bg-transparent border-none outline-none placeholder-slate-600 leading-tight"
-            />
+            {outlineHeadings.length === 0 ? (
+              <div className="text-[11px] text-slate-600 italic py-2 leading-relaxed">
+                暂无标题内容
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {outlineHeadings.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleScrollToHeading(item.id)}
+                    className={`w-full text-left text-xs py-1.5 px-2 rounded hover:bg-white/5 transition-colors truncate block flex items-center gap-1.5 ${
+                      item.type === 'h1'
+                        ? 'text-slate-200 font-medium'
+                        : item.type === 'h2'
+                        ? 'text-slate-400 pl-4 text-[11px]'
+                        : 'text-slate-500 pl-7 text-[11px]'
+                    }`}
+                    title={item.text}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        item.type === 'h1'
+                          ? 'bg-sky-400'
+                          : item.type === 'h2'
+                          ? 'bg-indigo-400/70'
+                          : 'bg-slate-500/50'
+                      }`}
+                    />
+                    <span className="truncate">{item.text}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+        )}
 
-          {/* 块流渲染 */}
-          <div className="space-y-0.5 min-h-[400px]">
-            {blocks.map((block) => (
-              <BlockItem
-                key={block.id}
-                block={block}
-                autoFocus={focusedBlockId === block.id}
-                onUpdate={(content, blockType, properties) =>
-                  handleUpdateBlock(block.id, content, blockType, properties)
-                }
-                onDelete={() => handleDeleteBlock(block.id)}
-                onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
-                onFocusPrev={() => handleFocusPrev(block.id)}
-                onFocusNext={() => handleFocusNext(block.id)}
+        {/* 页面内容正文区域 (版心扩展为 max-w-4xl xl:max-w-5xl，彻底解决全屏最大化下的空旷大面积留白) */}
+        <div className="flex-1 overflow-y-auto px-8 py-8 min-w-0">
+          <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-4">
+            {/* 文档图标与大标题 */}
+            <div className="space-y-3 mb-6">
+              <div className="relative inline-block">
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="text-3xl hover:bg-white/5 p-2 rounded-xl transition-colors cursor-pointer select-none"
+                  title="更换图标"
+                >
+                  {page.icon || '📝'}
+                </button>
+
+                {showEmojiPicker && (
+                  <div className="absolute left-0 top-full mt-1 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex gap-1.5 animate-in fade-in duration-100">
+                    {EMOJI_OPTIONS.map((emo) => (
+                      <button
+                        key={emo}
+                        onClick={() => {
+                          onUpdatePageIcon?.(emo);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="text-xl p-1.5 hover:bg-white/10 rounded-lg transition-transform hover:scale-110"
+                      >
+                        {emo}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={page.title}
+                onChange={(e) => onUpdatePageTitle(e.target.value)}
+                placeholder="无标题文档"
+                className="w-full text-3xl font-bold text-white bg-transparent border-none outline-none placeholder-slate-600 leading-tight"
               />
-            ))}
-          </div>
+            </div>
 
-          {/* 底部点击空白插入块 */}
-          <div
-            onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'p')}
-            className="py-12 cursor-text flex items-center justify-center text-xs text-slate-600 hover:text-slate-400 transition-colors"
-          >
-            <span>+ 点击空白处继续输入</span>
+            {/* 块流渲染 */}
+            <div className="space-y-0.5 min-h-[400px]">
+              {blocks.map((block) => (
+                <BlockItem
+                  key={block.id}
+                  block={block}
+                  autoFocus={focusedBlockId === block.id}
+                  onUpdate={(content, blockType, properties) =>
+                    handleUpdateBlock(block.id, content, blockType, properties)
+                  }
+                  onDelete={() => handleDeleteBlock(block.id)}
+                  onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
+                  onFocusPrev={() => handleFocusPrev(block.id)}
+                  onFocusNext={() => handleFocusNext(block.id)}
+                />
+              ))}
+            </div>
+
+            {/* 底部点击空白插入块 */}
+            <div
+              onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'p')}
+              className="py-12 cursor-text flex items-center justify-center text-xs text-slate-600 hover:text-slate-400 transition-colors"
+            >
+              <span>+ 点击空白处继续输入</span>
+            </div>
           </div>
         </div>
       </div>

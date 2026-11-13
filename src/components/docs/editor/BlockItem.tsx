@@ -178,11 +178,11 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 分隔线特殊渲染
   if (block.blockType === 'divider') {
     return (
-      <div className="group relative flex items-center py-2 my-1">
-        <div className="w-8 shrink-0 flex items-center justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div id={`block-${block.id}`} className="group relative flex items-center py-2 my-1">
+        <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
           <button
             onClick={onDelete}
-            className="p-1 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
             title="删除分隔线"
           >
             <Trash2 size={12} />
@@ -196,11 +196,11 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 表格嵌入卡片特殊渲染
   if (block.blockType === 'table') {
     return (
-      <div className="group relative flex items-start py-2 my-1">
-        <div className="w-8 shrink-0 flex items-center justify-end pr-2 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div id={`block-${block.id}`} className="group relative flex items-start py-2 my-1">
+        <div className="absolute -left-8 top-2 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
           <button
             onClick={onDelete}
-            className="p-1 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
             title="删除此块"
           >
             <Trash2 size={12} />
@@ -222,9 +222,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const isChecked = Boolean(block.properties?.checked);
 
   return (
-    <div className="group relative flex items-start py-0.5 my-0.5">
-      {/* 悬浮操作侧柄 (Grip & Actions) */}
-      <div className="w-8 shrink-0 flex items-center justify-end pr-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity select-none">
+    <div id={`block-${block.id}`} className="group relative flex items-start py-0.5 my-0.5">
+      {/* 悬浮操作侧柄：外挂绝对定位，绝对不占用正文水平流，实现正文起点与标题 100% 垂直向左对齐 */}
+      <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">
         <button
           onClick={() => onInsertBelow('p')}
           className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
