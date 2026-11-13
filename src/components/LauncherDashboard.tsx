@@ -678,6 +678,43 @@ export const LauncherDashboard: React.FC = () => {
     }
   };
 
+  // 智能拉起 Windows 系统资源管理器选择文件或目录 (REQ-LAUNCHER-NATIVE-PICKER-01)
+  const handlePickFile = async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const isFolder = formType === 'folder';
+      const pickedPath = await invoke<string | null>('pick_launcher_file', {
+        isFolder,
+      });
+
+      if (!pickedPath) return;
+
+      setFormTarget(pickedPath);
+
+      // 智能提取文件名（去除路径与扩展名）作为推荐默认名称
+      const normalized = pickedPath.replace(/\\/g, '/');
+      const baseName = normalized.split('/').pop() || '';
+      const dotIndex = baseName.lastIndexOf('.');
+      const pureName = dotIndex > 0 ? baseName.slice(0, dotIndex) : baseName;
+
+      if (!formName.trim()) {
+        setFormName(pureName);
+      }
+
+      // 依据扩展名智能自动纠偏类型
+      const ext = dotIndex > 0 ? baseName.slice(dotIndex + 1).toLowerCase() : '';
+      if (['exe', 'lnk'].includes(ext)) {
+        setFormType('app');
+      } else if (['bat', 'cmd', 'ps1'].includes(ext)) {
+        setFormType('script');
+      } else if (isFolder) {
+        setFormType('folder');
+      }
+    } catch (err) {
+      console.error('Failed to pick launcher file:', err);
+    }
+  };
+
   const handleSaveItem = async () => {
     const trimmedName = formName.trim();
     const trimmedTarget = formTarget.trim();
@@ -1518,23 +1555,11 @@ export const LauncherDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-3.5 text-xs">
-              {/* 名称 */}
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">名称 *</label>
-                <input
-                  type="text"
-                  placeholder="例如: 微信 / 飞书 / 浏览器"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                />
-              </div>
-
               {/* 启动类型选择器 */}
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">类型 *</label>
                 <div className="grid grid-cols-5 gap-1 bg-black/30 p-1 rounded-lg border border-white/[0.06]">
-                  {(['app', 'bundle', 'script', 'url', 'folder'] as LauncherItemType[]).map((t) => {
+                  {(['app', 'url', 'folder', 'script', 'bundle'] as LauncherItemType[]).map((t) => {
                     const b = renderTypeBadge(t);
                     return (
                       <button
@@ -1555,8 +1580,49 @@ export const LauncherDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 动态内容区：如果是 bundle 类型，展示包含子项复选列表；否则展示目标路径 */}
-              {formType === 'bundle' ? (
+              {/* 动态录入区：针对网页仅需 URL 与名称；针对本地程序/文件夹提供一键拉起资源管理器 */}
+              {formType === 'url' ? (
+                <>
+                  {/* 目标网址 */}
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">目标网址 (URL) *</label>
+                    <input
+                      type="text"
+                      placeholder="例如: https://github.com 或 https://www.bilibili.com"
+                      value={formTarget}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormTarget(val);
+                        if (!formName.trim() && val.includes('://')) {
+                          try {
+                            const urlObj = new URL(val);
+                            const host = urlObj.hostname.replace(/^www\./, '');
+                            const domainMain = host.split('.')[0];
+                            if (domainMain) {
+                              setFormName(domainMain.charAt(0).toUpperCase() + domainMain.slice(1));
+                            }
+                          } catch {
+                            // ignore
+                          }
+                        }
+                      }}
+                      className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 font-mono"
+                    />
+                  </div>
+
+                  {/* 网页名称 */}
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">网页名称 *</label>
+                    <input
+                      type="text"
+                      placeholder="例如: GitHub / 百度 / 内网系统"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                    />
+                  </div>
+                </>
+              ) : formType === 'bundle' ? (
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium flex items-center justify-between">
                     <span>组合包含的应用与脚本 ({formBundleItemIds.length} 项) *</span>
@@ -1632,45 +1698,58 @@ export const LauncherDashboard: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">
-                    {formType === 'script'
-                      ? 'PowerShell 脚本指令 *'
-                      : formType === 'url'
-                      ? '目标网址 (URL) *'
-                      : formType === 'folder'
-                      ? '文件夹绝对路径 *'
-                      : '应用程序路径 / .lnk 快捷方式 / 命令 *'}
-                  </label>
-                  {formType === 'script' ? (
-                    <textarea
-                      rows={3}
-                      placeholder="例如: pnpm dev 或 Get-Process"
-                      value={formTarget}
-                      onChange={(e) => setFormTarget(e.target.value)}
-                      className="w-full p-2.5 rounded-lg bg-black/40 border border-white/10 text-slate-100 font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                    />
-                  ) : (
+                <>
+                  {/* 目标物理路径 + 一键唤起资源管理器按钮 (REQ-LAUNCHER-NATIVE-PICKER-01) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-slate-400 font-medium">
+                        {formType === 'script'
+                          ? '脚本文件或指令 *'
+                          : formType === 'folder'
+                          ? '文件夹路径 *'
+                          : '应用程序路径 / .lnk 快捷方式 *'}
+                      </label>
+                      <span className="text-[10px] text-cyan-400/80">点击右侧按钮拉起资源管理器</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder={
+                          formType === 'folder'
+                            ? '点击右侧按钮选择文件夹，或输入绝对路径...'
+                            : formType === 'script'
+                            ? '点击右侧选择脚本文件，或输入指令...'
+                            : '点击右侧选择程序或快捷方式 (.exe / .lnk)...'
+                        }
+                        value={formTarget}
+                        onChange={(e) => setFormTarget(e.target.value)}
+                        className="flex-1 h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 min-w-0 font-mono text-[11.5px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handlePickFile}
+                        className="px-3 h-8 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5 text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(6,182,212,0.1)]"
+                        title="打开 Windows 资源管理器选择文件"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+                        <span>浏览选择</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 启动项名称 */}
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">名称 *</label>
                     <input
                       type="text"
-                      placeholder={
-                        formType === 'url'
-                          ? '例如: https://github.com'
-                          : formType === 'folder'
-                          ? '例如: D:\\Project 或 C:\\Users'
-                          : '例如: D:\\APP\\weixin\\Weixin.exe 或 calc.exe'
-                      }
-                      value={formTarget}
-                      onChange={(e) => setFormTarget(e.target.value)}
+                      placeholder="例如: 微信 / 飞书 / 命令行工具"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
                       className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
                     />
-                  )}
-                  {formType === 'app' && (
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      支持可执行文件 (.exe)、桌面快捷方式 (.lnk) 或系统命令，系统将自动提取原生图标。
-                    </p>
-                  )}
-                </div>
+                  </div>
+                </>
               )}
 
               {/* 所属分类 */}
@@ -1689,45 +1768,57 @@ export const LauncherDashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* 启动参数 (仅应用与脚本可选) */}
+              {/* 高级选项 (启动参数 / 工作目录 / 辅助描述) - 默认折叠收拢，不打扰新手 */}
               {(formType === 'app' || formType === 'script') && (
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">启动参数 (可选)</label>
-                  <input
-                    type="text"
-                    placeholder="例如: --profile default 或 -v"
-                    value={formArgs}
-                    onChange={(e) => setFormArgs(e.target.value)}
-                    className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                  />
-                </div>
-              )}
+                <details className="group pt-1 border-t border-white/[0.06]">
+                  <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-200 select-none flex items-center justify-between py-1 transition-colors">
+                    <span className="flex items-center gap-1.5">
+                      <span>高级选项 (启动参数 / 工作目录)</span>
+                      {(formArgs || formWorkingDir || formDescription) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+                  </summary>
 
-              {/* 工作目录 (仅应用与脚本可选) */}
-              {(formType === 'app' || formType === 'script') && (
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">工作目录 (可选，默认自动推导为应用所在目录)</label>
-                  <input
-                    type="text"
-                    placeholder="例如: D:\\APP\\weixin"
-                    value={formWorkingDir}
-                    onChange={(e) => setFormWorkingDir(e.target.value)}
-                    className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                  />
-                </div>
-              )}
+                  <div className="space-y-3 pt-2 text-xs">
+                    <div>
+                      <label className="block text-slate-400 mb-1 font-medium">启动参数 (可选)</label>
+                      <input
+                        type="text"
+                        placeholder="例如: --profile default 或 -v"
+                        value={formArgs}
+                        onChange={(e) => setFormArgs(e.target.value)}
+                        className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 font-mono"
+                      />
+                    </div>
 
-              {/* 描述 */}
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">辅助描述 (可选)</label>
-                <input
-                  type="text"
-                  placeholder="简短说明用途"
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
-                />
-              </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1 font-medium">
+                        工作目录 (可选，默认自动推导为应用所在目录)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="例如: D:\\APP\\weixin"
+                        value={formWorkingDir}
+                        onChange={(e) => setFormWorkingDir(e.target.value)}
+                        className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 mb-1 font-medium">辅助描述 (可选)</label>
+                      <input
+                        type="text"
+                        placeholder="简短说明用途"
+                        value={formDescription}
+                        onChange={(e) => setFormDescription(e.target.value)}
+                        className="w-full h-8 px-3 rounded-lg bg-black/40 border border-white/10 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                      />
+                    </div>
+                  </div>
+                </details>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">

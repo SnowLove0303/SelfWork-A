@@ -460,6 +460,47 @@ async fn window_close(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// 原生文件/目录选择器：唤起 Windows 资源管理器文件/目录选择窗口，并返回选中物理路径
+#[tauri::command]
+async fn pick_launcher_file(is_folder: Option<bool>) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(windows)]
+        {
+            use std::process::Command;
+            use std::os::windows::process::CommandExt;
+
+            let script = if is_folder == Some(true) {
+                r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '选择目标文件夹'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.SelectedPath }"#
+            } else {
+                r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = '选择启动目标文件或快捷方式'; $d.Filter = '常用启动目标 (*.exe;*.lnk;*.bat;*.cmd;*.ps1)|*.exe;*.lnk;*.bat;*.cmd;*.ps1|可执行文件 (*.exe)|*.exe|快捷方式 (*.lnk)|*.lnk|脚本文件 (*.bat;*.cmd;*.ps1)|*.bat;*.cmd;*.ps1|所有文件 (*.*)|*.*'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.FileName }"#
+            };
+
+            let output = Command::new("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-Command", script])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output()
+                .map_err(|e| format!("唤起文件选择窗口失败: {}", e))?;
+
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if path.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(path))
+                }
+            } else {
+                Ok(None)
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            Ok(None)
+        }
+    })
+    .await
+    .map_err(|e| format!("执行文件选择异常: {}", e))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -505,6 +546,7 @@ pub fn run() {
             window_toggle_maximize,
             window_is_maximized,
             window_close,
+            pick_launcher_file,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
             db::db_get_all_memos,

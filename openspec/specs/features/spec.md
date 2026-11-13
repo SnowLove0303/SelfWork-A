@@ -130,3 +130,22 @@ The workspace layout SHALL adapt to maximized window dimensions without gaping e
 - **WHEN** 观察文档顶栏右上角
 - **THEN** 原右上角的 `[目录]`、`[标题]`、`[待办]`、`[代码]` 按钮完全消失
 - **AND** 正文编辑区继续支持通过 `/` 斜杠菜单、快捷键进行各类块的自由插入
+
+### Requirement: REQ-LAUNCHER-NATIVE-PICKER-01 唤起原生资源管理器文件选择与自动填充
+添加启动项模态框 SHALL 提供显眼的“浏览文件”或“选择本地程序”按钮；点击后 SHALL 唤起 Windows 原生资源管理器文件选择器对话框，选定文件（`.exe`、`.lnk`、脚本或文件夹）后 SHALL 自动将绝对路径填充至目标输入框，并 SHALL 自动推导填充推荐名称。
+
+#### Scenario: 通过资源管理器选择微信可执行文件
+- **GIVEN** 用户打开“添加新的启动项”模态框
+- **WHEN** 点击“浏览文件”并在 Windows 资源管理器中选定 `Weixin.exe`
+- **THEN** 路径输入框自动填充为该文件的完整物理绝对路径
+- **AND** 若名称输入框为空，系统自动将名称填充为 `Weixin`
+- **AND** 类型自动确立为 `app`
+
+### Requirement: REQ-LAUNCHER-URL-SIMPLIFY-02 网页类型极简录入与高级选项折叠
+当启动项类型为“网页直达”时，弹窗 SHALL 仅向用户展示“目标网址 (URL)”与“名称”核心字段；启动参数与工作目录等字段 SHALL NOT 在网页类型下展示，且在其他类型下 SHALL 默认折叠在“高级选项”内。
+
+#### Scenario: 极简添加常用网页
+- **GIVEN** 用户在添加弹窗中选择“网页”类型
+- **WHEN** 观察表单输入界面
+- **THEN** 仅显示“目标网址 (URL)”与“名称”必填项，无复杂的启动参数或工作目录干扰
+- **AND** 输入网址并保存后，点击该卡片能够正常在系统默认浏览器中唤起目标网页
