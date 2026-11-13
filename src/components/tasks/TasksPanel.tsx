@@ -160,8 +160,8 @@ export const TasksPanel: React.FC<TasksPanelProps> = ({
         </div>
       </div>
 
-      {/* 次级快捷录入条 (回车秒建) */}
-      <div className="p-2.5 px-3.5 border-b border-border-subtle/50 bg-white/[0.005] shrink-0 min-w-0">
+      {/* 次级快捷录入条 (回车秒建，移除多余白色边框分割线实现一体化无痕过渡) */}
+      <div className="p-2.5 px-3.5 bg-white/[0.005] shrink-0 min-w-0">
         <div className="relative flex items-center min-w-0">
           <input
             type="text"
