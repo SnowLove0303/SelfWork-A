@@ -13,6 +13,9 @@ const DOC_BLOCKS_PREFIX = 'selfwork_doc_blocks_';
 const DB_COLLECTIONS_STORAGE_KEY = 'selfwork_db_collections';
 const DB_ROWS_PREFIX = 'selfwork_db_rows_';
 const DOCS_INIT_KEY = 'selfwork_docs_v2_initialized';
+const PLACEHOLDER_PURGED_MARK = 'selfwork_docs_placeholder_purged_v1';
+const LEGACY_PLACEHOLDER_PAGE_IDS = ['page_plm_readme', 'page_python_notes', 'page_env_variables'];
+const LEGACY_PLACEHOLDER_COL_IDS = ['col_plm_survey'];
 
 async function tauriInvoke<T>(
   cmd: string,
@@ -119,231 +122,48 @@ export const PLM_COLLECTION_SCHEMA: CollectionSchemaMap = {
 
 export const INITIAL_COLLECTION_SCHEMA = PLM_COLLECTION_SCHEMA;
 
-export const INITIAL_COLLECTIONS: DbCollection[] = [
-  {
-    id: 'col_plm_survey',
-    partitionId: 'part_private',
-    name: 'PLM流程调研',
-    description: '涵盖 U2 项目管理、U3 研发管理、U1 需求管理全景调研',
-    schema: PLM_COLLECTION_SCHEMA,
-    views: [
-      { id: 'v1', name: 'U2 项目管理全景调研表', type: 'table' },
-      { id: 'v2', name: 'U3 研发管理全景调研表', type: 'table' },
-      { id: 'v3', name: 'U1 需求管理全景调研表', type: 'table' },
-    ],
-    createdAt: Date.now() - 7200000,
-    updatedAt: Date.now() - 7200000,
-  },
-];
+export const INITIAL_COLLECTIONS: DbCollection[] = [];
+export const INITIAL_COLLECTION_ROWS: DbCollectionRow[] = [];
+export const INITIAL_ROW_PAGE_BLOCKS: Record<string, DocBlock[]> = {};
+export const INITIAL_DOC_PAGES: DocPage[] = [];
 
-export const INITIAL_COLLECTION_ROWS: DbCollectionRow[] = [
-  {
-    id: 'row-plm-1',
-    collectionId: 'col_plm_survey',
-    cells: {
-      col_title: '第1问：项目负责人与执行责任 调查研发项目负责人的指定方式、执...',
-      col_seq: 1,
-      col_module: 'opt_u2',
-      col_topic: 't_u2_01',
-      col_status: 'st_partial',
-      col_kw1: '项目负责人',
-      col_kw2: '立项工程师',
-      col_kw3: '多人协作',
-      col_kw4: '主责任人',
-      col_kw5: '进度管理',
-      col_kw6: '交接留痕',
-      col_notes: '1. 职责与台账记录机制：核实当前研发台账或系统表单中，项目主负责人与协同人员的具体职责是否有统一的结构化记录字段。\n2. 协作任务派发与追踪：核实跨人员/跨部门多人协作时，项目子任务分解与执行进度的集中追踪载体。',
-    },
-    sortOrder: 1,
-    createdAt: Date.now() - 7200000,
-    updatedAt: Date.now() - 7200000,
-  },
-  {
-    id: 'row-plm-2',
-    collectionId: 'col_plm_survey',
-    cells: {
-      col_title: '第2问：研发项目计划制定机制 调查研发项目立项后计划制定的规范...',
-      col_seq: 2,
-      col_module: 'opt_u2',
-      col_topic: 't_u2_02',
-      col_status: 'st_partial',
-      col_kw1: '立项计划',
-      col_kw2: '里程碑甘特',
-      col_kw3: '基线审查',
-      col_kw4: '资源排期',
-    },
-    sortOrder: 2,
-    createdAt: Date.now() - 7100000,
-    updatedAt: Date.now() - 7100000,
-  },
-  {
-    id: 'row-plm-3',
-    collectionId: 'col_plm_survey',
-    cells: {
-      col_title: '第3问：项目阶段目标与里程碑设置 调查研发项目执行过程中阶段目...',
-      col_seq: 3,
-      col_module: 'opt_u2',
-      col_topic: 't_u2_02',
-      col_status: 'st_partial',
-      col_kw1: '阶段目标',
-      col_kw2: '里程碑交付物',
-    },
-    sortOrder: 3,
-    createdAt: Date.now() - 7000000,
-    updatedAt: Date.now() - 7000000,
-  },
-  {
-    id: 'row-plm-4',
-    collectionId: 'col_plm_survey',
-    cells: {
-      col_title: '第4问：项目任务分解及分配机制 调查研发立项后具体工作任务的拆...',
-      col_seq: 4,
-      col_module: 'opt_u2',
-      col_topic: 't_u2_03',
-      col_status: 'st_partial',
-      col_kw1: 'WBS工作分解',
-      col_kw2: '执行责任矩阵',
-    },
-    sortOrder: 4,
-    createdAt: Date.now() - 6900000,
-    updatedAt: Date.now() - 6900000,
-  },
-  {
-    id: 'row-plm-5',
-    collectionId: 'col_plm_survey',
-    cells: {
-      col_title: '第5问：任务进度跟踪与完成确认 调查研发项目执行过程中任务进度...',
-      col_seq: 5,
-      col_module: 'opt_u2',
-      col_topic: 't_u2_03',
-      col_status: 'st_partial',
-      col_kw1: '实时进度看板',
-      col_kw2: '验收打卡',
-    },
-    sortOrder: 5,
-    createdAt: Date.now() - 6800000,
-    updatedAt: Date.now() - 6800000,
-  },
-  {
-    id: 'row-plm-6',
-    collectionId: 'col_plm_survey',
-    cells: {
-      col_title: '第6问：项目任务延期时的处理机制 调查研发任务执行延误时的原因...',
-      col_seq: 6,
-      col_module: 'opt_u2',
-      col_topic: 't_u2_04',
-      col_status: 'st_partial',
-      col_kw1: '偏差告警',
-      col_kw2: '纠偏策略',
-    },
-    sortOrder: 6,
-    createdAt: Date.now() - 6700000,
-    updatedAt: Date.now() - 6700000,
-  },
-];
+// ==================== 旧占位数据安全定向清算 ====================
 
-// 对齐 Row 1 专属的页面正文 Block 数据 (完全对齐 Notion 截图 3)
-export const INITIAL_ROW_PAGE_BLOCKS: Record<string, DocBlock[]> = {
-  'row-plm-1': [
-    {
-      id: 'b-plm-1',
-      pageId: 'row-plm-1',
-      blockType: 'h1',
-      content: '调查研发项目负责人的指定方式、执行职责分工以及跨人员协作机制:',
-      sortOrder: 1,
-      createdAt: Date.now() - 7200000,
-      updatedAt: Date.now() - 7200000,
-    },
-    {
-      id: 'b-plm-2',
-      pageId: 'row-plm-1',
-      blockType: 'bullet',
-      content: '项目立项后，项目负责人通常由谁担任？承担哪些具体研发与进度管理职责？',
-      sortOrder: 2,
-      createdAt: Date.now() - 7100000,
-      updatedAt: Date.now() - 7100000,
-    },
-    {
-      id: 'b-plm-3',
-      pageId: 'row-plm-1',
-      blockType: 'bullet',
-      content: '复杂项目涉及多名工程师或多部门协作时，是否设立明确的主责任人？',
-      sortOrder: 3,
-      createdAt: Date.now() - 7000000,
-      updatedAt: Date.now() - 7000000,
-    },
-    {
-      id: 'b-plm-4',
-      pageId: 'row-plm-1',
-      blockType: 'h2',
-      content: '1. 职责与台账记录机制',
-      sortOrder: 4,
-      createdAt: Date.now() - 6900000,
-      updatedAt: Date.now() - 6900000,
-    },
-    {
-      id: 'b-plm-5',
-      pageId: 'row-plm-1',
-      blockType: 'quote',
-      content: '核实当前研发台账或系统表单中，项目主负责人与协同人员的具体职责是否有统一的结构化记录字段。目前是通过口头沟通还是企微群确认？',
-      sortOrder: 5,
-      createdAt: Date.now() - 6800000,
-      updatedAt: Date.now() - 6800000,
-    },
-    {
-      id: 'b-plm-6',
-      pageId: 'row-plm-1',
-      blockType: 'h2',
-      content: '2. 协作任务派发与追踪',
-      sortOrder: 6,
-      createdAt: Date.now() - 6700000,
-      updatedAt: Date.now() - 6700000,
-    },
-    {
-      id: 'b-plm-7',
-      pageId: 'row-plm-1',
-      blockType: 'todo',
-      content: '核实跨人员/跨部门多人协作时，项目子任务分解与执行进度的集中追踪载体（目前是通过企业微信、线下表格还是口头沟通）。',
-      properties: { checked: false },
-      sortOrder: 7,
-      createdAt: Date.now() - 6600000,
-      updatedAt: Date.now() - 6600000,
-    },
-  ],
-};
-
-export const INITIAL_DOC_PAGES: DocPage[] = [
-  {
-    id: 'page_plm_readme',
-    partitionId: 'part_private',
-    title: 'PLM项目说明',
-    icon: '📑',
-    isFavorite: false,
-    isArchived: false,
-    createdAt: Date.now() - 8000000,
-    updatedAt: Date.now() - 8000000,
-  },
-  {
-    id: 'page_python_notes',
-    partitionId: 'part_private',
-    title: 'python白梳理',
-    icon: '🐍',
-    isFavorite: false,
-    isArchived: false,
-    createdAt: Date.now() - 7500000,
-    updatedAt: Date.now() - 7500000,
-  },
-  {
-    id: 'page_env_variables',
-    partitionId: 'part_favorite',
-    title: '01.2.2 环境变量 (Environment Variables)',
-    icon: '📄',
-    isFavorite: true,
-    isArchived: false,
-    createdAt: Date.now() - 9000000,
-    updatedAt: Date.now() - 9000000,
-  },
-];
+export async function purgeLegacyPlaceholders(): Promise<void> {
+  if (localStorage.getItem(PLACEHOLDER_PURGED_MARK) === 'true') {
+    return;
+  }
+  try {
+    for (const colId of LEGACY_PLACEHOLDER_COL_IDS) {
+      try {
+        await tauriInvoke('db_delete_collection', { id: colId });
+      } catch (_) {}
+      localStorage.removeItem(`${DB_ROWS_PREFIX}${colId}`);
+    }
+    for (const pageId of LEGACY_PLACEHOLDER_PAGE_IDS) {
+      try {
+        await tauriInvoke('db_delete_page', { id: pageId });
+      } catch (_) {}
+      localStorage.removeItem(`${DOC_BLOCKS_PREFIX}${pageId}`);
+    }
+    const savedPages = localStorage.getItem(DOC_PAGES_STORAGE_KEY);
+    if (savedPages) {
+      const parsed: DocPage[] = JSON.parse(savedPages);
+      const filtered = parsed.filter((p) => !LEGACY_PLACEHOLDER_PAGE_IDS.includes(p.id));
+      localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(filtered));
+    }
+    const savedCols = localStorage.getItem(DB_COLLECTIONS_STORAGE_KEY);
+    if (savedCols) {
+      const parsed: DbCollection[] = JSON.parse(savedCols);
+      const filtered = parsed.filter((c) => !LEGACY_PLACEHOLDER_COL_IDS.includes(c.id));
+      localStorage.setItem(DB_COLLECTIONS_STORAGE_KEY, JSON.stringify(filtered));
+    }
+    localStorage.setItem(PLACEHOLDER_PURGED_MARK, 'true');
+    localStorage.setItem(DOCS_INIT_KEY, 'true');
+  } catch (err) {
+    console.warn('[docsDb] purgeLegacyPlaceholders failed', err);
+  }
+}
 
 // ==================== 分区服务 (Partitions) ====================
 
@@ -457,46 +277,43 @@ export async function createSubPartition(parentId: string, name: string): Promis
 // ==================== 文档页面服务 (DocPages) ====================
 
 export async function loadDocPages(): Promise<DocPage[]> {
+  await purgeLegacyPlaceholders();
   try {
     const rawPages = await tauriInvoke<any[]>('db_get_all_pages');
     if (rawPages && rawPages.length > 0) {
-      const formatted: DocPage[] = rawPages.map((p) => ({
-        id: p.id,
-        title: p.title,
-        icon: p.icon,
-        cover: p.cover,
-        parentId: p.parentId,
-        partitionId: p.partitionId || 'part_private',
-        collectionId: p.collectionId,
-        properties: p.propertiesJson ? JSON.parse(p.propertiesJson) : undefined,
-        isFavorite: p.isFavorite,
-        isArchived: p.isArchived,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      }));
+      const formatted: DocPage[] = rawPages
+        .filter((p) => !LEGACY_PLACEHOLDER_PAGE_IDS.includes(p.id))
+        .map((p) => ({
+          id: p.id,
+          title: p.title,
+          icon: p.icon,
+          cover: p.cover,
+          parentId: p.parentId,
+          partitionId: p.partitionId || 'part_private',
+          collectionId: p.collectionId,
+          properties: p.propertiesJson ? JSON.parse(p.propertiesJson) : undefined,
+          isFavorite: p.isFavorite,
+          isArchived: p.isArchived,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        }));
       localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(formatted));
       return formatted;
     }
 
-    const isInit = localStorage.getItem(DOCS_INIT_KEY);
-    if (isInit === 'true') {
-      const saved = localStorage.getItem(DOC_PAGES_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-      return [];
+    const saved = localStorage.getItem(DOC_PAGES_STORAGE_KEY);
+    if (saved) {
+      const parsed: DocPage[] = JSON.parse(saved);
+      return parsed.filter((p) => !LEGACY_PLACEHOLDER_PAGE_IDS.includes(p.id));
     }
-
-    // 首次播种
-    for (const p of INITIAL_DOC_PAGES) {
-      await saveDocPage(p);
-    }
-    localStorage.setItem(DOCS_INIT_KEY, 'true');
-    localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(INITIAL_DOC_PAGES));
-    return INITIAL_DOC_PAGES;
+    return [];
   } catch (err) {
     const saved = localStorage.getItem(DOC_PAGES_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-    localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(INITIAL_DOC_PAGES));
-    return INITIAL_DOC_PAGES;
+    if (saved) {
+      const parsed: DocPage[] = JSON.parse(saved);
+      return parsed.filter((p) => !LEGACY_PLACEHOLDER_PAGE_IDS.includes(p.id));
+    }
+    return [];
   }
 }
 
@@ -568,18 +385,10 @@ export async function loadDocBlocks(pageId: string): Promise<DocBlock[]> {
     const saved = localStorage.getItem(`${DOC_BLOCKS_PREFIX}${pageId}`);
     if (saved) return JSON.parse(saved);
 
-    // 播种种子数据
-    if (INITIAL_ROW_PAGE_BLOCKS[pageId]) {
-      const seedBlocks = INITIAL_ROW_PAGE_BLOCKS[pageId];
-      await saveDocBlocks(pageId, seedBlocks);
-      return seedBlocks;
-    }
-
     return [];
   } catch (err) {
     const saved = localStorage.getItem(`${DOC_BLOCKS_PREFIX}${pageId}`);
     if (saved) return JSON.parse(saved);
-    if (INITIAL_ROW_PAGE_BLOCKS[pageId]) return INITIAL_ROW_PAGE_BLOCKS[pageId];
     return [];
   }
 }
@@ -612,40 +421,41 @@ export async function saveDocBlocks(pageId: string, blocks: DocBlock[]): Promise
 // ==================== 多维表格服务 (Collections) ====================
 
 export async function loadDbCollections(): Promise<DbCollection[]> {
+  await purgeLegacyPlaceholders();
   try {
     const rawCols = await tauriInvoke<any[]>('db_get_all_collections');
     if (rawCols && rawCols.length > 0) {
-      const formatted: DbCollection[] = rawCols.map((c) => ({
-        id: c.id,
-        pageId: c.pageId,
-        partitionId: c.partitionId || 'part_private',
-        name: c.name,
-        description: c.description,
-        schema: typeof c.schemaJson === 'string' ? JSON.parse(c.schemaJson) : c.schemaJson,
-        format: c.formatJson ? JSON.parse(c.formatJson) : undefined,
-        isFavorite: Boolean(c.isFavorite),
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-      }));
+      const formatted: DbCollection[] = rawCols
+        .filter((c) => !LEGACY_PLACEHOLDER_COL_IDS.includes(c.id))
+        .map((c) => ({
+          id: c.id,
+          pageId: c.pageId,
+          partitionId: c.partitionId || 'part_private',
+          name: c.name,
+          description: c.description,
+          schema: typeof c.schemaJson === 'string' ? JSON.parse(c.schemaJson) : c.schemaJson,
+          format: c.formatJson ? JSON.parse(c.formatJson) : undefined,
+          isFavorite: Boolean(c.isFavorite),
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        }));
       localStorage.setItem(DB_COLLECTIONS_STORAGE_KEY, JSON.stringify(formatted));
       return formatted;
     }
 
     const saved = localStorage.getItem(DB_COLLECTIONS_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-
-    // 播种初始表格与记录行
-    for (const c of INITIAL_COLLECTIONS) {
-      await saveDbCollection(c);
+    if (saved) {
+      const parsed: DbCollection[] = JSON.parse(saved);
+      return parsed.filter((c) => !LEGACY_PLACEHOLDER_COL_IDS.includes(c.id));
     }
-    for (const r of INITIAL_COLLECTION_ROWS) {
-      await saveDbCollectionRow(r);
-    }
-    return INITIAL_COLLECTIONS;
+    return [];
   } catch (err) {
     const saved = localStorage.getItem(DB_COLLECTIONS_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-    return INITIAL_COLLECTIONS;
+    if (saved) {
+      const parsed: DbCollection[] = JSON.parse(saved);
+      return parsed.filter((c) => !LEGACY_PLACEHOLDER_COL_IDS.includes(c.id));
+    }
+    return [];
   }
 }
 
@@ -711,14 +521,10 @@ export async function loadDbCollectionRows(collectionId: string): Promise<DbColl
     const saved = localStorage.getItem(`${DB_ROWS_PREFIX}${collectionId}`);
     if (saved) return JSON.parse(saved);
 
-    if (collectionId === 'col_plm_survey') {
-      return INITIAL_COLLECTION_ROWS;
-    }
     return [];
   } catch (err) {
     const saved = localStorage.getItem(`${DB_ROWS_PREFIX}${collectionId}`);
     if (saved) return JSON.parse(saved);
-    if (collectionId === 'col_plm_survey') return INITIAL_COLLECTION_ROWS;
     return [];
   }
 }

@@ -38,8 +38,8 @@ export const DocsView: React.FC = () => {
   const [partitions, setPartitions] = useState<DocPartition[]>([]);
   const [pages, setPages] = useState<DocPage[]>([]);
   const [collections, setCollections] = useState<DbCollection[]>([]);
-  const [activeType, setActiveType] = useState<'page' | 'collection'>('collection');
-  const [activeId, setActiveId] = useState<string>('col_plm_survey');
+  const [activeType, setActiveType] = useState<'page' | 'collection'>('page');
+  const [activeId, setActiveId] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [loading, setLoading] = useState(true);
@@ -65,17 +65,15 @@ export const DocsView: React.FC = () => {
           setPartitions(loadedParts);
           setPages(loadedPages);
           setCollections(loadedCols);
-          // 默认选中已有数据库或首个页面
-          const plmCol = loadedCols.find((c) => c.id === 'col_plm_survey');
-          if (plmCol) {
-            setActiveType('collection');
-            setActiveId(plmCol.id);
+          // 自动选中首个可用条目或置空
+          if (loadedPages.length > 0) {
+            setActiveType('page');
+            setActiveId(loadedPages[0].id);
           } else if (loadedCols.length > 0) {
             setActiveType('collection');
             setActiveId(loadedCols[0].id);
-          } else if (loadedPages.length > 0) {
-            setActiveType('page');
-            setActiveId(loadedPages[0].id);
+          } else {
+            setActiveId('');
           }
         }
       } catch (err) {
@@ -361,6 +359,9 @@ export const DocsView: React.FC = () => {
   const breadcrumbPath = useMemo(() => {
     const currentPartId =
       activeType === 'collection' ? selectedCollection?.partitionId : selectedPage?.partitionId;
+    if (!selectedPage && !selectedCollection) {
+      return '私人 / 个人工作台';
+    }
     const title =
       activeType === 'collection'
         ? selectedCollection?.name || '笔记数据库'
@@ -689,6 +690,15 @@ export const DocsView: React.FC = () => {
                     );
                   })}
 
+                  {/* 当没有任何子分区且没有任何直接条目时的友好提示 */}
+                  {subPartitions.length === 0 &&
+                    collections.filter((c) => !c.partitionId || c.partitionId === 'part_private').length === 0 &&
+                    pages.filter((p) => !p.partitionId || p.partitionId === 'part_private').length === 0 && (
+                      <div className="px-3 py-2 text-[11px] text-slate-500 italic">
+                        暂无笔记，点击上方 + 快速创建
+                      </div>
+                    )}
+
                   {/* 私人直接根目录下的多维数据库与笔记 */}
                   {collections
                     .filter((c) => !c.partitionId || c.partitionId === 'part_private')
@@ -982,9 +992,32 @@ export const DocsView: React.FC = () => {
               onUpdateCollection={handleUpdateCollection}
             />
           ) : (
-            <div className="flex-1 h-full flex flex-col items-center justify-center gap-3 text-slate-500 text-xs">
-              <Table size={32} className="opacity-40" />
-              <span>选择左侧导航开始查看或编辑笔记</span>
+            <div className="flex-1 h-full flex flex-col items-center justify-center p-8 select-none">
+              <div className="max-w-md w-full bg-white/[0.02] border border-white/5 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl backdrop-blur-sm">
+                <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                  <FileText size={28} />
+                </div>
+                <h3 className="text-base font-semibold text-white mb-2">纯净个人知识库</h3>
+                <p className="text-xs text-slate-400 mb-6 leading-relaxed max-w-sm">
+                  所有虚假占位数据已彻底清空。这里是 100% 属于你的本地纯净空间，所有新建内容均通过 SQLite 本地高可靠落盘。
+                </p>
+                <div className="flex items-center gap-3 w-full justify-center">
+                  <button
+                    onClick={() => handleCreatePageInPartition('part_private')}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-medium text-xs rounded-lg transition-colors shadow-lg shadow-sky-500/20"
+                  >
+                    <Plus size={14} />
+                    <span>新建第一篇笔记</span>
+                  </button>
+                  <button
+                    onClick={() => handleCreateCollectionInPartition('part_private')}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 font-medium text-xs rounded-lg transition-colors"
+                  >
+                    <Database size={14} className="text-sky-400" />
+                    <span>新建笔记数据库</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

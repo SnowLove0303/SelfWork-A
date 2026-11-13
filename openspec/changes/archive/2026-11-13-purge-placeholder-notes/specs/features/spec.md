@@ -1,0 +1,27 @@
+# Specification: features
+
+## ADDED Requirements
+
+### Requirement: 纯净零占位数据契约 (Zero Placeholder Seed Invariant)
+The system SHALL NOT automatically inject or seed any mock placeholder notes or mock databases during initialization.
+系统在任何初始化、重置或冷启动过程中，绝对禁止自动写入或展示任何非用户主动创建的示例笔记、假调查问卷或假数据库。
+
+#### Scenario: 初始空状态启动
+- **WHEN**: 用户首次启动或重启应用时
+- **THEN**: 文档页面列表与多维数据库列表必须均为空集合 (length == 0)，绝对不展示任何测试预置数据
+
+### Requirement: 旧占位物理数据自动定向清算 (Legacy Placeholder Purge Contract)
+The system SHALL purge legacy placeholder items from SQLite database and local caches upon startup.
+针对旧版本中已持久化写入 SQLite 与缓存的固定占位笔记与数据库，系统必须在初次加载时进行无感安全清算，彻底清除其页面记录、块节点及数据行。
+
+#### Scenario: 清算既有物理占位数据
+- **WHEN**: 系统初始化加载文档与数据库服务时
+- **THEN**: 检测并物理删除旧的占位 ID (如 `page_plm_readme`, `page_python_notes`, `page_env_variables`, `col_plm_survey`)，确保无任何假数据残留
+
+### Requirement: 优雅空状态与首篇创建引导 (Empty Workspace UX Contract)
+The system SHALL render an elegant empty workspace canvas with quick action buttons when no notes exist.
+当工作台中不存在任何笔记与数据库时，主视口必须呈现符合 Notion 极简美学的居中引导面板，并提供直接可用的创建动作。
+
+#### Scenario: 空工作区首篇创建
+- **WHEN**: 工作区处于无笔记状态且用户点击居中引导区的「新建笔记」或「新建数据库」时
+- **THEN**: 系统立即创建首篇空白实体，并自动将其设置为当前激活项载入编辑器
