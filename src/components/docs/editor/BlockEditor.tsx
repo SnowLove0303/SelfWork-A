@@ -5,6 +5,8 @@ import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
 import {
   FileText,
   ListTree,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 
 interface BlockEditorProps {
@@ -30,7 +32,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [, setLoading] = useState(true);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showOutline] = useState(true);
+  const [showOutline, setShowOutline] = useState(true);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // 1. 加载块流
@@ -192,6 +194,21 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <span className="text-slate-600">·</span>
           <span className="text-[11px] text-slate-500">{blocks.length} 个块</span>
         </div>
+
+        {/* 右侧大纲控制入口：当大纲折叠时展示展开按钮 */}
+        {!showOutline && (
+          <button
+            onClick={() => setShowOutline(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 rounded-lg transition-colors select-none"
+            title="展开目录大纲"
+          >
+            <PanelRightOpen size={13} className="text-sky-400" />
+            <span>目录大纲</span>
+            {outlineHeadings.length > 0 && (
+              <span className="text-[10px] text-slate-500 font-mono">({outlineHeadings.length})</span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* 主工作区：左侧正文编辑区（标题靠左） + 右侧目录大纲栏（相对向右缩进伴随索引） */}
@@ -275,6 +292,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <span className="text-slate-200 font-semibold tracking-wide">目录大纲</span>
                 <span className="text-[11px] text-slate-500 font-mono">({outlineHeadings.length})</span>
               </div>
+              <button
+                onClick={() => setShowOutline(false)}
+                className="p-1 text-slate-500 hover:text-slate-200 hover:bg-white/10 rounded-md transition-colors"
+                title="收起目录大纲 (折叠)"
+              >
+                <PanelRightClose size={14} />
+              </button>
             </div>
 
             {outlineHeadings.length === 0 ? (

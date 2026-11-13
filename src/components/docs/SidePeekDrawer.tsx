@@ -70,7 +70,7 @@ export const SidePeekDrawer: React.FC<SidePeekDrawerProps> = ({
   return (
     <div
       className={`h-full border-l border-white/10 bg-[#0c101a]/95 backdrop-blur-2xl flex flex-col transition-all duration-200 z-30 select-text overflow-hidden shadow-2xl ${
-        isMaximized ? 'w-full' : 'w-[580px] shrink-0'
+        isMaximized ? 'w-full' : 'w-[780px] max-w-[85vw] shrink-0'
       }`}
     >
       {/* 顶部操作条 (49px 高度对齐基准线) */}
