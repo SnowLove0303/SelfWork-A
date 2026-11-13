@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { DocBlock, BlockType } from '../../../types/docs.ts';
 import { SlashMenu, SLASH_MENU_ITEMS } from './SlashMenu.tsx';
+import { BlockContextMenu } from './BlockContextMenu.tsx';
 import {
   Plus,
   Trash2,
@@ -31,6 +32,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+
+  // 划选右键弹窗状态
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [savedSelection, setSavedSelection] = useState<{ start: number; end: number; text: string }>({
+    start: 0,
+    end: 0,
+    text: '',
+  });
 
   // 动态自动撑高高度
   const adjustHeight = () => {
@@ -74,6 +84,159 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     onUpdate(val);
   };
 
+  // 右键上下文菜单捕获
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const textarea = inputRef.current;
+    let start = 0;
+    let end = 0;
+    let text = '';
+    if (textarea) {
+      start = textarea.selectionStart;
+      end = textarea.selectionEnd;
+      text = textarea.value.slice(start, end);
+    }
+    setSavedSelection({ start, end, text });
+    setContextMenuPos({ x: e.clientX, y: e.clientY });
+    setContextMenuOpen(true);
+  };
+
+  // 选区文字排版应用
+  const handleApplyFormat = (format: 'bold' | 'italic' | 'strike' | 'code' | 'clear') => {
+    const { start, end, text } = savedSelection;
+    if (start === end || !text) {
+      setContextMenuOpen(false);
+      return;
+    }
+    const before = block.content.slice(0, start);
+    const after = block.content.slice(end);
+    let newContent = block.content;
+
+    if (format === 'clear') {
+      const cleaned = text
+        .replace(/^\*\*|\*\*$/g, '')
+        .replace(/^\*|\*$/g, '')
+        .replace(/^~~|~~$/g, '')
+        .replace(/^`|`$/g, '')
+        .replace(/<[^>]*>/g, '');
+      newContent = before + cleaned + after;
+    } else {
+      let wrap = '';
+      if (format === 'bold') wrap = '**';
+      else if (format === 'italic') wrap = '*';
+      else if (format === 'strike') wrap = '~~';
+      else if (format === 'code') wrap = '`';
+
+      if (text.startsWith(wrap) && text.endsWith(wrap) && text.length >= wrap.length * 2) {
+        const unwrapped = text.slice(wrap.length, text.length - wrap.length);
+        newContent = before + unwrapped + after;
+      } else {
+        newContent = before + wrap + text + wrap + after;
+      }
+    }
+
+    onUpdate(newContent);
+    setContextMenuOpen(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
+
+  // 字体颜色应用
+  const handleApplyColor = (colorId: string) => {
+    const { start, end, text } = savedSelection;
+    if (start === end || !text) {
+      setContextMenuOpen(false);
+      return;
+    }
+    const before = block.content.slice(0, start);
+    const after = block.content.slice(end);
+    let newContent = block.content;
+
+    if (colorId === 'default') {
+      const cleaned = text.replace(/<span class="text-[^"]+">([\s\S]*?)<\/span>/g, '$1');
+      newContent = before + cleaned + after;
+    } else {
+      const colorClassMap: Record<string, string> = {
+        rose: 'text-rose-400',
+        orange: 'text-amber-500',
+        yellow: 'text-yellow-300',
+        green: 'text-emerald-400',
+        sky: 'text-sky-400',
+        purple: 'text-purple-400',
+      };
+      const cls = colorClassMap[colorId] || 'text-slate-100';
+      newContent = before + `<span class="${cls}">${text}</span>` + after;
+    }
+
+    onUpdate(newContent);
+    setContextMenuOpen(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
+
+  // 荧光笔高亮应用
+  const handleApplyHighlight = (highlightId: string) => {
+    const { start, end, text } = savedSelection;
+    if (start === end || !text) {
+      setContextMenuOpen(false);
+      return;
+    }
+    const before = block.content.slice(0, start);
+    const after = block.content.slice(end);
+    let newContent = block.content;
+
+    if (highlightId === 'none') {
+      const cleaned = text.replace(/<mark class="[^"]+">([\s\S]*?)<\/mark>/g, '$1');
+      newContent = before + cleaned + after;
+    } else {
+      const bgMap: Record<string, string> = {
+        yellow: 'bg-yellow-400/20 text-yellow-200 border-b border-yellow-400/60 px-1 py-0.5 rounded',
+        green: 'bg-emerald-400/20 text-emerald-200 border-b border-emerald-400/60 px-1 py-0.5 rounded',
+        sky: 'bg-sky-400/20 text-sky-200 border-b border-sky-400/60 px-1 py-0.5 rounded',
+        rose: 'bg-rose-400/20 text-rose-200 border-b border-rose-400/60 px-1 py-0.5 rounded',
+        purple: 'bg-purple-400/20 text-purple-200 border-b border-purple-400/60 px-1 py-0.5 rounded',
+      };
+      const cls = bgMap[highlightId] || '';
+      newContent = before + `<mark class="${cls}">${text}</mark>` + after;
+    }
+
+    onUpdate(newContent);
+    setContextMenuOpen(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
+
+  // 块类型转换 (Turn into)
+  const handleTurnInto = (newType: BlockType) => {
+    onUpdate(block.content, newType);
+    setContextMenuOpen(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
+
+  // 剪贴板动作
+  const handleCopy = () => {
+    if (savedSelection.text) {
+      navigator.clipboard.writeText(savedSelection.text);
+    }
+    setContextMenuOpen(false);
+  };
+
+  const handleCut = () => {
+    const { start, end, text } = savedSelection;
+    if (text) {
+      navigator.clipboard.writeText(text);
+      const before = block.content.slice(0, start);
+      const after = block.content.slice(end);
+      onUpdate(before + after);
+    }
+    setContextMenuOpen(false);
+  };
+
   // 键盘快捷流
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 1. 斜杠菜单开启状态下的导航
@@ -103,20 +266,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
     }
 
-    // 2. 普通 Enter 键换行 / 派发新块
+    // 2. 普通回车：派生新块
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (block.blockType === 'todo') {
-        onInsertBelow('todo');
-      } else if (block.blockType === 'bullet') {
-        onInsertBelow('bullet');
-      } else {
-        onInsertBelow('p');
-      }
+      // 在当前块下方插入新段落
+      onInsertBelow('p');
       return;
     }
 
-    // 3. Backspace 退格键降级或删除
+    // 3. 空块退格：熔断回退
     if (e.key === 'Backspace' && block.content === '') {
       e.preventDefault();
       if (block.blockType !== 'p') {
@@ -143,7 +301,6 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 选择斜杠菜单中的类型
   const handleSelectBlockType = (newType: BlockType) => {
     setSlashMenuOpen(false);
-    // 移除末尾输入的 /
     const cleaned = block.content.replace(/\/$/, '');
     onUpdate(cleaned, newType);
     setTimeout(() => {
@@ -222,7 +379,11 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const isChecked = Boolean(block.properties?.checked);
 
   return (
-    <div id={`block-${block.id}`} className="group relative flex items-start py-0.5 my-0.5">
+    <div
+      id={`block-${block.id}`}
+      onContextMenu={handleContextMenu}
+      className="group relative flex items-start py-0.5 my-0.5"
+    >
       {/* 悬浮操作侧柄：外挂绝对定位，绝对不占用正文水平流，实现正文起点与标题 100% 垂直向左对齐 */}
       <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">
         <button
@@ -308,6 +469,23 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           setSelectedIndex={setSlashSelectedIndex}
           onSelect={handleSelectBlockType}
           onClose={() => setSlashMenuOpen(false)}
+        />
+      )}
+
+      {/* 划选右键定制调整弹窗 */}
+      {contextMenuOpen && (
+        <BlockContextMenu
+          position={contextMenuPos}
+          hasSelection={Boolean(savedSelection.text)}
+          selectedText={savedSelection.text}
+          currentBlockType={block.blockType}
+          onApplyFormat={handleApplyFormat}
+          onApplyColor={handleApplyColor}
+          onApplyHighlight={handleApplyHighlight}
+          onTurnInto={handleTurnInto}
+          onCopy={handleCopy}
+          onCut={handleCut}
+          onClose={() => setContextMenuOpen(false)}
         />
       )}
     </div>
