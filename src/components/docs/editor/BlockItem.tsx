@@ -87,6 +87,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 右键上下文菜单捕获
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const textarea = inputRef.current;
     let start = 0;
     let end = 0;
@@ -269,7 +270,6 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     // 2. 普通回车：派生新块
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // 在当前块下方插入新段落
       onInsertBelow('p');
       return;
     }
@@ -443,6 +443,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           value={block.content}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onContextMenu={handleContextMenu}
           placeholder={
             block.blockType === 'h1'
               ? '一级标题...'

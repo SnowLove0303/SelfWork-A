@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BlockType } from '../../../types/docs.ts';
 import {
   Bold,
@@ -79,25 +80,27 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
   // 1. 视窗碰撞检测自适应防溢出算法
   useEffect(() => {
-    if (menuRef.current) {
-      const rect = menuRef.current.getBoundingClientRect();
-      const padding = 12;
-      let left = position.x;
-      let top = position.y;
+    const padding = 12;
+    const menuWidth = 288; // w-72 = 18rem = 288px
+    const menuHeight = 360;
 
-      if (left + rect.width > window.innerWidth - padding) {
-        left = Math.max(padding, window.innerWidth - rect.width - padding);
-      }
-      if (top + rect.height > window.innerHeight - padding) {
-        top = Math.max(padding, top - rect.height);
-      }
-      setStylePos({ top, left });
+    let left = position.x;
+    let top = position.y;
+
+    if (left + menuWidth > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - menuWidth - padding);
     }
+    if (top + menuHeight > window.innerHeight - padding) {
+      top = Math.max(padding, top - menuHeight);
+    }
+    setStylePos({ top, left });
   }, [position]);
 
-  // 2. 点击外部与 Esc 键自动关闭
+  // 2. 点击外部与 Esc 键自动关闭 (增加 50ms 延迟挂载与右键忽略)
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     const handleOutsideClick = (e: MouseEvent) => {
+      if (e.button === 2) return;
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
       }
@@ -107,19 +110,31 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         onClose();
       }
     };
-    window.addEventListener('mousedown', handleOutsideClick);
-    window.addEventListener('keydown', handleKeyDown);
+
+    timer = setTimeout(() => {
+      window.addEventListener('mousedown', handleOutsideClick);
+      window.addEventListener('keydown', handleKeyDown);
+    }, 50);
+
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('mousedown', handleOutsideClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
 
-  return (
+  // 使用 React Portal 直接注入 document.body，彻底逃脱任何父容器的 backdrop-filter 与 overflow 裁剪
+  return createPortal(
     <div
       ref={menuRef}
-      style={{ top: `${stylePos.top}px`, left: `${stylePos.left}px` }}
-      className="fixed z-50 w-72 bg-[#0c101a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2.5 text-slate-200 select-none animate-in fade-in zoom-in-95 duration-100 space-y-2.5"
+      style={{
+        position: 'fixed',
+        top: `${stylePos.top}px`,
+        left: `${stylePos.left}px`,
+        zIndex: 999999,
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      className="w-72 bg-[#0c101a]/98 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-2.5 text-slate-200 select-none animate-in fade-in zoom-in-95 duration-100 space-y-2.5 pointer-events-auto"
     >
       {/* 1. 行内排版工具行 (仅在有选区时重点高亮) */}
       <div>
@@ -247,6 +262,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           </button>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
