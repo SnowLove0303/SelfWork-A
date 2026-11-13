@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { DocBlock, BlockType } from '../../../types/docs.ts';
 import { SlashMenu, SLASH_MENU_ITEMS } from './SlashMenu.tsx';
 import { BlockContextMenu } from './BlockContextMenu.tsx';
@@ -17,6 +17,28 @@ interface BlockItemProps {
   onFocusPrev: () => void;
   onFocusNext: () => void;
   autoFocus?: boolean;
+}
+
+// 富文本渲染转换器 (安全转义 + 格式还原)
+function renderFormattedContent(raw: string): string {
+  let html = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 还原安全的高亮与颜色样式标签
+  html = html
+    .replace(/&lt;span class="([^"]+)"&gt;([\s\S]*?)&lt;\/span&gt;/g, '<span class="$1">$2</span>')
+    .replace(/&lt;mark class="([^"]+)"&gt;([\s\S]*?)&lt;\/mark&gt;/g, '<mark class="$1">$2</mark>');
+
+  // Markdown 语法还原
+  html = html
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/~~(.+?)~~/g, '<del class="line-through text-slate-500">$1</del>')
+    .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs">$1</code>');
+
+  return html;
 }
 
 export const BlockItem: React.FC<BlockItemProps> = ({
@@ -42,6 +64,21 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     text: '',
   });
 
+  // 焦点编辑态 vs 预览态
+  const [isFocused, setIsFocused] = useState(false);
+
+  // 是否包含富文本标记（加粗/斜体/删除线/代码/span/mark）
+  const hasFormatting = useMemo(() => {
+    return (
+      block.content.includes('**') ||
+      block.content.includes('*') ||
+      block.content.includes('~~') ||
+      block.content.includes('`') ||
+      block.content.includes('<span') ||
+      block.content.includes('<mark')
+    );
+  }, [block.content]);
+
   // 动态自动撑高高度
   const adjustHeight = () => {
     if (inputRef.current) {
@@ -52,10 +89,11 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   useEffect(() => {
     adjustHeight();
-  }, [block.content, block.blockType]);
+  }, [block.content, block.blockType, isFocused]);
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {
+      setIsFocused(true);
       inputRef.current.focus();
       const len = inputRef.current.value.length;
       inputRef.current.setSelectionRange(len, len);
@@ -66,8 +104,38 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
 
-    // 检测斜杠指令唤起
-    if (val.endsWith('/')) {
+    // 1. 行首 Markdown 语法糖自动蜕变 (Shorthand Sugaring)
+    if (block.blockType === 'p') {
+      if (val === '---') {
+        onUpdate('', 'divider');
+        onInsertBelow('p');
+        return;
+      }
+      const match = val.match(/^(#{1,3}|\[\]|\[ \]|---|-|\*|>)\s(.*)$/);
+      if (match) {
+        const trigger = match[1];
+        const rest = match[2];
+        let nextType: BlockType = 'p';
+        let initialProps: Record<string, any> | undefined = undefined;
+
+        if (trigger === '#') nextType = 'h1';
+        else if (trigger === '##') nextType = 'h2';
+        else if (trigger === '###') nextType = 'h3';
+        else if (trigger === '[]' || trigger === '[ ]') {
+          nextType = 'todo';
+          initialProps = { checked: false };
+        } else if (trigger === '-' || trigger === '*') nextType = 'bullet';
+        else if (trigger === '>') nextType = 'quote';
+
+        if (nextType !== 'p') {
+          onUpdate(rest, nextType, initialProps);
+          return;
+        }
+      }
+    }
+
+    // 2. 检测斜杠指令唤起 (避免在 URL 如 https:// 等内部误触)
+    if (val.endsWith('/') && (val.length === 1 || val.endsWith(' /') || val.endsWith('\n/'))) {
       if (inputRef.current) {
         const rect = inputRef.current.getBoundingClientRect();
         setSlashMenuPos({
@@ -267,25 +335,73 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
     }
 
-    // 2. 普通回车：派生新块
+    // 2. 回车键：继承或派生块
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // 空列表/待办：回车退出为普通段落
+      if ((block.blockType === 'bullet' || block.blockType === 'todo') && block.content.trim() === '') {
+        onUpdate('', 'p');
+        return;
+      }
+
+      // 继承 bullet 或 todo 列表类型
+      if (block.blockType === 'bullet') {
+        onInsertBelow('bullet');
+        return;
+      }
+      if (block.blockType === 'todo') {
+        onInsertBelow('todo');
+        return;
+      }
+
+      // 默认在下方插入普通段落
       onInsertBelow('p');
       return;
     }
 
-    // 3. 空块退格：熔断回退
-    if (e.key === 'Backspace' && block.content === '') {
+    // 3. 退格键：块类型降级或删块
+    if (e.key === 'Backspace') {
+      const textarea = inputRef.current;
+      const isAtStart = textarea ? textarea.selectionStart === 0 && textarea.selectionEnd === 0 : false;
+
+      // 如果当前是特殊块类型 (h1/h2/h3/bullet/todo/quote/code) 且光标位于行首
+      if (isAtStart && block.blockType !== 'p') {
+        e.preventDefault();
+        onUpdate(block.content, 'p');
+        return;
+      }
+
+      // 空块退格：删除当前块
+      if (block.content === '') {
+        e.preventDefault();
+        if (block.blockType !== 'p') {
+          onUpdate('', 'p');
+        } else {
+          onDelete();
+        }
+        return;
+      }
+    }
+
+    // 4. Tab 键：防止切焦，支持行内缩进
+    if (e.key === 'Tab') {
       e.preventDefault();
-      if (block.blockType !== 'p') {
-        onUpdate('', 'p');
-      } else {
-        onDelete();
+      const textarea = inputRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newContent = block.content.substring(0, start) + '  ' + block.content.substring(end);
+        onUpdate(newContent);
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.selectionStart = inputRef.current.selectionEnd = start + 2;
+          }
+        }, 0);
       }
       return;
     }
 
-    // 4. 上下箭头跨块移动对焦
+    // 5. 上下箭头跨块移动对焦
     if (e.key === 'ArrowUp' && inputRef.current?.selectionStart === 0) {
       e.preventDefault();
       onFocusPrev();
@@ -430,7 +546,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         <div className="w-1 self-stretch bg-sky-500/40 rounded-full mr-3 shrink-0 my-0.5" />
       )}
 
-      {/* 代码块背景容器包装 */}
+      {/* 文本内容编辑与富文本渲染容器 */}
       <div
         className={`flex-1 min-w-0 ${
           block.blockType === 'code'
@@ -438,28 +554,49 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             : ''
         }`}
       >
-        <textarea
-          ref={inputRef}
-          value={block.content}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onContextMenu={handleContextMenu}
-          placeholder={
-            block.blockType === 'h1'
-              ? '一级标题...'
-              : block.blockType === 'h2'
-              ? '二级标题...'
-              : block.blockType === 'h3'
-              ? '三级标题...'
-              : block.blockType === 'code'
-              ? '// 粘贴或输入代码...'
-              : "输入文本，或按 '/' 唤出菜单..."
-          }
-          rows={1}
-          className={`w-full bg-transparent resize-none border-none outline-none overflow-hidden ${getBlockStyle()} ${
-            isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
-          }`}
-        />
+        {!isFocused && hasFormatting ? (
+          <div
+            onClick={() => {
+              setIsFocused(true);
+              setTimeout(() => inputRef.current?.focus(), 0);
+            }}
+            className={`w-full min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
+              isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
+            }`}
+            dangerouslySetInnerHTML={{ __html: renderFormattedContent(block.content) }}
+          />
+        ) : (
+          <textarea
+            ref={inputRef}
+            value={block.content}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => {
+              setTimeout(() => {
+                if (!contextMenuOpen) {
+                  setIsFocused(false);
+                }
+              }, 150);
+            }}
+            onContextMenu={handleContextMenu}
+            placeholder={
+              block.blockType === 'h1'
+                ? '一级标题...'
+                : block.blockType === 'h2'
+                ? '二级标题...'
+                : block.blockType === 'h3'
+                ? '三级标题...'
+                : block.blockType === 'code'
+                ? '// 粘贴或输入代码...'
+                : "输入文本，或按 '/' 唤出菜单..."
+            }
+            rows={1}
+            className={`w-full bg-transparent resize-none border-none outline-none overflow-hidden ${getBlockStyle()} ${
+              isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
+            }`}
+          />
+        )}
       </div>
 
       {/* 斜杠指令菜单 */}
