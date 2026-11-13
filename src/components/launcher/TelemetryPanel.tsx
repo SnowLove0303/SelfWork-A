@@ -88,34 +88,34 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#070a0f]/90 backdrop-blur-xl border-l border-white/[0.08] select-text min-w-0">
-      {/* 终端顶部操作栏 */}
-      <div className="shrink-0 h-11 px-3 border-b border-white/[0.08] flex items-center justify-between gap-2 bg-black/40 overflow-x-auto no-scrollbar">
+      {/* 终端顶部操作栏：紧凑自适应布局，确保过滤胶囊与所有控制按钮（包括关闭 X）100% 完整露出且不溢出 */}
+      <div className="shrink-0 h-11 px-2.5 border-b border-white/[0.08] flex items-center justify-between gap-1.5 bg-black/40 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 shrink-0">
-          <Terminal className="w-4 h-4 text-brand-primary shrink-0" />
+          <Terminal className="w-3.5 h-3.5 text-brand-primary shrink-0" />
           <span className="text-xs font-semibold text-fg-primary tracking-tight font-mono whitespace-nowrap">
             执行报文
           </span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-fg-muted shrink-0 whitespace-nowrap">
+          <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-white/[0.06] text-fg-muted shrink-0">
             {logs.length}
           </span>
         </div>
 
         {/* 控制按钮组 */}
-        <div className="flex items-center gap-1 shrink-0 select-none">
-          {/* 日志过滤选择 */}
-          <div className="flex items-center bg-white/[0.04] p-0.5 rounded border border-white/[0.06] text-[10px] shrink-0">
-            {(['all', 'info', 'success', 'warn', 'error'] as const).map((lvl) => (
+        <div className="flex items-center gap-1 min-w-0 shrink-0 select-none">
+          {/* 紧凑日志等级过滤 */}
+          <div className="flex items-center bg-white/[0.04] p-0.5 rounded border border-white/[0.06] text-[9px] shrink-0">
+            {(['all', 'info', 'warn', 'error'] as const).map((lvl) => (
               <button
                 key={lvl}
                 type="button"
-                onClick={() => setFilterLevel(lvl)}
-                className={`px-1.5 py-0.5 rounded uppercase font-mono text-[9px] transition-colors shrink-0 whitespace-nowrap ${
+                onClick={() => setFilterLevel(lvl === filterLevel ? 'all' : lvl)}
+                className={`px-1 py-0.5 rounded uppercase font-mono text-[9px] transition-colors shrink-0 whitespace-nowrap ${
                   filterLevel === lvl
-                    ? 'bg-white/[0.12] text-fg-primary font-bold'
+                    ? 'bg-white/[0.15] text-fg-primary font-bold shadow-sm'
                     : 'text-fg-muted hover:text-fg-secondary'
                 }`}
               >
-                {lvl}
+                {lvl === 'all' ? '全部' : lvl}
               </button>
             ))}
           </div>
@@ -125,14 +125,13 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
             type="button"
             onClick={() => setAutoScroll((prev) => !prev)}
             title={autoScroll ? '已开启实时自动滚屏 (点击暂停)' : '已锁定滚屏 (点击开启)'}
-            className={`h-7 px-2 rounded border text-[11px] font-mono flex items-center gap-1 transition-colors tactile-btn shrink-0 whitespace-nowrap ${
+            className={`h-6 w-6 rounded border text-[11px] font-mono flex items-center justify-center transition-colors tactile-btn shrink-0 ${
               autoScroll
                 ? 'bg-brand-primary/10 border-brand-primary/30 text-brand-primary'
                 : 'bg-white/[0.04] border-white/[0.08] text-fg-muted hover:text-fg-primary'
             }`}
           >
             <ArrowDown className={`w-3 h-3 shrink-0 ${autoScroll ? 'animate-bounce' : ''}`} />
-            <span className="hidden xl:inline">滚屏</span>
           </button>
 
           {/* 复制全部 */}
@@ -141,18 +140,12 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
             onClick={handleCopy}
             disabled={logs.length === 0}
             title="复制全部报文至剪贴板"
-            className="h-7 px-2 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-secondary hover:text-fg-primary text-[11px] font-mono flex items-center gap-1 tactile-btn shrink-0 whitespace-nowrap disabled:opacity-40"
+            className="h-6 w-6 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-secondary hover:text-fg-primary text-[11px] font-mono flex items-center justify-center tactile-btn shrink-0 disabled:opacity-40"
           >
             {copied ? (
-              <>
-                <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                <span className="text-emerald-400">已复制</span>
-              </>
+              <Check className="w-3 h-3 text-emerald-400 shrink-0" />
             ) : (
-              <>
-                <Copy className="w-3 h-3 shrink-0" />
-                <span className="hidden xl:inline">复制</span>
-              </>
+              <Copy className="w-3 h-3 shrink-0" />
             )}
           </button>
 
@@ -162,19 +155,18 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
             onClick={onClearLogs}
             disabled={logs.length === 0}
             title="清空控制台报文"
-            className="h-7 px-2 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-rose-500/10 hover:border-rose-500/30 text-fg-muted hover:text-rose-400 text-[11px] font-mono flex items-center gap-1 tactile-btn shrink-0 whitespace-nowrap disabled:opacity-40"
+            className="h-6 w-6 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-rose-500/10 hover:border-rose-500/30 text-fg-muted hover:text-rose-400 text-[11px] font-mono flex items-center justify-center tactile-btn shrink-0 disabled:opacity-40"
           >
             <Trash2 className="w-3 h-3 shrink-0" />
-            <span className="hidden xl:inline">清空</span>
           </button>
 
-          {/* 收起面板 */}
+          {/* 收起面板 (锁定在最右侧，始终 100% 完整可见) */}
           {onClose && (
             <button
               type="button"
               onClick={onClose}
               title="收起报文面板"
-              className="h-7 w-7 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-muted hover:text-fg-primary flex items-center justify-center tactile-btn shrink-0"
+              className="h-6 w-6 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-muted hover:text-fg-primary flex items-center justify-center tactile-btn shrink-0 ml-0.5"
             >
               <X className="w-3.5 h-3.5 shrink-0" />
             </button>

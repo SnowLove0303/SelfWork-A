@@ -773,7 +773,7 @@ export const LauncherDashboard: React.FC = () => {
   return (
     <div className="flex-1 flex overflow-hidden bg-transparent select-none">
       {/* ================= 左侧分类管理侧栏 ================= */}
-      <div className="w-64 border-r border-white/[0.08] bg-black/20 backdrop-blur-md flex flex-col shrink-0">
+      <div className="w-48 lg:w-56 border-r border-white/[0.08] bg-black/20 backdrop-blur-md flex flex-col shrink-0">
         {/* 侧栏顶标：高度严格对齐 h-[49px]，基准线与思维导图/待办清单 100% 贯穿对齐 */}
         <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
@@ -912,7 +912,7 @@ export const LauncherDashboard: React.FC = () => {
       {/* ================= 右侧启动项卡片大盘 ================= */}
       <div className="flex-1 flex flex-col min-w-0 bg-transparent overflow-hidden">
         {/* 顶部工具栏：高度严格对齐 h-[49px]，基准底线与左栏 100% 贯穿对齐 */}
-        <div className="h-[49px] px-4 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
+        <div className="h-[49px] px-3 md:px-4 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0 gap-2">
           {/* 左侧：常规分类信息 vs 多选控制状态 */}
           {isSelectMode ? (
             <div className="flex items-center gap-2.5 min-w-0">
@@ -929,8 +929,8 @@ export const LauncherDashboard: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono shrink-0 whitespace-nowrap">
+            <div className="flex items-center gap-2 min-w-0 shrink">
+              <h2 className="text-xs font-semibold text-fg-primary tracking-tight font-mono truncate whitespace-nowrap">
                 {activeCategory?.name || '默认工具'}
               </h2>
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/[0.06] text-fg-muted border border-white/[0.06] shrink-0 whitespace-nowrap">
@@ -939,8 +939,8 @@ export const LauncherDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* 右侧动作区：动态切换常规与多选操作 */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* 右侧动作区：动态切换常规与多选操作，支持弹性伸缩与平滑防溢出 */}
+          <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
             {isSelectMode ? (
               <>
                 {/* 多选模式下：一键保存为新组合通道 */}
@@ -989,7 +989,7 @@ export const LauncherDashboard: React.FC = () => {
             ) : (
               <>
                 {/* 搜索框：内嵌紧凑形态 */}
-                <div className="relative w-44 shrink-0">
+                <div className="relative w-32 sm:w-36 md:w-44 min-w-[90px] shrink-0">
                   <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -1100,7 +1100,10 @@ export const LauncherDashboard: React.FC = () => {
 
         {/* 启动项卡片大盘网格 (自适应多列晶体网格) */}
         <div className="flex-1 overflow-y-auto p-4 min-w-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3.5">
+          <div
+            className="grid gap-3.5"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(136px, 1fr))' }}
+          >
             {/* 首卡：+ 添加快速启动项 (多选模式下隐藏) */}
             {!isSelectMode && (
               <div
@@ -1315,7 +1318,7 @@ export const LauncherDashboard: React.FC = () => {
 
       {/* ================= 右侧专职执行报文控制台 (REQ-01 & REQ-02) ================= */}
       {isTelemetryOpen && (
-        <div className="w-[380px] xl:w-[420px] shrink-0 h-full flex flex-col overflow-hidden animate-in fade-in duration-150">
+        <div className="w-[320px] xl:w-[380px] shrink-0 h-full flex flex-col overflow-hidden animate-in fade-in duration-150">
           <TelemetryPanel
             logs={logs}
             onClearLogs={handleClearLogs}
