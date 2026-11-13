@@ -24,12 +24,28 @@ export interface DocBlock {
   updatedAt: number;
 }
 
+// 分区类型定义 (Notion Partition System)
+export type PartitionType = 'private' | 'favorite' | 'workspace';
+
+export interface DocPartition {
+  id: string;
+  name: string;
+  type: PartitionType;
+  sortOrder: number;
+  isCollapsed: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface DocPage {
   id: string;
   title: string;
   icon?: string;
   cover?: string;
   parentId?: string | null;
+  partitionId?: string | null;
+  collectionId?: string | null; // 若此页面是多维表格的一行
+  properties?: Record<string, any>; // 页面绑定的多维属性字典 (Row-as-Page 核心)
   isFavorite: boolean;
   isArchived: boolean;
   createdAt: number;
@@ -62,12 +78,23 @@ export interface ColumnSchema {
 
 export type CollectionSchemaMap = Record<string, ColumnSchema>;
 
+// 多维表格视图 Tab 定义 (Notion Multi-View Tabs)
+export interface DbCollectionView {
+  id: string;
+  name: string;
+  type: 'table' | 'board' | 'list';
+  filter?: Record<string, any>;
+  sort?: { property: string; direction: 'asc' | 'desc' };
+}
+
 export interface DbCollection {
   id: string;
   pageId?: string | null;
+  partitionId?: string | null;
   name: string;
   description?: string;
   schema: CollectionSchemaMap;
+  views?: DbCollectionView[];
   format?: {
     tableProperties?: Array<{ property: string; width: number; visible: boolean }>;
   };
@@ -82,4 +109,12 @@ export interface DbCollectionRow {
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
+}
+
+// Notion 经典 Side Peek 侧边预览抽屉状态
+export interface SidePeekState {
+  isOpen: boolean;
+  rowId: string | null;
+  collectionId: string | null;
+  isMaximized: boolean;
 }

@@ -19,7 +19,22 @@ pub struct TaskItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct DocPartitionItem {
+    pub id: String,
+    pub name: String,
+    pub partition_type: String, // "private" | "favorite" | "workspace"
+    pub sort_order: f64,
+    pub is_collapsed: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct DocPageItem {
+    pub partition_id: Option<String>,
+    pub collection_id: Option<String>,
+    pub properties_json: Option<String>,
     pub id: String,
     pub title: String,
     pub icon: Option<String>,
@@ -51,6 +66,7 @@ pub struct DocBlockItem {
 pub struct DbCollectionItem {
     pub id: String,
     pub page_id: Option<String>,
+    pub partition_id: Option<String>,
     pub name: String,
     pub description: Option<String>,
     pub schema_json: String,
@@ -125,12 +141,24 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
              value TEXT NOT NULL,
              updated_at INTEGER NOT NULL
          );
+         CREATE TABLE IF NOT EXISTS doc_partitions (
+             id TEXT PRIMARY KEY,
+             name TEXT NOT NULL,
+             partition_type TEXT NOT NULL,
+             sort_order REAL NOT NULL,
+             is_collapsed INTEGER NOT NULL DEFAULT 0,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+         );
          CREATE TABLE IF NOT EXISTS doc_pages (
              id TEXT PRIMARY KEY,
              title TEXT NOT NULL,
              icon TEXT,
              cover TEXT,
              parent_id TEXT,
+             partition_id TEXT DEFAULT 'private',
+             collection_id TEXT,
+             properties_json TEXT,
              created_at INTEGER NOT NULL,
              updated_at INTEGER NOT NULL,
              is_favorite INTEGER NOT NULL DEFAULT 0,
@@ -151,6 +179,7 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
          CREATE TABLE IF NOT EXISTS db_collections (
              id TEXT PRIMARY KEY,
              page_id TEXT,
+             partition_id TEXT DEFAULT 'private',
              name TEXT NOT NULL,
              description TEXT,
              schema_json TEXT NOT NULL,
@@ -167,6 +196,11 @@ pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
              updated_at INTEGER NOT NULL
          );",
     )?;
+    // 增量字段迁移兼容
+    let _ = conn.execute("ALTER TABLE doc_pages ADD COLUMN partition_id TEXT DEFAULT 'private';", []);
+    let _ = conn.execute("ALTER TABLE doc_pages ADD COLUMN collection_id TEXT;", []);
+    let _ = conn.execute("ALTER TABLE doc_pages ADD COLUMN properties_json TEXT;", []);
+    let _ = conn.execute("ALTER TABLE db_collections ADD COLUMN partition_id TEXT DEFAULT 'private';", []);
     Ok(())
 }
 
@@ -326,11 +360,59 @@ pub fn save_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rus
     Ok(())
 }
 
+// ==================== 分区管理 (Partitions) CRUD ====================
+
+pub fn query_all_doc_partitions(conn: &Connection) -> Result<Vec<DocPartitionItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, partition_type, sort_order, is_collapsed, created_at, updated_at
+         FROM doc_partitions
+         ORDER BY sort_order ASC, created_at ASC",
+    )?;
+    let p_iter = stmt.query_map([], |row| {
+        let is_col_int: i64 = row.get(4)?;
+        Ok(DocPartitionItem {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            partition_type: row.get(2)?,
+            sort_order: row.get(3)?,
+            is_collapsed: is_col_int != 0,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+        })
+    })?;
+    let mut partitions = Vec::new();
+    for p in p_iter {
+        partitions.push(p?);
+    }
+    Ok(partitions)
+}
+
+pub fn save_doc_partition_atomic(conn: &Connection, p: &DocPartitionItem) -> Result<(), rusqlite::Error> {
+    let is_col: i64 = if p.is_collapsed { 1 } else { 0 };
+    conn.execute(
+        "INSERT INTO doc_partitions (id, name, partition_type, sort_order, is_collapsed, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            partition_type = excluded.partition_type,
+            sort_order = excluded.sort_order,
+            is_collapsed = excluded.is_collapsed,
+            updated_at = excluded.updated_at;",
+        params![p.id, p.name, p.partition_type, p.sort_order, is_col, p.created_at, p.updated_at],
+    )?;
+    Ok(())
+}
+
+pub fn delete_doc_partition_atomic(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute("DELETE FROM doc_partitions WHERE id = ?1;", params![id])?;
+    Ok(())
+}
+
 // ==================== 文档页面 (DocPages) CRUD ====================
 
 pub fn query_all_doc_pages(conn: &Connection) -> Result<Vec<DocPageItem>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, icon, cover, parent_id, is_favorite, is_archived, created_at, updated_at
+        "SELECT id, title, icon, cover, parent_id, is_favorite, is_archived, created_at, updated_at, partition_id, collection_id, properties_json
          FROM doc_pages
          ORDER BY updated_at DESC",
     )?;
@@ -347,6 +429,9 @@ pub fn query_all_doc_pages(conn: &Connection) -> Result<Vec<DocPageItem>, rusqli
             is_archived: is_arc_int != 0,
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
+            partition_id: row.get(9)?,
+            collection_id: row.get(10)?,
+            properties_json: row.get(11)?,
         })
     })?;
     let mut pages = Vec::new();
@@ -360,8 +445,8 @@ pub fn save_doc_page_atomic(conn: &Connection, page: &DocPageItem) -> Result<(),
     let is_fav: i64 = if page.is_favorite { 1 } else { 0 };
     let is_arc: i64 = if page.is_archived { 1 } else { 0 };
     conn.execute(
-        "INSERT INTO doc_pages (id, title, icon, cover, parent_id, is_favorite, is_archived, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO doc_pages (id, title, icon, cover, parent_id, is_favorite, is_archived, created_at, updated_at, partition_id, collection_id, properties_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             icon = excluded.icon,
@@ -369,8 +454,11 @@ pub fn save_doc_page_atomic(conn: &Connection, page: &DocPageItem) -> Result<(),
             parent_id = excluded.parent_id,
             is_favorite = excluded.is_favorite,
             is_archived = excluded.is_archived,
-            updated_at = excluded.updated_at;",
-        params![page.id, page.title, page.icon, page.cover, page.parent_id, is_fav, is_arc, page.created_at, page.updated_at],
+            updated_at = excluded.updated_at,
+            partition_id = excluded.partition_id,
+            collection_id = excluded.collection_id,
+            properties_json = excluded.properties_json;",
+        params![page.id, page.title, page.icon, page.cover, page.parent_id, is_fav, is_arc, page.created_at, page.updated_at, page.partition_id, page.collection_id, page.properties_json],
     )?;
     Ok(())
 }
@@ -442,7 +530,7 @@ pub fn save_all_blocks_for_page_atomic(conn: &mut Connection, page_id: &str, blo
 
 pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, page_id, name, description, schema_json, format_json, created_at, updated_at
+        "SELECT id, page_id, name, description, schema_json, format_json, created_at, updated_at, partition_id
          FROM db_collections
          ORDER BY updated_at DESC",
     )?;
@@ -456,6 +544,7 @@ pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>,
             format_json: row.get(5)?,
             created_at: row.get(6)?,
             updated_at: row.get(7)?,
+            partition_id: row.get(8)?,
         })
     })?;
     let mut cols = Vec::new();
@@ -467,16 +556,17 @@ pub fn query_all_collections(conn: &Connection) -> Result<Vec<DbCollectionItem>,
 
 pub fn save_collection_atomic(conn: &Connection, col: &DbCollectionItem) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "INSERT INTO db_collections (id, page_id, name, description, schema_json, format_json, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        "INSERT INTO db_collections (id, page_id, name, description, schema_json, format_json, created_at, updated_at, partition_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(id) DO UPDATE SET
             page_id = excluded.page_id,
             name = excluded.name,
             description = excluded.description,
             schema_json = excluded.schema_json,
             format_json = excluded.format_json,
-            updated_at = excluded.updated_at;",
-        params![col.id, col.page_id, col.name, col.description, col.schema_json, col.format_json, col.created_at, col.updated_at],
+            updated_at = excluded.updated_at,
+            partition_id = excluded.partition_id;",
+        params![col.id, col.page_id, col.name, col.description, col.schema_json, col.format_json, col.created_at, col.updated_at, col.partition_id],
     )?;
     Ok(())
 }
@@ -595,6 +685,36 @@ pub async fn db_set_setting(key: String, value: String) -> Result<(), String> {
 
 
 #[tauri::command]
+pub async fn db_get_all_partitions() -> Result<Vec<DocPartitionItem>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let conn = get_db_connection()?;
+        query_all_doc_partitions(&conn).map_err(|e| format!("查询分区失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_save_partition(partition: DocPartitionItem) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        save_doc_partition_atomic(&conn, &partition).map_err(|e| format!("保存分区失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
+pub async fn db_delete_partition(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = get_db_connection()?;
+        delete_doc_partition_atomic(&conn, &id).map_err(|e| format!("删除分区失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("执行异步任务失败: {}", e))?
+}
+
+#[tauri::command]
 pub async fn db_get_all_pages() -> Result<Vec<DocPageItem>, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let conn = get_db_connection()?;
@@ -709,6 +829,29 @@ pub async fn db_delete_collection_row(id: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn test_partition_crud() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        init_db_schema(&conn).expect("init schema");
+
+        let p1 = DocPartitionItem {
+            id: "part-private".to_string(),
+            name: "私人空间".to_string(),
+            partition_type: "private".to_string(),
+            sort_order: 1.0,
+            is_collapsed: false,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+        save_doc_partition_atomic(&conn, &p1).expect("save partition");
+        let parts = query_all_doc_partitions(&conn).expect("query partitions");
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].name, "私人空间");
+
+        delete_doc_partition_atomic(&conn, "part-private").expect("delete partition");
+        assert_eq!(query_all_doc_partitions(&conn).expect("query").len(), 0);
+    }
+
+    #[test]
     fn test_doc_and_collection_crud() {
         let mut conn = Connection::open_in_memory().expect("open in-memory db");
         init_db_schema(&conn).expect("init schema");
@@ -720,6 +863,9 @@ mod tests {
             icon: Some("📝".to_string()),
             cover: None,
             parent_id: None,
+            partition_id: Some("part-private".to_string()),
+            collection_id: None,
+            properties_json: None,
             is_favorite: true,
             is_archived: false,
             created_at: 1000,
@@ -766,6 +912,7 @@ mod tests {
         let col = DbCollectionItem {
             id: "col-1".to_string(),
             page_id: Some("page-1".to_string()),
+            partition_id: Some("part-private".to_string()),
             name: "项目进度管理表".to_string(),
             description: Some("多维属性测试".to_string()),
             schema_json: r#"{"title":{"id":"title","name":"任务名称","type":"text"}}"#.to_string(),

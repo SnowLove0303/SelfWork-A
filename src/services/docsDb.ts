@@ -4,13 +4,15 @@ import {
   DbCollection,
   DbCollectionRow,
   CollectionSchemaMap,
+  DocPartition,
 } from '../types/docs.ts';
 
+const DOC_PARTITIONS_STORAGE_KEY = 'selfwork_doc_partitions';
 const DOC_PAGES_STORAGE_KEY = 'selfwork_doc_pages';
 const DOC_BLOCKS_PREFIX = 'selfwork_doc_blocks_';
 const DB_COLLECTIONS_STORAGE_KEY = 'selfwork_db_collections';
 const DB_ROWS_PREFIX = 'selfwork_db_rows_';
-const DOCS_INIT_KEY = 'selfwork_docs_initialized';
+const DOCS_INIT_KEY = 'selfwork_docs_v2_initialized';
 
 async function tauriInvoke<T>(
   cmd: string,
@@ -20,175 +22,115 @@ async function tauriInvoke<T>(
   return await invoke<T>(cmd, args);
 }
 
-// ==================== 默认初始数据种子 (Initial Seed Data) ====================
+// ==================== 默认分区种子 (Partitions Seed) ====================
 
-export const INITIAL_DOC_PAGES: DocPage[] = [
+export const INITIAL_PARTITIONS: DocPartition[] = [
   {
-    id: 'page-getting-started',
-    title: '欢迎使用 SelfWork 知识库与多维表格',
-    icon: '🚀',
-    isFavorite: true,
-    isArchived: false,
-    createdAt: Date.now() - 3600000,
-    updatedAt: Date.now() - 3600000,
+    id: 'part_private',
+    name: '私人',
+    type: 'private',
+    sortOrder: 1,
+    isCollapsed: false,
+    createdAt: Date.now() - 86400000,
+    updatedAt: Date.now() - 86400000,
   },
   {
-    id: 'page-feature-roadmap',
-    title: 'SelfWork 2026 功能迭代规划',
-    icon: '🎯',
-    isFavorite: false,
-    isArchived: false,
-    createdAt: Date.now() - 1800000,
-    updatedAt: Date.now() - 1800000,
+    id: 'part_favorite',
+    name: '最爱',
+    type: 'favorite',
+    sortOrder: 2,
+    isCollapsed: false,
+    createdAt: Date.now() - 86400000,
+    updatedAt: Date.now() - 86400000,
+  },
+  {
+    id: 'part_workspace',
+    name: 'Jr Forever 的工作空间 总部',
+    type: 'workspace',
+    sortOrder: 3,
+    isCollapsed: false,
+    createdAt: Date.now() - 86400000,
+    updatedAt: Date.now() - 86400000,
   },
 ];
 
-export const INITIAL_DOC_BLOCKS: Record<string, DocBlock[]> = {
-  'page-getting-started': [
-    {
-      id: 'b-start-1',
-      pageId: 'page-getting-started',
-      blockType: 'h1',
-      content: '欢迎使用 SelfWork 知识库与多维表格系统',
-      sortOrder: 1,
-      createdAt: Date.now() - 3600000,
-      updatedAt: Date.now() - 3600000,
-    },
-    {
-      id: 'b-start-2',
-      pageId: 'page-getting-started',
-      blockType: 'p',
-      content: '本系统基于 Notion 核心工业级架构逆向自研，支持块级富文本页面与多维表格数据引擎。',
-      sortOrder: 2,
-      createdAt: Date.now() - 3500000,
-      updatedAt: Date.now() - 3500000,
-    },
-    {
-      id: 'b-start-3',
-      pageId: 'page-getting-started',
-      blockType: 'h2',
-      content: '💡 核心特色功能',
-      sortOrder: 3,
-      createdAt: Date.now() - 3400000,
-      updatedAt: Date.now() - 3400000,
-    },
-    {
-      id: 'b-start-4',
-      pageId: 'page-getting-started',
-      blockType: 'todo',
-      content: '支持文本、一级/二级/三级标题、待办清单、引述、代码块与分隔线',
-      properties: { checked: true },
-      sortOrder: 4,
-      createdAt: Date.now() - 3300000,
-      updatedAt: Date.now() - 3300000,
-    },
-    {
-      id: 'b-start-5',
-      pageId: 'page-getting-started',
-      blockType: 'todo',
-      content: '多维表格引擎：支持文本、数字、状态、单选标签、复选框、日期多类型',
-      properties: { checked: true },
-      sortOrder: 5,
-      createdAt: Date.now() - 3200000,
-      updatedAt: Date.now() - 3200000,
-    },
-    {
-      id: 'b-start-6',
-      pageId: 'page-getting-started',
-      blockType: 'todo',
-      content: '输入 / 呼出斜杠指令菜单，沉浸式键盘流交互',
-      properties: { checked: false },
-      sortOrder: 6,
-      createdAt: Date.now() - 3100000,
-      updatedAt: Date.now() - 3100000,
-    },
-    {
-      id: 'b-start-7',
-      pageId: 'page-getting-started',
-      blockType: 'quote',
-      content: '数据完全由本地 SQLite 原生持久化，毫秒级响应，永不丢失。',
-      sortOrder: 7,
-      createdAt: Date.now() - 3000000,
-      updatedAt: Date.now() - 3000000,
-    },
-  ],
-  'page-feature-roadmap': [
-    {
-      id: 'b-road-1',
-      pageId: 'page-feature-roadmap',
-      blockType: 'h1',
-      content: 'SelfWork 2026 功能迭代规划',
-      sortOrder: 1,
-      createdAt: Date.now() - 1800000,
-      updatedAt: Date.now() - 1800000,
-    },
-    {
-      id: 'b-road-2',
-      pageId: 'page-feature-roadmap',
-      blockType: 'p',
-      content: '追踪与沉淀工作台核心模块的研发进度与长程演进目标。',
-      sortOrder: 2,
-      createdAt: Date.now() - 1700000,
-      updatedAt: Date.now() - 1700000,
-    },
-  ],
-};
+// ==================== PLM 流程调研 多维数据库种子 (完全对齐用户 Notion 截图 1 & 3) ====================
 
-export const INITIAL_COLLECTION_SCHEMA: CollectionSchemaMap = {
+export const PLM_COLLECTION_SCHEMA: CollectionSchemaMap = {
   col_title: {
     id: 'col_title',
-    name: '任务名称',
+    name: '调查问题',
     type: 'text',
-    width: 260,
+    width: 320,
+  },
+  col_seq: {
+    id: 'col_seq',
+    name: '序号',
+    type: 'number',
+    width: 80,
+  },
+  col_module: {
+    id: 'col_module',
+    name: '模块',
+    type: 'select',
+    width: 140,
+    options: [
+      { id: 'opt_u2', label: 'U2 项目管理', color: 'amber' },
+      { id: 'opt_u3', label: 'U3 研发管理', color: 'sky' },
+      { id: 'opt_u1', label: 'U1 需求管理', color: 'purple' },
+    ],
+  },
+  col_topic: {
+    id: 'col_topic',
+    name: '调查专题',
+    type: 'select',
+    width: 220,
+    options: [
+      { id: 't_u2_01', label: 'U2-01 项目启动与负责人管理', color: 'amber' },
+      { id: 't_u2_02', label: 'U2-02 研发项目计划管理', color: 'emerald' },
+      { id: 't_u2_03', label: 'U2-03 项目任务分解与责任分配管理', color: 'amber' },
+      { id: 't_u2_04', label: 'U2-04 项目任务延期与计划偏差管理', color: 'sky' },
+      { id: 't_u2_05', label: 'U2-05 项目生命周期与阶段流转管理', color: 'rose' },
+      { id: 't_u2_06', label: 'U2-06 项目目标与范围变更管理', color: 'amber' },
+      { id: 't_u2_07', label: 'U2-07 跨项目资源协调与优先级管理', color: 'sky' },
+      { id: 't_u2_08', label: 'U2-08 研发项目暂停与恢复管理', color: 'rose' },
+      { id: 't_u2_09', label: 'U2-09 研发项目正常结项管理', color: 'emerald' },
+    ],
   },
   col_status: {
     id: 'col_status',
-    name: '进度状态',
+    name: '确认状态',
     type: 'status',
-    width: 140,
+    width: 130,
     options: [
-      { id: 'opt_todo', label: '待处理', color: 'slate' },
-      { id: 'opt_prog', label: '进行中', color: 'sky' },
-      { id: 'opt_done', label: '已完成', color: 'emerald' },
+      { id: 'st_partial', label: '部分确认', color: 'amber' },
+      { id: 'st_confirmed', label: '已确认', color: 'emerald' },
+      { id: 'st_pending', label: '待调研', color: 'slate' },
     ],
   },
-  col_priority: {
-    id: 'col_priority',
-    name: '优先级',
-    type: 'select',
-    width: 120,
-    options: [
-      { id: 'p0', label: 'P0 紧急', color: 'rose' },
-      { id: 'p1', label: 'P1 重要', color: 'amber' },
-      { id: 'p2', label: 'P2 普通', color: 'slate' },
-    ],
-  },
-  col_owner: {
-    id: 'col_owner',
-    name: '负责人',
-    type: 'text',
-    width: 120,
-  },
-  col_date: {
-    id: 'col_date',
-    name: '截止日期',
-    type: 'date',
-    width: 140,
-  },
-  col_verified: {
-    id: 'col_verified',
-    name: '机检通过',
-    type: 'checkbox',
-    width: 100,
-  },
+  col_kw1: { id: 'col_kw1', name: '关键词1', type: 'text', width: 120 },
+  col_kw2: { id: 'col_kw2', name: '关键词2', type: 'text', width: 120 },
+  col_kw3: { id: 'col_kw3', name: '关键词3', type: 'text', width: 120 },
+  col_kw4: { id: 'col_kw4', name: '关键词4', type: 'text', width: 120 },
+  col_kw5: { id: 'col_kw5', name: '关键词5', type: 'text', width: 120 },
+  col_kw6: { id: 'col_kw6', name: '关键词6', type: 'text', width: 120 },
+  col_notes: { id: 'col_notes', name: '待核实事项', type: 'text', width: 260 },
 };
+
+export const INITIAL_COLLECTION_SCHEMA = PLM_COLLECTION_SCHEMA;
 
 export const INITIAL_COLLECTIONS: DbCollection[] = [
   {
-    id: 'col_roadmap_main',
-    name: '2026 核心任务多维追踪表',
-    description: '涵盖 SelfWork 启动器、脑图、待办便签与文档数据库等全矩阵任务',
-    schema: INITIAL_COLLECTION_SCHEMA,
+    id: 'col_plm_survey',
+    partitionId: 'part_private',
+    name: 'PLM流程调研',
+    description: '涵盖 U2 项目管理、U3 研发管理、U1 需求管理全景调研',
+    schema: PLM_COLLECTION_SCHEMA,
+    views: [
+      { id: 'v1', name: 'U2 项目管理全景调研表', type: 'table' },
+      { id: 'v2', name: 'U3 研发管理全景调研表', type: 'table' },
+      { id: 'v3', name: 'U1 需求管理全景调研表', type: 'table' },
+    ],
     createdAt: Date.now() - 7200000,
     updatedAt: Date.now() - 7200000,
   },
@@ -196,51 +138,264 @@ export const INITIAL_COLLECTIONS: DbCollection[] = [
 
 export const INITIAL_COLLECTION_ROWS: DbCollectionRow[] = [
   {
-    id: 'row-1',
-    collectionId: 'col_roadmap_main',
+    id: 'row-plm-1',
+    collectionId: 'col_plm_survey',
     cells: {
-      col_title: '构建文档/多维表格数据库引擎',
-      col_status: 'opt_prog',
-      col_priority: 'p0',
-      col_owner: 'Antigravity',
-      col_date: '2026-11-15',
-      col_verified: true,
+      col_title: '第1问：项目负责人与执行责任 调查研发项目负责人的指定方式、执...',
+      col_seq: 1,
+      col_module: 'opt_u2',
+      col_topic: 't_u2_01',
+      col_status: 'st_partial',
+      col_kw1: '项目负责人',
+      col_kw2: '立项工程师',
+      col_kw3: '多人协作',
+      col_kw4: '主责任人',
+      col_kw5: '进度管理',
+      col_kw6: '交接留痕',
+      col_notes: '1. 职责与台账记录机制：核实当前研发台账或系统表单中，项目主负责人与协同人员的具体职责是否有统一的结构化记录字段。\n2. 协作任务派发与追踪：核实跨人员/跨部门多人协作时，项目子任务分解与执行进度的集中追踪载体。',
     },
     sortOrder: 1,
     createdAt: Date.now() - 7200000,
     updatedAt: Date.now() - 7200000,
   },
   {
-    id: 'row-2',
-    collectionId: 'col_roadmap_main',
+    id: 'row-plm-2',
+    collectionId: 'col_plm_survey',
     cells: {
-      col_title: 'Launcher 自动化脚本执行报文流',
-      col_status: 'opt_done',
-      col_priority: 'p1',
-      col_owner: 'Administrator',
-      col_date: '2026-11-12',
-      col_verified: true,
+      col_title: '第2问：研发项目计划制定机制 调查研发项目立项后计划制定的规范...',
+      col_seq: 2,
+      col_module: 'opt_u2',
+      col_topic: 't_u2_02',
+      col_status: 'st_partial',
+      col_kw1: '立项计划',
+      col_kw2: '里程碑甘特',
+      col_kw3: '基线审查',
+      col_kw4: '资源排期',
     },
     sortOrder: 2,
     createdAt: Date.now() - 7100000,
     updatedAt: Date.now() - 7100000,
   },
   {
-    id: 'row-3',
-    collectionId: 'col_roadmap_main',
+    id: 'row-plm-3',
+    collectionId: 'col_plm_survey',
     cells: {
-      col_title: '思维导图双向同步与分区分组',
-      col_status: 'opt_done',
-      col_priority: 'p2',
-      col_owner: 'Team',
-      col_date: '2026-11-10',
-      col_verified: true,
+      col_title: '第3问：项目阶段目标与里程碑设置 调查研发项目执行过程中阶段目...',
+      col_seq: 3,
+      col_module: 'opt_u2',
+      col_topic: 't_u2_02',
+      col_status: 'st_partial',
+      col_kw1: '阶段目标',
+      col_kw2: '里程碑交付物',
     },
     sortOrder: 3,
     createdAt: Date.now() - 7000000,
     updatedAt: Date.now() - 7000000,
   },
+  {
+    id: 'row-plm-4',
+    collectionId: 'col_plm_survey',
+    cells: {
+      col_title: '第4问：项目任务分解及分配机制 调查研发立项后具体工作任务的拆...',
+      col_seq: 4,
+      col_module: 'opt_u2',
+      col_topic: 't_u2_03',
+      col_status: 'st_partial',
+      col_kw1: 'WBS工作分解',
+      col_kw2: '执行责任矩阵',
+    },
+    sortOrder: 4,
+    createdAt: Date.now() - 6900000,
+    updatedAt: Date.now() - 6900000,
+  },
+  {
+    id: 'row-plm-5',
+    collectionId: 'col_plm_survey',
+    cells: {
+      col_title: '第5问：任务进度跟踪与完成确认 调查研发项目执行过程中任务进度...',
+      col_seq: 5,
+      col_module: 'opt_u2',
+      col_topic: 't_u2_03',
+      col_status: 'st_partial',
+      col_kw1: '实时进度看板',
+      col_kw2: '验收打卡',
+    },
+    sortOrder: 5,
+    createdAt: Date.now() - 6800000,
+    updatedAt: Date.now() - 6800000,
+  },
+  {
+    id: 'row-plm-6',
+    collectionId: 'col_plm_survey',
+    cells: {
+      col_title: '第6问：项目任务延期时的处理机制 调查研发任务执行延误时的原因...',
+      col_seq: 6,
+      col_module: 'opt_u2',
+      col_topic: 't_u2_04',
+      col_status: 'st_partial',
+      col_kw1: '偏差告警',
+      col_kw2: '纠偏策略',
+    },
+    sortOrder: 6,
+    createdAt: Date.now() - 6700000,
+    updatedAt: Date.now() - 6700000,
+  },
 ];
+
+// 对齐 Row 1 专属的页面正文 Block 数据 (完全对齐 Notion 截图 3)
+export const INITIAL_ROW_PAGE_BLOCKS: Record<string, DocBlock[]> = {
+  'row-plm-1': [
+    {
+      id: 'b-plm-1',
+      pageId: 'row-plm-1',
+      blockType: 'h1',
+      content: '调查研发项目负责人的指定方式、执行职责分工以及跨人员协作机制:',
+      sortOrder: 1,
+      createdAt: Date.now() - 7200000,
+      updatedAt: Date.now() - 7200000,
+    },
+    {
+      id: 'b-plm-2',
+      pageId: 'row-plm-1',
+      blockType: 'bullet',
+      content: '项目立项后，项目负责人通常由谁担任？承担哪些具体研发与进度管理职责？',
+      sortOrder: 2,
+      createdAt: Date.now() - 7100000,
+      updatedAt: Date.now() - 7100000,
+    },
+    {
+      id: 'b-plm-3',
+      pageId: 'row-plm-1',
+      blockType: 'bullet',
+      content: '复杂项目涉及多名工程师或多部门协作时，是否设立明确的主责任人？',
+      sortOrder: 3,
+      createdAt: Date.now() - 7000000,
+      updatedAt: Date.now() - 7000000,
+    },
+    {
+      id: 'b-plm-4',
+      pageId: 'row-plm-1',
+      blockType: 'h2',
+      content: '1. 职责与台账记录机制',
+      sortOrder: 4,
+      createdAt: Date.now() - 6900000,
+      updatedAt: Date.now() - 6900000,
+    },
+    {
+      id: 'b-plm-5',
+      pageId: 'row-plm-1',
+      blockType: 'quote',
+      content: '核实当前研发台账或系统表单中，项目主负责人与协同人员的具体职责是否有统一的结构化记录字段。目前是通过口头沟通还是企微群确认？',
+      sortOrder: 5,
+      createdAt: Date.now() - 6800000,
+      updatedAt: Date.now() - 6800000,
+    },
+    {
+      id: 'b-plm-6',
+      pageId: 'row-plm-1',
+      blockType: 'h2',
+      content: '2. 协作任务派发与追踪',
+      sortOrder: 6,
+      createdAt: Date.now() - 6700000,
+      updatedAt: Date.now() - 6700000,
+    },
+    {
+      id: 'b-plm-7',
+      pageId: 'row-plm-1',
+      blockType: 'todo',
+      content: '核实跨人员/跨部门多人协作时，项目子任务分解与执行进度的集中追踪载体（目前是通过企业微信、线下表格还是口头沟通）。',
+      properties: { checked: false },
+      sortOrder: 7,
+      createdAt: Date.now() - 6600000,
+      updatedAt: Date.now() - 6600000,
+    },
+  ],
+};
+
+export const INITIAL_DOC_PAGES: DocPage[] = [
+  {
+    id: 'page_plm_readme',
+    partitionId: 'part_private',
+    title: 'PLM项目说明',
+    icon: '📑',
+    isFavorite: false,
+    isArchived: false,
+    createdAt: Date.now() - 8000000,
+    updatedAt: Date.now() - 8000000,
+  },
+  {
+    id: 'page_python_notes',
+    partitionId: 'part_private',
+    title: 'python白梳理',
+    icon: '🐍',
+    isFavorite: false,
+    isArchived: false,
+    createdAt: Date.now() - 7500000,
+    updatedAt: Date.now() - 7500000,
+  },
+  {
+    id: 'page_env_variables',
+    partitionId: 'part_favorite',
+    title: '01.2.2 环境变量 (Environment Variables)',
+    icon: '📄',
+    isFavorite: true,
+    isArchived: false,
+    createdAt: Date.now() - 9000000,
+    updatedAt: Date.now() - 9000000,
+  },
+];
+
+// ==================== 分区服务 (Partitions) ====================
+
+export async function loadDocPartitions(): Promise<DocPartition[]> {
+  try {
+    const raw = await tauriInvoke<any[]>('db_get_all_partitions');
+    if (raw && raw.length > 0) {
+      localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(raw));
+      return raw;
+    }
+
+    const saved = localStorage.getItem(DOC_PARTITIONS_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+
+    // 播种默认分区
+    for (const p of INITIAL_PARTITIONS) {
+      await tauriInvoke('db_save_partition', { partition: p });
+    }
+    localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(INITIAL_PARTITIONS));
+    return INITIAL_PARTITIONS;
+  } catch (err) {
+    const saved = localStorage.getItem(DOC_PARTITIONS_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+    return INITIAL_PARTITIONS;
+  }
+}
+
+export async function saveDocPartition(partition: DocPartition): Promise<void> {
+  try {
+    await tauriInvoke('db_save_partition', { partition });
+  } catch (err) {
+    console.warn('[DocPartition] Tauri IPC save failed, using fallback', err);
+  }
+  const partitions = await loadDocPartitions();
+  const idx = partitions.findIndex((p) => p.id === partition.id);
+  if (idx >= 0) {
+    partitions[idx] = partition;
+  } else {
+    partitions.push(partition);
+  }
+  localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(partitions));
+}
+
+export async function deleteDocPartition(id: string): Promise<void> {
+  try {
+    await tauriInvoke('db_delete_partition', { id });
+  } catch (err) {
+    console.warn('[DocPartition] Tauri IPC delete failed, using fallback', err);
+  }
+  const partitions = (await loadDocPartitions()).filter((p) => p.id !== id);
+  localStorage.setItem(DOC_PARTITIONS_STORAGE_KEY, JSON.stringify(partitions));
+}
 
 // ==================== 文档页面服务 (DocPages) ====================
 
@@ -248,8 +403,22 @@ export async function loadDocPages(): Promise<DocPage[]> {
   try {
     const rawPages = await tauriInvoke<any[]>('db_get_all_pages');
     if (rawPages && rawPages.length > 0) {
-      localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(rawPages));
-      return rawPages;
+      const formatted: DocPage[] = rawPages.map((p) => ({
+        id: p.id,
+        title: p.title,
+        icon: p.icon,
+        cover: p.cover,
+        parentId: p.parentId,
+        partitionId: p.partitionId || 'part_private',
+        collectionId: p.collectionId,
+        properties: p.propertiesJson ? JSON.parse(p.propertiesJson) : undefined,
+        isFavorite: p.isFavorite,
+        isArchived: p.isArchived,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      }));
+      localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(formatted));
+      return formatted;
     }
 
     const isInit = localStorage.getItem(DOCS_INIT_KEY);
@@ -261,13 +430,12 @@ export async function loadDocPages(): Promise<DocPage[]> {
 
     // 首次播种
     for (const p of INITIAL_DOC_PAGES) {
-      await tauriInvoke('db_save_page', { page: p });
+      await saveDocPage(p);
     }
     localStorage.setItem(DOCS_INIT_KEY, 'true');
     localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(INITIAL_DOC_PAGES));
     return INITIAL_DOC_PAGES;
   } catch (err) {
-    // 降级为 localStorage
     const saved = localStorage.getItem(DOC_PAGES_STORAGE_KEY);
     if (saved) return JSON.parse(saved);
     localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(INITIAL_DOC_PAGES));
@@ -276,11 +444,27 @@ export async function loadDocPages(): Promise<DocPage[]> {
 }
 
 export async function saveDocPage(page: DocPage): Promise<void> {
+  const payload = {
+    id: page.id,
+    title: page.title,
+    icon: page.icon || null,
+    cover: page.cover || null,
+    parentId: page.parentId || null,
+    partitionId: page.partitionId || 'part_private',
+    collectionId: page.collectionId || null,
+    propertiesJson: page.properties ? JSON.stringify(page.properties) : null,
+    isFavorite: page.isFavorite,
+    isArchived: page.isArchived,
+    createdAt: page.createdAt,
+    updatedAt: page.updatedAt,
+  };
+
   try {
-    await tauriInvoke('db_save_page', { page });
+    await tauriInvoke('db_save_page', { page: payload });
   } catch (err) {
-    console.warn('[DocPage] Tauri IPC save failed, using localStorage fallback', err);
+    console.warn('[DocPage] Tauri IPC save failed, using fallback', err);
   }
+
   const pages = await loadDocPages();
   const idx = pages.findIndex((p) => p.id === page.id);
   if (idx >= 0) {
@@ -295,7 +479,7 @@ export async function deleteDocPage(id: string): Promise<void> {
   try {
     await tauriInvoke('db_delete_page', { id });
   } catch (err) {
-    console.warn('[DocPage] Tauri IPC delete failed, using localStorage fallback', err);
+    console.warn('[DocPage] Tauri IPC delete failed, using fallback', err);
   }
   const pages = (await loadDocPages()).filter((p) => p.id !== id);
   localStorage.setItem(DOC_PAGES_STORAGE_KEY, JSON.stringify(pages));
@@ -328,8 +512,8 @@ export async function loadDocBlocks(pageId: string): Promise<DocBlock[]> {
     if (saved) return JSON.parse(saved);
 
     // 播种种子数据
-    if (INITIAL_DOC_BLOCKS[pageId]) {
-      const seedBlocks = INITIAL_DOC_BLOCKS[pageId];
+    if (INITIAL_ROW_PAGE_BLOCKS[pageId]) {
+      const seedBlocks = INITIAL_ROW_PAGE_BLOCKS[pageId];
       await saveDocBlocks(pageId, seedBlocks);
       return seedBlocks;
     }
@@ -338,7 +522,7 @@ export async function loadDocBlocks(pageId: string): Promise<DocBlock[]> {
   } catch (err) {
     const saved = localStorage.getItem(`${DOC_BLOCKS_PREFIX}${pageId}`);
     if (saved) return JSON.parse(saved);
-    if (INITIAL_DOC_BLOCKS[pageId]) return INITIAL_DOC_BLOCKS[pageId];
+    if (INITIAL_ROW_PAGE_BLOCKS[pageId]) return INITIAL_ROW_PAGE_BLOCKS[pageId];
     return [];
   }
 }
@@ -363,7 +547,7 @@ export async function saveDocBlocks(pageId: string, blocks: DocBlock[]): Promise
       blocks: backendBlocks,
     });
   } catch (err) {
-    console.warn('[DocBlocks] Tauri IPC save failed, using localStorage fallback', err);
+    console.warn('[DocBlocks] Tauri IPC save failed, using fallback', err);
   }
   localStorage.setItem(`${DOC_BLOCKS_PREFIX}${pageId}`, JSON.stringify(blocks));
 }
@@ -377,6 +561,7 @@ export async function loadDbCollections(): Promise<DbCollection[]> {
       const formatted: DbCollection[] = rawCols.map((c) => ({
         id: c.id,
         pageId: c.pageId,
+        partitionId: c.partitionId || 'part_private',
         name: c.name,
         description: c.description,
         schema: typeof c.schemaJson === 'string' ? JSON.parse(c.schemaJson) : c.schemaJson,
@@ -391,11 +576,10 @@ export async function loadDbCollections(): Promise<DbCollection[]> {
     const saved = localStorage.getItem(DB_COLLECTIONS_STORAGE_KEY);
     if (saved) return JSON.parse(saved);
 
-    // 播种初始表格
+    // 播种初始表格与记录行
     for (const c of INITIAL_COLLECTIONS) {
       await saveDbCollection(c);
     }
-    // 播种数据行
     for (const r of INITIAL_COLLECTION_ROWS) {
       await saveDbCollectionRow(r);
     }
@@ -411,6 +595,7 @@ export async function saveDbCollection(col: DbCollection): Promise<void> {
   const payload = {
     id: col.id,
     pageId: col.pageId || null,
+    partitionId: col.partitionId || 'part_private',
     name: col.name,
     description: col.description || null,
     schemaJson: JSON.stringify(col.schema),
@@ -422,7 +607,7 @@ export async function saveDbCollection(col: DbCollection): Promise<void> {
   try {
     await tauriInvoke('db_save_collection', { collection: payload });
   } catch (err) {
-    console.warn('[DbCollection] Tauri IPC save failed, using localStorage fallback', err);
+    console.warn('[DbCollection] Tauri IPC save failed, using fallback', err);
   }
 
   const collections = await loadDbCollections();
@@ -439,7 +624,7 @@ export async function deleteDbCollection(id: string): Promise<void> {
   try {
     await tauriInvoke('db_delete_collection', { id });
   } catch (err) {
-    console.warn('[DbCollection] Tauri IPC delete failed, using localStorage fallback', err);
+    console.warn('[DbCollection] Tauri IPC delete failed, using fallback', err);
   }
   const collections = (await loadDbCollections()).filter((c) => c.id !== id);
   localStorage.setItem(DB_COLLECTIONS_STORAGE_KEY, JSON.stringify(collections));
@@ -467,14 +652,14 @@ export async function loadDbCollectionRows(collectionId: string): Promise<DbColl
     const saved = localStorage.getItem(`${DB_ROWS_PREFIX}${collectionId}`);
     if (saved) return JSON.parse(saved);
 
-    if (collectionId === 'col_roadmap_main') {
+    if (collectionId === 'col_plm_survey') {
       return INITIAL_COLLECTION_ROWS;
     }
     return [];
   } catch (err) {
     const saved = localStorage.getItem(`${DB_ROWS_PREFIX}${collectionId}`);
     if (saved) return JSON.parse(saved);
-    if (collectionId === 'col_roadmap_main') return INITIAL_COLLECTION_ROWS;
+    if (collectionId === 'col_plm_survey') return INITIAL_COLLECTION_ROWS;
     return [];
   }
 }
@@ -492,7 +677,7 @@ export async function saveDbCollectionRow(row: DbCollectionRow): Promise<void> {
   try {
     await tauriInvoke('db_save_collection_row', { row: payload });
   } catch (err) {
-    console.warn('[DbCollectionRow] Tauri IPC save failed, using localStorage fallback', err);
+    console.warn('[DbCollectionRow] Tauri IPC save failed, using fallback', err);
   }
 
   const rows = await loadDbCollectionRows(row.collectionId);
@@ -509,7 +694,7 @@ export async function deleteDbCollectionRow(collectionId: string, id: string): P
   try {
     await tauriInvoke('db_delete_collection_row', { id });
   } catch (err) {
-    console.warn('[DbCollectionRow] Tauri IPC delete failed, using localStorage fallback', err);
+    console.warn('[DbCollectionRow] Tauri IPC delete failed, using fallback', err);
   }
 
   const rows = (await loadDbCollectionRows(collectionId)).filter((r) => r.id !== id);
