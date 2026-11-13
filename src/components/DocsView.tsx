@@ -16,7 +16,6 @@ import {
 import { BlockEditor } from './docs/editor/BlockEditor.tsx';
 import { TableDatabaseView } from './docs/database/TableDatabaseView.tsx';
 import {
-  FileText,
   Plus,
   Trash2,
   ChevronLeft,
@@ -27,7 +26,6 @@ import {
   Table,
   Folder,
   FolderPlus,
-  Clock,
   Database,
   Edit2,
   Check,
@@ -65,7 +63,6 @@ export const DocsView: React.FC = () => {
           setPartitions(loadedParts);
           setPages(loadedPages);
           setCollections(loadedCols);
-          // 自动选中首个可用条目或置空
           if (loadedPages.length > 0) {
             setActiveType('page');
             setActiveId(loadedPages[0].id);
@@ -103,7 +100,7 @@ export const DocsView: React.FC = () => {
 
   // 2. 在「私人」根模块下创建新子分区
   const handleCreateSubPartitionSubmit = async () => {
-    const name = newSubPartName.trim() || '新子分区';
+    const name = newSubPartName.trim() || '未命名分区';
     const sub = await createSubPartition('part_private', name);
     setPartitions((prev) => [...prev, sub]);
     setIsCreatingSubPart(false);
@@ -126,10 +123,9 @@ export const DocsView: React.FC = () => {
     setEditingPartId(null);
   };
 
-  // 4. 删除子分区 (同时解绑或级联处理内部条目到私人根目录)
+  // 4. 删除子分区
   const handleDeleteSubPartition = async (e: React.MouseEvent, partId: string) => {
     e.stopPropagation();
-    // 迁移该分区下的页面和数据库到 part_private
     const updatedPages = pages.map((p) =>
       p.partitionId === partId ? { ...p, partitionId: 'part_private' } : p
     );
@@ -141,7 +137,6 @@ export const DocsView: React.FC = () => {
     setPartitions((prev) => prev.filter((p) => p.id !== partId));
     await deleteDocPartition(partId);
 
-    // 批量异步更新被迁移的项目
     pages
       .filter((p) => p.partitionId === partId)
       .forEach((p) => saveDocPage({ ...p, partitionId: 'part_private' }));
@@ -150,7 +145,7 @@ export const DocsView: React.FC = () => {
       .forEach((c) => saveDbCollection({ ...c, partitionId: 'part_private' }));
   };
 
-  // 5. 在指定分区或子分区新建独立笔记
+  // 5. 在指定分区新建独立笔记
   const handleCreatePageInPartition = async (partitionId: string = 'part_private') => {
     const newPage: DocPage = {
       id: 'page_' + Date.now(),
@@ -169,13 +164,12 @@ export const DocsView: React.FC = () => {
     await saveDocPage(newPage);
   };
 
-  // 6. 在指定分区或子分区新建笔记数据库 (DbCollection)
+  // 6. 在指定分区新建笔记数据库
   const handleCreateCollectionInPartition = async (partitionId: string = 'part_private') => {
     const newCol: DbCollection = {
       id: 'col_' + Date.now(),
       partitionId,
       name: '未命名笔记数据库',
-      description: '统一管理多个关联笔记的多维知识库',
       schema: { ...INITIAL_COLLECTION_SCHEMA },
       views: [{ id: 'v_' + Date.now(), name: '所有笔记', type: 'table' }],
       isFavorite: false,
@@ -258,8 +252,9 @@ export const DocsView: React.FC = () => {
     );
   };
 
-  // 12. 切换当前条目的收藏状态 (真实联动)
+  // 12. 切换当前条目收藏
   const handleToggleCurrentFavorite = async () => {
+    if (!activeId) return;
     if (activeType === 'page') {
       const target = pages.find((p) => p.id === activeId);
       if (!target) return;
@@ -293,22 +288,20 @@ export const DocsView: React.FC = () => {
     }
   };
 
-  // 选中的对象
   const selectedPage = pages.find((p) => p.id === activeId);
   const selectedCollection = collections.find((c) => c.id === activeId);
 
-  // 当前激活项的收藏状态
   const isCurrentFavorite =
     activeType === 'page'
       ? Boolean(selectedPage?.isFavorite)
       : Boolean(selectedCollection?.isFavorite);
 
-  // 子分区列表 (挂在 part_private 之下)
+  // 子分区
   const subPartitions = useMemo(() => {
     return partitions.filter((p) => p.parentId === 'part_private' || (p.parentId && p.parentId !== null));
   }, [partitions]);
 
-  // 动态聚合：「最近」访问/更新的时间线 (按 updatedAt 降序排名前 10)
+  // 最近
   const recentItems = useMemo(() => {
     const pItems = pages.map((p) => ({
       id: p.id,
@@ -332,7 +325,7 @@ export const DocsView: React.FC = () => {
     return combined.filter((i) => i.title.toLowerCase().includes(filter)).slice(0, 10);
   }, [pages, collections, searchFilter]);
 
-  // 动态聚合：「收藏」标星条目
+  // 收藏
   const favoriteItems = useMemo(() => {
     const pItems = pages
       .filter((p) => p.isFavorite)
@@ -355,13 +348,13 @@ export const DocsView: React.FC = () => {
     return [...pItems, ...cItems].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [pages, collections]);
 
-  // 计算面包屑导航路径
+  // 面包屑
   const breadcrumbPath = useMemo(() => {
+    if (!selectedPage && !selectedCollection) {
+      return '';
+    }
     const currentPartId =
       activeType === 'collection' ? selectedCollection?.partitionId : selectedPage?.partitionId;
-    if (!selectedPage && !selectedCollection) {
-      return '私人 / 个人工作台';
-    }
     const title =
       activeType === 'collection'
         ? selectedCollection?.name || '笔记数据库'
@@ -377,24 +370,15 @@ export const DocsView: React.FC = () => {
     return `私人 / ${title}`;
   }, [activeType, selectedPage, selectedCollection, subPartitions]);
 
-  // 格式化相对时间
-  const formatRelativeTime = (timestamp: number) => {
-    const diff = Date.now() - timestamp;
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-    return new Date(timestamp).toLocaleDateString();
-  };
-
   return (
     <div className="flex-1 flex h-full w-full bg-[#080b11] text-slate-100 overflow-hidden select-none">
-      {/* 左侧 Notion 纯净三模块分区侧栏 */}
+      {/* 左侧 Notion 风格纯净三分区侧栏 */}
       <div
         className={`border-r border-white/5 bg-[#0a0d14]/90 backdrop-blur-xl flex flex-col shrink-0 transition-all duration-200 relative ${
-          sidebarCollapsed ? 'w-10' : 'w-64'
+          sidebarCollapsed ? 'w-10' : 'w-60'
         }`}
       >
-        {/* 侧栏顶端检索栏 (49px 高度对齐基准线) */}
+        {/* 侧栏顶端检索栏 */}
         <div className="h-[49px] border-b border-white/5 px-3 flex items-center justify-between shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 flex-1 mr-2">
@@ -405,7 +389,7 @@ export const DocsView: React.FC = () => {
                 />
                 <input
                   type="text"
-                  placeholder="搜索笔记或数据库..."
+                  placeholder="搜索或询问 Ctrl+K"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
                   className="w-full bg-white/5 border border-white/5 rounded-md pl-7 pr-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500/50"
@@ -423,12 +407,12 @@ export const DocsView: React.FC = () => {
           </button>
         </div>
 
-        {/* 侧栏分区内容区 (已彻底净化所有假入口，严格分为：私人/最近/收藏) */}
+        {/* 侧栏分区列表 (遵循少字原则：绝无多余文本说明) */}
         {!sidebarCollapsed && (
-          <div className="flex-1 overflow-y-auto p-2 space-y-4 text-xs">
-            {/* ==================== 模块 1：私人 (Private) ==================== */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-3 text-xs">
+            {/* 1. 私人 (Private) */}
             <div>
-              <div className="flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-200 cursor-pointer group rounded hover:bg-white/5">
+              <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-slate-400 hover:text-slate-200 cursor-pointer group rounded hover:bg-white/5">
                 <div
                   className="flex items-center gap-1.5 flex-1"
                   onClick={() => handleTogglePartition('part_private')}
@@ -441,27 +425,27 @@ export const DocsView: React.FC = () => {
                         : ''
                     }`}
                   />
-                  <span className="tracking-wide">私人</span>
+                  <span>私人</span>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setIsCreatingSubPart(true)}
                     className="p-0.5 text-slate-400 hover:text-sky-400 rounded hover:bg-white/10"
-                    title="在私人模块下新建子分区"
+                    title="新建子分区"
                   >
                     <FolderPlus size={12} />
                   </button>
                   <button
                     onClick={() => handleCreateCollectionInPartition('part_private')}
                     className="p-0.5 text-slate-400 hover:text-sky-400 rounded hover:bg-white/10"
-                    title="新建笔记数据库"
+                    title="新建数据库"
                   >
                     <Database size={12} />
                   </button>
                   <button
                     onClick={() => handleCreatePageInPartition('part_private')}
                     className="p-0.5 text-slate-400 hover:text-white rounded hover:bg-white/10"
-                    title="新建独立笔记"
+                    title="新建笔记"
                   >
                     <Plus size={12} />
                   </button>
@@ -469,15 +453,15 @@ export const DocsView: React.FC = () => {
               </div>
 
               {!partitions.find((p) => p.id === 'part_private')?.isCollapsed && (
-                <div className="space-y-1 mt-1 pl-1">
-                  {/* 新建子分区内联输入框 */}
+                <div className="space-y-0.5 mt-0.5 pl-1">
+                  {/* 新建子分区输入框 */}
                   {isCreatingSubPart && (
                     <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded border border-sky-500/30 my-1">
                       <Folder size={12} className="text-sky-400 shrink-0" />
                       <input
                         type="text"
                         autoFocus
-                        placeholder="子分区名称..."
+                        placeholder="分区名称..."
                         value={newSubPartName}
                         onChange={(e) => setNewSubPartName(e.target.value)}
                         onKeyDown={(e) => {
@@ -489,21 +473,19 @@ export const DocsView: React.FC = () => {
                       <button
                         onClick={handleCreateSubPartitionSubmit}
                         className="p-0.5 text-emerald-400 hover:text-emerald-300"
-                        title="确认创建"
                       >
                         <Check size={11} />
                       </button>
                       <button
                         onClick={() => setIsCreatingSubPart(false)}
                         className="p-0.5 text-slate-400 hover:text-slate-300"
-                        title="取消"
                       >
                         <X size={11} />
                       </button>
                     </div>
                   )}
 
-                  {/* 子分区列表树渲染 */}
+                  {/* 子分区列表 */}
                   {subPartitions.map((sub) => {
                     const isCollapsed = sub.isCollapsed;
                     const isEditing = editingPartId === sub.id;
@@ -511,8 +493,7 @@ export const DocsView: React.FC = () => {
                     const subCols = collections.filter((c) => c.partitionId === sub.id);
 
                     return (
-                      <div key={sub.id} className="rounded-md overflow-hidden bg-white/[0.02] border border-white/5 my-0.5">
-                        {/* 子分区头部栏 */}
+                      <div key={sub.id} className="rounded overflow-hidden my-0.5">
                         <div className="flex items-center justify-between px-2 py-1 text-[11px] text-slate-300 hover:bg-white/5 cursor-pointer group">
                           <div
                             className="flex items-center gap-1.5 flex-1 min-w-0"
@@ -540,20 +521,18 @@ export const DocsView: React.FC = () => {
                               />
                             ) : (
                               <span
-                                className="truncate font-medium text-slate-200"
+                                className="truncate text-slate-300"
                                 onDoubleClick={(e) => {
                                   e.stopPropagation();
                                   setEditingPartId(sub.id);
                                   setEditingPartName(sub.name);
                                 }}
-                                title="双击重命名"
                               >
                                 {sub.name}
                               </span>
                             )}
                           </div>
 
-                          {/* 子分区动作按钮组：+数据库、+笔记、重命名、删除 */}
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={(e) => {
@@ -561,7 +540,7 @@ export const DocsView: React.FC = () => {
                                 handleCreateCollectionInPartition(sub.id);
                               }}
                               className="p-0.5 text-slate-400 hover:text-sky-400 rounded"
-                              title="在子分区内建立笔记数据库"
+                              title="新建数据库"
                             >
                               <Database size={11} />
                             </button>
@@ -571,7 +550,7 @@ export const DocsView: React.FC = () => {
                                 handleCreatePageInPartition(sub.id);
                               }}
                               className="p-0.5 text-slate-400 hover:text-white rounded"
-                              title="在子分区内直接创建笔记"
+                              title="新建笔记"
                             >
                               <Plus size={11} />
                             </button>
@@ -589,23 +568,15 @@ export const DocsView: React.FC = () => {
                             <button
                               onClick={(e) => handleDeleteSubPartition(e, sub.id)}
                               className="p-0.5 text-slate-400 hover:text-rose-400 rounded"
-                              title="删除子分区"
+                              title="删除分区"
                             >
                               <Trash2 size={10} />
                             </button>
                           </div>
                         </div>
 
-                        {/* 子分区内部条目 */}
                         {!isCollapsed && (
-                          <div className="pl-4 pr-1 pb-1 space-y-0.5 border-t border-white/[0.03]">
-                            {subCols.length === 0 && subPages.length === 0 && (
-                              <div className="py-1 px-2 text-[10px] text-slate-600 italic">
-                                空分区 (点击右侧 + 建立数据库或笔记)
-                              </div>
-                            )}
-
-                            {/* 子分区内的数据库 */}
+                          <div className="pl-4 space-y-0.5">
                             {subCols.map((c) => {
                               const isActive = activeType === 'collection' && activeId === c.id;
                               return (
@@ -629,14 +600,12 @@ export const DocsView: React.FC = () => {
                                     <button
                                       onClick={(e) => handleToggleItemFavorite(e, 'collection', c.id)}
                                       className={`p-0.5 ${c.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
-                                      title={c.isFavorite ? '取消收藏' : '收藏'}
                                     >
                                       <Star size={10} className={c.isFavorite ? 'fill-amber-400' : ''} />
                                     </button>
                                     <button
                                       onClick={(e) => handleDeleteCollection(e, c.id)}
                                       className="p-0.5 text-slate-500 hover:text-rose-400 rounded"
-                                      title="删除数据库"
                                     >
                                       <Trash2 size={10} />
                                     </button>
@@ -645,7 +614,6 @@ export const DocsView: React.FC = () => {
                               );
                             })}
 
-                            {/* 子分区内的独立笔记 */}
                             {subPages.map((p) => {
                               const isActive = activeType === 'page' && activeId === p.id;
                               return (
@@ -669,14 +637,12 @@ export const DocsView: React.FC = () => {
                                     <button
                                       onClick={(e) => handleToggleItemFavorite(e, 'page', p.id)}
                                       className={`p-0.5 ${p.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
-                                      title={p.isFavorite ? '取消收藏' : '收藏'}
                                     >
                                       <Star size={10} className={p.isFavorite ? 'fill-amber-400' : ''} />
                                     </button>
                                     <button
                                       onClick={(e) => handleDeletePage(e, p.id)}
                                       className="p-0.5 text-slate-500 hover:text-rose-400 rounded"
-                                      title="删除笔记"
                                     >
                                       <Trash2 size={10} />
                                     </button>
@@ -690,16 +656,7 @@ export const DocsView: React.FC = () => {
                     );
                   })}
 
-                  {/* 当没有任何子分区且没有任何直接条目时的友好提示 */}
-                  {subPartitions.length === 0 &&
-                    collections.filter((c) => !c.partitionId || c.partitionId === 'part_private').length === 0 &&
-                    pages.filter((p) => !p.partitionId || p.partitionId === 'part_private').length === 0 && (
-                      <div className="px-3 py-2 text-[11px] text-slate-500 italic">
-                        暂无笔记，点击上方 + 快速创建
-                      </div>
-                    )}
-
-                  {/* 私人直接根目录下的多维数据库与笔记 */}
+                  {/* 私人直接根目录项 */}
                   {collections
                     .filter((c) => !c.partitionId || c.partitionId === 'part_private')
                     .map((c) => {
@@ -725,14 +682,12 @@ export const DocsView: React.FC = () => {
                             <button
                               onClick={(e) => handleToggleItemFavorite(e, 'collection', c.id)}
                               className={`p-0.5 ${c.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
-                              title={c.isFavorite ? '取消收藏' : '收藏'}
                             >
                               <Star size={11} className={c.isFavorite ? 'fill-amber-400' : ''} />
                             </button>
                             <button
                               onClick={(e) => handleDeleteCollection(e, c.id)}
                               className="p-0.5 text-slate-500 hover:text-rose-400 rounded"
-                              title="删除数据库"
                             >
                               <Trash2 size={11} />
                             </button>
@@ -766,14 +721,12 @@ export const DocsView: React.FC = () => {
                             <button
                               onClick={(e) => handleToggleItemFavorite(e, 'page', p.id)}
                               className={`p-0.5 ${p.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
-                              title={p.isFavorite ? '取消收藏' : '收藏'}
                             >
                               <Star size={11} className={p.isFavorite ? 'fill-amber-400' : ''} />
                             </button>
                             <button
                               onClick={(e) => handleDeletePage(e, p.id)}
                               className="p-0.5 text-slate-500 hover:text-rose-400 rounded"
-                              title="删除笔记"
                             >
                               <Trash2 size={11} />
                             </button>
@@ -785,10 +738,10 @@ export const DocsView: React.FC = () => {
               )}
             </div>
 
-            {/* ==================== 模块 2：最近 (Recent) ==================== */}
+            {/* 2. 最近 (Recent) - 纯净无多余文字 */}
             <div>
               <div
-                className="flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-200 cursor-pointer group rounded hover:bg-white/5"
+                className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-slate-400 hover:text-slate-200 cursor-pointer group rounded hover:bg-white/5"
                 onClick={() => handleTogglePartition('part_recent')}
               >
                 <div className="flex items-center gap-1.5 flex-1">
@@ -800,57 +753,46 @@ export const DocsView: React.FC = () => {
                         : ''
                     }`}
                   />
-                  <Clock size={12} className="text-sky-400/80" />
-                  <span className="tracking-wide">最近</span>
+                  <span>最近</span>
                 </div>
-                <span className="text-[10px] text-slate-600 group-hover:text-slate-400">
-                  {recentItems.length}
-                </span>
               </div>
 
-              {!partitions.find((p) => p.id === 'part_recent')?.isCollapsed && (
-                <div className="space-y-0.5 mt-1 pl-1.5">
-                  {recentItems.length === 0 ? (
-                    <div className="px-2 py-1 text-[11px] text-slate-500 italic">暂无最近访问</div>
-                  ) : (
-                    recentItems.map((item) => {
-                      const isActive = activeType === item.type && activeId === item.id;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => {
-                            setActiveType(item.type);
-                            setActiveId(item.id);
-                          }}
-                          className={`group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
-                            isActive
-                              ? 'bg-sky-500/15 text-white font-medium border border-sky-500/30'
-                              : 'hover:bg-white/5 text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 truncate min-w-0">
-                            {item.type === 'collection' ? (
-                              <Table size={12} className="text-sky-400 shrink-0" />
-                            ) : (
-                              <span className="text-xs shrink-0">{item.icon}</span>
-                            )}
-                            <span className="truncate">{item.title}</span>
-                          </div>
-                          <span className="text-[10px] text-slate-500 shrink-0 group-hover:text-slate-400 ml-1">
-                            {formatRelativeTime(item.updatedAt)}
-                          </span>
+              {!partitions.find((p) => p.id === 'part_recent')?.isCollapsed && recentItems.length > 0 && (
+                <div className="space-y-0.5 mt-0.5 pl-1.5">
+                  {recentItems.map((item) => {
+                    const isActive = activeType === item.type && activeId === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setActiveType(item.type);
+                          setActiveId(item.id);
+                        }}
+                        className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition-colors ${
+                          isActive
+                            ? 'bg-sky-500/15 text-white font-medium border border-sky-500/30'
+                            : 'hover:bg-white/5 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate min-w-0">
+                          {item.type === 'collection' ? (
+                            <Table size={12} className="text-sky-400 shrink-0" />
+                          ) : (
+                            <span className="text-xs shrink-0">{item.icon}</span>
+                          )}
+                          <span className="truncate">{item.title}</span>
                         </div>
-                      );
-                    })
-                  )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* ==================== 模块 3：收藏 (Favorites) ==================== */}
+            {/* 3. 收藏 (Favorites) - 纯净无多余文字 */}
             <div>
               <div
-                className="flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-200 cursor-pointer group rounded hover:bg-white/5"
+                className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-slate-400 hover:text-slate-200 cursor-pointer group rounded hover:bg-white/5"
                 onClick={() => handleTogglePartition('part_favorite')}
               >
                 <div className="flex items-center gap-1.5 flex-1">
@@ -862,122 +804,107 @@ export const DocsView: React.FC = () => {
                         : ''
                     }`}
                   />
-                  <Star size={12} className="text-amber-400 fill-amber-400/30" />
-                  <span className="tracking-wide">收藏</span>
+                  <span>收藏</span>
                 </div>
-                <span className="text-[10px] text-slate-600 group-hover:text-slate-400">
-                  {favoriteItems.length}
-                </span>
               </div>
 
-              {!partitions.find((p) => p.id === 'part_favorite')?.isCollapsed && (
-                <div className="space-y-0.5 mt-1 pl-1.5">
-                  {favoriteItems.length === 0 ? (
-                    <div className="px-2 py-1 text-[11px] text-slate-500 italic">暂无收藏项目</div>
-                  ) : (
-                    favoriteItems.map((item) => {
-                      const isActive = activeType === item.type && activeId === item.id;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => {
-                            setActiveType(item.type);
-                            setActiveId(item.id);
-                          }}
-                          className={`group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
-                            isActive
-                              ? 'bg-sky-500/15 text-white font-medium border border-sky-500/30'
-                              : 'hover:bg-white/5 text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 truncate min-w-0">
-                            {item.type === 'collection' ? (
-                              <Table size={12} className="text-sky-400 shrink-0" />
-                            ) : (
-                              <span className="text-xs shrink-0">{item.icon}</span>
-                            )}
-                            <span className="truncate">{item.title}</span>
-                          </div>
-                          <button
-                            onClick={(e) => handleToggleItemFavorite(e, item.type, item.id)}
-                            className="p-0.5 text-amber-400 hover:text-slate-400"
-                            title="取消收藏"
-                          >
-                            <Star size={11} className="fill-amber-400" />
-                          </button>
+              {!partitions.find((p) => p.id === 'part_favorite')?.isCollapsed && favoriteItems.length > 0 && (
+                <div className="space-y-0.5 mt-0.5 pl-1.5">
+                  {favoriteItems.map((item) => {
+                    const isActive = activeType === item.type && activeId === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setActiveType(item.type);
+                          setActiveId(item.id);
+                        }}
+                        className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition-colors ${
+                          isActive
+                            ? 'bg-sky-500/15 text-white font-medium border border-sky-500/30'
+                            : 'hover:bg-white/5 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate min-w-0">
+                          {item.type === 'collection' ? (
+                            <Table size={12} className="text-sky-400 shrink-0" />
+                          ) : (
+                            <span className="text-xs shrink-0">{item.icon}</span>
+                          )}
+                          <span className="truncate">{item.title}</span>
                         </div>
-                      );
-                    })
-                  )}
+                        <button
+                          onClick={(e) => handleToggleItemFavorite(e, item.type, item.id)}
+                          className="p-0.5 text-amber-400 hover:text-slate-400"
+                        >
+                          <Star size={10} className="fill-amber-400" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* 折叠模式下的极简图标按钮列 */}
+        {/* 折叠模式 */}
         {sidebarCollapsed && (
           <div className="flex-1 py-3 flex flex-col items-center gap-2">
             <button
               onClick={() => handleCreatePageInPartition('part_private')}
               className="p-2 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors"
-              title="新建独立笔记"
+              title="新建笔记"
             >
-              <FileText size={16} />
+              <Plus size={16} />
             </button>
             <button
               onClick={() => handleCreateCollectionInPartition('part_private')}
               className="p-2 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors"
-              title="新建笔记数据库"
+              title="新建数据库"
             >
               <Table size={16} />
-            </button>
-            <button
-              onClick={() => setIsCreatingSubPart(true)}
-              className="p-2 hover:bg-white/10 text-slate-400 hover:text-sky-400 rounded-lg transition-colors"
-              title="新建子分区"
-            >
-              <FolderPlus size={16} />
             </button>
           </div>
         )}
       </div>
 
-      {/* 右侧主工作区 (带有纯净面包屑与真实收藏联动) */}
+      {/* 右侧主工作区 (极简留白，绝无任何 AI-Slop 说明卡片) */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-        {/* 面包屑与顶部导航栏 (49px 高度对齐基准线，已彻底删除上次编辑/共享/复制链接等假功能) */}
+        {/* 面包屑与顶部导航栏 */}
         <div className="h-[49px] border-b border-white/5 px-6 flex items-center justify-between bg-black/25 shrink-0 select-none">
-          {/* 面包屑层级路径 */}
           <div className="flex items-center gap-2 text-xs text-slate-300">
-            <span className="font-medium text-slate-200 truncate max-w-md">
-              {breadcrumbPath}
-            </span>
+            {breadcrumbPath && (
+              <span className="font-medium text-slate-200 truncate max-w-md">
+                {breadcrumbPath}
+              </span>
+            )}
           </div>
 
-          {/* 右侧操作按钮：仅保留真实联动的标星收藏按钮 */}
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <button
-              onClick={handleToggleCurrentFavorite}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition-colors ${
-                isCurrentFavorite
-                  ? 'bg-amber-400/10 text-amber-300 border border-amber-400/20'
-                  : 'hover:bg-white/5 text-slate-400 hover:text-slate-200'
-              }`}
-              title={isCurrentFavorite ? '取消收藏此项目' : '收藏此项目'}
-            >
-              <Star
-                size={13}
-                className={isCurrentFavorite ? 'text-amber-400 fill-amber-400' : 'text-slate-400'}
-              />
-              <span className="text-[11px]">{isCurrentFavorite ? '已收藏' : '收藏'}</span>
-            </button>
+            {activeId && (
+              <button
+                onClick={handleToggleCurrentFavorite}
+                className={`p-1.5 rounded transition-colors ${
+                  isCurrentFavorite
+                    ? 'text-amber-400'
+                    : 'hover:bg-white/5 text-slate-400 hover:text-slate-200'
+                }`}
+                title={isCurrentFavorite ? '取消收藏' : '收藏'}
+              >
+                <Star
+                  size={14}
+                  className={isCurrentFavorite ? 'fill-amber-400' : ''}
+                />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 主视口渲染 */}
+        {/* 主视口渲染 (严格落实少字原则：空状态纯粹留白，无任何废话文本卡片) */}
         <div className="flex-1 overflow-hidden min-w-0">
           {loading ? (
-            <div className="flex-1 h-full flex items-center justify-center text-xs text-slate-500">
+            <div className="flex-1 h-full flex items-center justify-center text-xs text-slate-600">
               加载中...
             </div>
           ) : activeType === 'page' && selectedPage ? (
@@ -992,33 +919,11 @@ export const DocsView: React.FC = () => {
               onUpdateCollection={handleUpdateCollection}
             />
           ) : (
-            <div className="flex-1 h-full flex flex-col items-center justify-center p-8 select-none">
-              <div className="max-w-md w-full bg-white/[0.02] border border-white/5 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl backdrop-blur-sm">
-                <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
-                  <FileText size={28} />
-                </div>
-                <h3 className="text-base font-semibold text-white mb-2">纯净个人知识库</h3>
-                <p className="text-xs text-slate-400 mb-6 leading-relaxed max-w-sm">
-                  所有虚假占位数据已彻底清空。这里是 100% 属于你的本地纯净空间，所有新建内容均通过 SQLite 本地高可靠落盘。
-                </p>
-                <div className="flex items-center gap-3 w-full justify-center">
-                  <button
-                    onClick={() => handleCreatePageInPartition('part_private')}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-medium text-xs rounded-lg transition-colors shadow-lg shadow-sky-500/20"
-                  >
-                    <Plus size={14} />
-                    <span>新建第一篇笔记</span>
-                  </button>
-                  <button
-                    onClick={() => handleCreateCollectionInPartition('part_private')}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 font-medium text-xs rounded-lg transition-colors"
-                  >
-                    <Database size={14} className="text-sky-400" />
-                    <span>新建笔记数据库</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            /* 纯粹极简留白：彻底移除 AI 说明卡片、多余废话段落与大按钮，直接静默留白 */
+            <div
+              className="flex-1 h-full cursor-text"
+              onClick={() => handleCreatePageInPartition('part_private')}
+            />
           )}
         </div>
       </div>
