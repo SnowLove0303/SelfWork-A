@@ -17,8 +17,6 @@ import {
   CheckSquare,
   List,
   Quote,
-  Palette,
-  Sparkles,
   ChevronRight,
 } from 'lucide-react';
 
@@ -28,39 +26,18 @@ export interface BlockContextMenuProps {
   selectedText: string;
   currentBlockType: BlockType;
   onApplyFormat: (format: 'bold' | 'italic' | 'strike' | 'code' | 'clear') => void;
-  onApplyColor: (color: string) => void;
-  onApplyHighlight: (highlight: string) => void;
+  onApplyColor?: (color: string) => void;
+  onApplyHighlight?: (highlight: string) => void;
   onTurnInto: (type: BlockType) => void;
   onCopy: () => void;
   onCut: () => void;
   onClose: () => void;
 }
 
-const TEXT_COLORS = [
-  { id: 'default', label: '默认', bgClass: 'bg-slate-200' },
-  { id: 'rose', label: '绯红', bgClass: 'bg-rose-500' },
-  { id: 'orange', label: '暖橙', bgClass: 'bg-amber-500' },
-  { id: 'yellow', label: '明黄', bgClass: 'bg-yellow-400' },
-  { id: 'green', label: '苍翠', bgClass: 'bg-emerald-500' },
-  { id: 'sky', label: '晴蓝', bgClass: 'bg-sky-400' },
-  { id: 'purple', label: '浅紫', bgClass: 'bg-purple-400' },
-];
-
-const HIGHLIGHT_COLORS = [
-  { id: 'none', label: '无底色', bgClass: 'bg-slate-700/50 border border-white/20' },
-  { id: 'yellow', label: '鹅黄高亮', bgClass: 'bg-yellow-400/80' },
-  { id: 'green', label: '薄荷高亮', bgClass: 'bg-emerald-400/80' },
-  { id: 'sky', label: '冰蓝高亮', bgClass: 'bg-sky-400/80' },
-  { id: 'rose', label: '淡粉高亮', bgClass: 'bg-rose-400/80' },
-  { id: 'purple', label: '淡紫高亮', bgClass: 'bg-purple-400/80' },
-];
-
 export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   position,
   hasSelection,
   onApplyFormat,
-  onApplyColor,
-  onApplyHighlight,
   onTurnInto,
   onCopy,
   onCut,
@@ -78,8 +55,8 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   // 1. 视窗碰撞检测自适应防溢出算法 (主菜单)
   useEffect(() => {
     const padding = 12;
-    const menuWidth = 288; // w-72 = 18rem = 288px
-    const menuHeight = 350;
+    const menuWidth = 260; // 紧凑优雅宽度
+    const menuHeight = 280;
 
     let left = position.x;
     let top = position.y;
@@ -183,9 +160,9 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           zIndex: 999999,
         }}
         onContextMenu={(e) => e.preventDefault()}
-        className="w-72 bg-[#0c101a]/98 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-2.5 text-slate-200 select-none animate-in fade-in zoom-in-95 duration-100 space-y-2.5 pointer-events-auto"
+        className="w-64 bg-[#0c101a]/98 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-2 text-slate-200 select-none animate-in fade-in zoom-in-95 duration-100 space-y-2 pointer-events-auto"
       >
-        {/* 1. 行内排版工具行 (仅在有选区时重点高亮) */}
+        {/* 1. 行内排版工具行 */}
         <div>
           <div className="text-[10px] uppercase font-mono tracking-wider text-slate-500 mb-1 px-1">
             {hasSelection ? '选区排版格式' : '快捷排版'}
@@ -223,55 +200,14 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             <button
               onClick={() => onApplyFormat('clear')}
               className="flex-1 py-1 px-1.5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors"
-              title="清除所有格式"
+              title="清除格式"
             >
               <Eraser size={13} />
             </button>
           </div>
         </div>
 
-        {/* 2. 字体色盘与荧光高亮色盘 */}
-        <div className="space-y-1.5 pt-1 border-t border-white/5">
-          <div className="flex items-center justify-between text-[10px] uppercase font-mono tracking-wider text-slate-500 px-1">
-            <span className="flex items-center gap-1">
-              <Palette size={11} className="text-sky-400" />
-              <span>文字颜色</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 px-1">
-            {TEXT_COLORS.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => onApplyColor(c.id)}
-                className="group relative p-0.5 rounded-full hover:scale-110 transition-transform"
-                title={`文字色: ${c.label}`}
-              >
-                <div className={`w-4 h-4 rounded-full ${c.bgClass} shadow-sm`} />
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between text-[10px] uppercase font-mono tracking-wider text-slate-500 px-1 pt-1">
-            <span className="flex items-center gap-1">
-              <Sparkles size={11} className="text-amber-400" />
-              <span>荧光高亮底色</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 px-1">
-            {HIGHLIGHT_COLORS.map((h) => (
-              <button
-                key={h.id}
-                onClick={() => onApplyHighlight(h.id)}
-                className="group relative p-0.5 rounded-md hover:scale-110 transition-transform"
-                title={`荧光笔: ${h.label}`}
-              >
-                <div className={`w-4 h-4 rounded ${h.bgClass} shadow-sm`} />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 3. 块级转换 (Turn into...) 包含标题二级子弹窗聚合 */}
+        {/* 2. 块级转换 (Turn into...) 包含标题二级子弹窗聚合 */}
         <div className="pt-1 border-t border-white/5">
           <div className="text-[10px] uppercase font-mono tracking-wider text-slate-500 mb-1 px-1">
             转换为... (Turn into)
@@ -347,7 +283,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           </div>
         </div>
 
-        {/* 4. 剪贴板动作 */}
+        {/* 3. 剪贴板动作 */}
         {hasSelection && (
           <div className="pt-1 border-t border-white/5 flex items-center gap-1 text-[11px] text-slate-400">
             <button
@@ -370,7 +306,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         )}
       </div>
 
-      {/* 5. 标题二级子弹窗 (Headings Submenu) */}
+      {/* 4. 标题二级子弹窗 (Headings Submenu) */}
       {headingSubmenuOpen && (
         <div
           ref={submenuRef}

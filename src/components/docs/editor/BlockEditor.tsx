@@ -71,15 +71,25 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     };
   }, [page.id]);
 
-  // 2. 动态自动提取文档标题大纲索引 (Notion / 飞书风格)
+  // 2. 动态自动提取文档标题大纲索引 (纯文本清洗，杜绝 Markdown 与 HTML 符号污染)
   const outlineHeadings = useMemo<OutlineItem[]>(() => {
     return blocks
       .filter((b) => ['h1', 'h2', 'h3'].includes(b.blockType) && b.content.trim() !== '')
-      .map((b) => ({
-        id: b.id,
-        type: b.blockType,
-        text: b.content.trim(),
-      }));
+      .map((b) => {
+        const cleanText = b.content
+          .replace(/<[^>]*>/g, '')
+          .replace(/\*\*(.*?)\*\*/g, '$1')
+          .replace(/\*(.*?)\*/g, '$1')
+          .replace(/~~(.*?)~~/g, '$1')
+          .replace(/`(.*?)`/g, '$1')
+          .trim();
+        return {
+          id: b.id,
+          type: b.blockType,
+          text: cleanText || b.content.trim(),
+        };
+      })
+      .filter((item) => item.text !== '');
   }, [blocks]);
 
   // 3. 点击大纲平滑滚动至对应锚点
@@ -278,58 +288,48 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'p')}
               className="py-12 cursor-text flex items-center justify-center text-xs text-slate-600 hover:text-slate-400 transition-colors"
             >
-              <span>+ 点击空白处继续输入</span>
+              点击此处添加新段落，或按 '/' 唤出格式菜单...
             </div>
           </div>
         </div>
 
-        {/* 右侧大纲目录栏 (相对向右缩进排布，作为右侧伴随式索引栏) */}
+        {/* 右侧轻量目录大纲栏 (Notion 风格微光胶囊，字号与间距精心收敛) */}
         {showOutline && (
-          <div className="w-56 lg:w-64 border-l border-white/5 bg-black/10 flex flex-col shrink-0 overflow-y-auto p-4 select-none animate-in fade-in duration-150">
-            <div className="flex items-center justify-between text-xs text-slate-400 font-medium pb-3 border-b border-white/5 mb-3">
-              <div className="flex items-center gap-1.5">
+          <div className="w-56 border-l border-white/5 bg-black/10 backdrop-blur-sm p-4 flex flex-col shrink-0 select-none">
+            <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/5">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-300">
                 <ListTree size={14} className="text-sky-400" />
-                <span className="text-slate-200 font-semibold tracking-wide">目录大纲</span>
-                <span className="text-[11px] text-slate-500 font-mono">({outlineHeadings.length})</span>
+                <span>目录大纲</span>
               </div>
               <button
                 onClick={() => setShowOutline(false)}
-                className="p-1 text-slate-500 hover:text-slate-200 hover:bg-white/10 rounded-md transition-colors"
-                title="收起目录大纲 (折叠)"
+                className="p-1 hover:bg-white/5 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
+                title="收起大纲"
               >
-                <PanelRightClose size={14} />
+                <PanelRightClose size={13} />
               </button>
             </div>
 
             {outlineHeadings.length === 0 ? (
-              <div className="text-[11px] text-slate-600 italic py-2 leading-relaxed">
-                暂无标题内容
+              <div className="text-[11px] text-slate-600 py-6 text-center italic">
+                当前文档暂无标题 (H1/H2/H3)
               </div>
             ) : (
-              <div className="space-y-1">
-                {outlineHeadings.map((item) => (
+              <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                {outlineHeadings.map((heading) => (
                   <button
-                    key={item.id}
-                    onClick={() => handleScrollToHeading(item.id)}
-                    className={`w-full text-left text-xs py-1.5 px-2 rounded hover:bg-white/5 transition-colors truncate block flex items-center gap-1.5 ${
-                      item.type === 'h1'
-                        ? 'text-slate-200 font-medium'
-                        : item.type === 'h2'
-                        ? 'text-slate-400 pl-4 text-[11px]'
-                        : 'text-slate-500 pl-7 text-[11px]'
+                    key={heading.id}
+                    onClick={() => handleScrollToHeading(heading.id)}
+                    className={`w-full text-left truncate rounded-md transition-colors block text-xs py-1 px-1.5 ${
+                      heading.type === 'h1'
+                        ? 'font-medium text-slate-200 hover:text-white hover:bg-white/5 pl-1.5'
+                        : heading.type === 'h2'
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5 pl-4'
+                        : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 pl-6 text-[11px]'
                     }`}
-                    title={item.text}
+                    title={heading.text}
                   >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        item.type === 'h1'
-                          ? 'bg-sky-400'
-                          : item.type === 'h2'
-                          ? 'bg-indigo-400/70'
-                          : 'bg-slate-500/50'
-                      }`}
-                    />
-                    <span className="truncate">{item.text}</span>
+                    {heading.text}
                   </button>
                 ))}
               </div>

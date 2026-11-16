@@ -19,19 +19,17 @@ interface BlockItemProps {
   autoFocus?: boolean;
 }
 
-// 富文本渲染转换器 (安全转义 + 格式还原)
+// 富文本渲染转换器 (安全转义 + 标准 Markdown 格式还原，绝不注入任何原生 HTML 标签)
 function renderFormattedContent(raw: string): string {
-  let html = raw
+  // 先将所有 HTML 标签剥除，确保绝对无标签残留
+  const cleanRaw = raw.replace(/<[^>]*>/g, '');
+
+  let html = cleanRaw
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 还原安全的高亮与颜色样式标签
-  html = html
-    .replace(/&lt;span class="([^"]+)"&gt;([\s\S]*?)&lt;\/span&gt;/g, '<span class="$1">$2</span>')
-    .replace(/&lt;mark class="([^"]+)"&gt;([\s\S]*?)&lt;\/mark&gt;/g, '<mark class="$1">$2</mark>');
-
-  // Markdown 语法还原
+  // 标准 Markdown 语法优雅还原
   html = html
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -67,15 +65,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 焦点编辑态 vs 预览态
   const [isFocused, setIsFocused] = useState(false);
 
-  // 是否包含富文本标记（加粗/斜体/删除线/代码/span/mark）
+  // 是否包含标准 Markdown 富文本标记（加粗/斜体/删除线/代码）
   const hasFormatting = useMemo(() => {
     return (
       block.content.includes('**') ||
       block.content.includes('*') ||
       block.content.includes('~~') ||
-      block.content.includes('`') ||
-      block.content.includes('<span') ||
-      block.content.includes('<mark')
+      block.content.includes('`')
     );
   }, [block.content]);
 
@@ -102,7 +98,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   // 处理文本输入
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
+    // 自动剥除任何意外输入的 HTML 尖括号代码，保持内容 100% 纯净
+    const rawVal = e.target.value;
+    const val = rawVal.replace(/<[^>]*>/g, '');
 
     // 1. 行首 Markdown 语法糖自动蜕变 (Shorthand Sugaring)
     if (block.blockType === 'p') {
@@ -202,73 +200,6 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       } else {
         newContent = before + wrap + text + wrap + after;
       }
-    }
-
-    onUpdate(newContent);
-    setContextMenuOpen(false);
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
-  };
-
-  // 字体颜色应用
-  const handleApplyColor = (colorId: string) => {
-    const { start, end, text } = savedSelection;
-    if (start === end || !text) {
-      setContextMenuOpen(false);
-      return;
-    }
-    const before = block.content.slice(0, start);
-    const after = block.content.slice(end);
-    let newContent = block.content;
-
-    if (colorId === 'default') {
-      const cleaned = text.replace(/<span class="text-[^"]+">([\s\S]*?)<\/span>/g, '$1');
-      newContent = before + cleaned + after;
-    } else {
-      const colorClassMap: Record<string, string> = {
-        rose: 'text-rose-400',
-        orange: 'text-amber-500',
-        yellow: 'text-yellow-300',
-        green: 'text-emerald-400',
-        sky: 'text-sky-400',
-        purple: 'text-purple-400',
-      };
-      const cls = colorClassMap[colorId] || 'text-slate-100';
-      newContent = before + `<span class="${cls}">${text}</span>` + after;
-    }
-
-    onUpdate(newContent);
-    setContextMenuOpen(false);
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
-  };
-
-  // 荧光笔高亮应用
-  const handleApplyHighlight = (highlightId: string) => {
-    const { start, end, text } = savedSelection;
-    if (start === end || !text) {
-      setContextMenuOpen(false);
-      return;
-    }
-    const before = block.content.slice(0, start);
-    const after = block.content.slice(end);
-    let newContent = block.content;
-
-    if (highlightId === 'none') {
-      const cleaned = text.replace(/<mark class="[^"]+">([\s\S]*?)<\/mark>/g, '$1');
-      newContent = before + cleaned + after;
-    } else {
-      const bgMap: Record<string, string> = {
-        yellow: 'bg-yellow-400/20 text-yellow-200 border-b border-yellow-400/60 px-1 py-0.5 rounded',
-        green: 'bg-emerald-400/20 text-emerald-200 border-b border-emerald-400/60 px-1 py-0.5 rounded',
-        sky: 'bg-sky-400/20 text-sky-200 border-b border-sky-400/60 px-1 py-0.5 rounded',
-        rose: 'bg-rose-400/20 text-rose-200 border-b border-rose-400/60 px-1 py-0.5 rounded',
-        purple: 'bg-purple-400/20 text-purple-200 border-b border-purple-400/60 px-1 py-0.5 rounded',
-      };
-      const cls = bgMap[highlightId] || '';
-      newContent = before + `<mark class="${cls}">${text}</mark>` + after;
     }
 
     onUpdate(newContent);
@@ -618,8 +549,6 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           selectedText={savedSelection.text}
           currentBlockType={block.blockType}
           onApplyFormat={handleApplyFormat}
-          onApplyColor={handleApplyColor}
-          onApplyHighlight={handleApplyHighlight}
           onTurnInto={handleTurnInto}
           onCopy={handleCopy}
           onCut={handleCut}
