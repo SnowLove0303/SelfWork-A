@@ -2,6 +2,27 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.42] - 2026-11-16
+
+### Feature & UI/UX (快速启动全局按钮设计体系与调色板收敛重构)
+- **三级按钮体系与调色板大降噪 (`src/components/LauncherDashboard.tsx`)**:
+  - **Primary Action (首选焦点)**: 将核心高频操作 `[+ 新建项]` 升级为唯一的科技青实体发光高亮按钮（`bg-cyan-500 text-slate-950 font-semibold shadow-[0_0_16px_rgba(6,182,212,0.35)]`），成为顶栏最清晰的视觉引导锚点；
+  - **Secondary Ghost (暗晶体次级按钮)**: 将 `[分类]`、`[多选启动]`、`[全启动]`、`[分屏组合]` 与 `[>_ 执行报文]` 彻底从之前“青、绿、粉红、灰”的四色水果糖拼盘中解救出来，统一收敛为高质感的暗夜半透明玻璃晶体（`bg-white/[0.04]` + `border-white/10` + `text-slate-300 hover:text-white hover:border-cyan-500/30`）；
+  - 彻底清除静态常驻的高饱和红绿大底色，色彩回归专业沉稳的暗色控制台规范。
+- **置顶分屏专区视觉融入全局暗晶体**:
+  - 将分屏专区背景板与卡片边框从原本脱节的玫瑰粉红（`rose-500`）重构为深邃暗夜磨砂晶体（`bg-white/[0.025]` + `border-white/[0.08]` + hover 青蓝微光）；
+  - 将套件启动按钮 `[▶️ 启动套件并平铺]` 升级为精致的青蓝微光实体风格，与全局暗色控制台浑然一体。
+- **刚性几何尺度与基线像素对齐**:
+  - 顶栏所有操作按钮与搜索输入框严格锁定在 `h-8 (32px)` 黄金高度；
+  - 统一标准圆角尺度为 `rounded-xl (12px)`，消除组件间参差不齐的公差毛刺。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 30/30 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换上线（新进程 PID: 34760）。
+
+
 ## [0.1.41] - 2026-11-16
 
 ### Bug Fix (快速启动网页 URL 直达目标协议判定解耦与误拦截修复)

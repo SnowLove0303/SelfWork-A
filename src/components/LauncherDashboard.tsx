@@ -1109,9 +1109,9 @@ export const LauncherDashboard: React.FC = () => {
               setNewCategoryName('');
             }}
             title="新建启动分类"
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+            className="flex items-center gap-1 h-7 px-2 rounded-lg text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 hover:border-cyan-500/30 transition-all tactile-btn shrink-0 whitespace-nowrap"
           >
-            <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+            <FolderPlus className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
             <span>分类</span>
           </button>
         </div>
@@ -1269,13 +1269,13 @@ export const LauncherDashboard: React.FC = () => {
                   disabled={selectedItemIds.length === 0}
                   onClick={() => handleOpenCreateComboModal(selectedItemIds)}
                   title="将当前已勾选的项目保存为一个新组合并配置分屏"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
+                  className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium transition-all tactile-btn shrink-0 ${
                     selectedItemIds.length > 0
-                      ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]'
+                      ? 'bg-white/[0.04] hover:bg-white/[0.08] text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
                       : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
                   }`}
                 >
-                  <Layers className="w-3.5 h-3.5 shrink-0" />
+                  <Layers className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
                   <span>保存为组合</span>
                 </button>
 
@@ -1286,9 +1286,9 @@ export const LauncherDashboard: React.FC = () => {
                       type="button"
                       onClick={handleLaunchSelectedWithTiling}
                       title="立即以分屏平铺方式启动所选项并自动无缝吸附指定屏幕"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-500/40 shadow-[0_0_14px_rgba(6,182,212,0.25)] transition-all tactile-btn shrink-0"
+                      className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 border border-cyan-400 shadow-[0_0_14px_rgba(6,182,212,0.3)] transition-all tactile-btn shrink-0"
                     >
-                      <Monitor className="w-3.5 h-3.5 shrink-0 text-cyan-300" />
+                      <Monitor className="w-3.5 h-3.5 shrink-0" />
                       <span>
                         {selectedItemIds.length === 4
                           ? '田字四分屏启动 (4)'
@@ -1299,14 +1299,14 @@ export const LauncherDashboard: React.FC = () => {
                     </button>
 
                     {systemMonitors.length > 1 && (
-                      <div className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded-md border border-white/10 shrink-0">
+                      <div className="flex items-center gap-1 bg-black/40 px-2 h-8 rounded-xl border border-white/10 shrink-0">
                         <span className="text-[10px] text-slate-400">投放在:</span>
                         {systemMonitors.map((mon) => (
                           <button
                             key={mon.index}
                             type="button"
                             onClick={() => setMultiSelectMonitorIndex(mon.index)}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all ${
+                            className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono transition-all ${
                               multiSelectMonitorIndex === mon.index
                                 ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50 font-semibold shadow-sm'
                                 : 'text-slate-400 hover:text-slate-200'
@@ -1325,13 +1325,13 @@ export const LauncherDashboard: React.FC = () => {
                   disabled={selectedItemIds.length === 0}
                   onClick={handleLaunchSelected}
                   title="立即同时唤醒选中的应用或脚本"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
+                  className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium transition-all tactile-btn shrink-0 ${
                     selectedItemIds.length > 0
-                      ? 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40 shadow-[0_0_14px_rgba(16,185,129,0.25)]'
+                      ? 'bg-white/[0.04] hover:bg-white/[0.08] text-emerald-300 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
                       : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
                   }`}
                 >
-                  <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <Zap className="w-3.5 h-3.5 fill-current shrink-0 text-emerald-400" />
                   <span>常规启动 ({selectedItemIds.length})</span>
                 </button>
 
@@ -1341,7 +1341,7 @@ export const LauncherDashboard: React.FC = () => {
                     setIsSelectMode(false);
                     setSelectedItemIds([]);
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-white/10 transition-colors"
+                  className="flex items-center gap-1 h-8 px-2.5 rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-white/10 transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                   <span>退出</span>
@@ -1357,7 +1357,7 @@ export const LauncherDashboard: React.FC = () => {
                     placeholder="搜索名称或指令..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-7 bg-black/30 border border-white/10 rounded-lg pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
+                    className="w-full h-8 bg-black/40 border border-white/10 rounded-xl pl-8 pr-7 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all font-sans shadow-inner"
                   />
                   {searchQuery && (
                     <button
@@ -1369,7 +1369,7 @@ export const LauncherDashboard: React.FC = () => {
                   )}
                 </div>
 
-                {/* 自由多选启动按钮 */}
+                {/* 自由多选启动按钮 (Secondary Ghost 暗晶体) */}
                 {currentItems.length > 0 && (
                   <button
                     type="button"
@@ -1378,61 +1378,61 @@ export const LauncherDashboard: React.FC = () => {
                       setSelectedItemIds([]);
                     }}
                     title="自由勾选任意多个应用或脚本同时启动或四分屏"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                    className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 hover:border-cyan-500/30 transition-all tactile-btn shrink-0 whitespace-nowrap"
                   >
-                    <CheckSquare className="w-3.5 h-3.5 shrink-0" />
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
                     <span>多选启动</span>
                   </button>
                 )}
 
-                {/* 一键全启动按钮 */}
+                {/* 一键全启动按钮 (Secondary Ghost 暗晶体) */}
                 {currentItems.length > 0 && (
                   <button
                     type="button"
                     onClick={handleBatchLaunchAll}
                     title="一键启动当前分类下全部项目"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                    className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 hover:border-emerald-500/30 transition-all tactile-btn shrink-0 whitespace-nowrap"
                   >
-                    <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                    <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>全启动</span>
                   </button>
                 )}
 
-                {/* 显式独立的新建组合/分屏按钮 */}
+                {/* 显式独立的新建组合/分屏按钮 (Secondary Ghost 暗晶体) */}
                 <button
                   type="button"
                   onClick={() => handleOpenCreateComboModal()}
                   title="创建多项目组合套餐并编排屏幕分屏位置"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(244,63,94,0.12)]"
+                  className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 hover:border-cyan-500/30 transition-all tactile-btn shrink-0 whitespace-nowrap"
                 >
-                  <Monitor className="w-3.5 h-3.5 shrink-0 text-rose-300" />
-                  <span>+ 分屏组合</span>
+                  <Monitor className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+                  <span>分屏组合</span>
                 </button>
 
-                {/* 添加单项启动项按钮 */}
+                {/* 添加单项启动项按钮 (Primary Hero 绝对主行动焦点) */}
                 <button
                   type="button"
                   onClick={handleOpenAddModal}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 border border-cyan-400 shadow-[0_0_16px_rgba(6,182,212,0.35)] transition-all tactile-btn shrink-0 whitespace-nowrap"
                 >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
                   <span>新建项</span>
                 </button>
 
-                {/* 专职执行报文控制台切换按钮 (REQ-01) */}
+                {/* 专职执行报文控制台切换按钮 (Secondary Ghost 暗晶体) */}
                 <button
                   type="button"
                   onClick={() => setIsTelemetryOpen((prev) => !prev)}
                   title={isTelemetryOpen ? '收起执行报文面板' : '展开执行报文面板'}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
+                  className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
                     isTelemetryOpen
-                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.2)]'
-                      : 'bg-white/[0.04] text-fg-muted hover:text-fg-secondary border-white/[0.08]'
+                      ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                      : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/10 hover:border-white/20'
                   }`}
                 >
-                  <Terminal className="w-3.5 h-3.5 shrink-0" />
+                  <Terminal className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                   <span>执行报文</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.08] text-fg-muted">
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/[0.08] text-slate-400">
                     {logs.length}
                   </span>
                 </button>
@@ -1466,7 +1466,7 @@ export const LauncherDashboard: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300">
+                  <div className="w-5 h-5 rounded-md bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300">
                     <Layers className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-xs font-semibold text-slate-200">
@@ -1498,17 +1498,17 @@ export const LauncherDashboard: React.FC = () => {
                       className={`group relative rounded-2xl border transition-all duration-200 p-4 select-none flex flex-col justify-between ${
                         isSelectMode && isSelected
                           ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_18px_rgba(6,182,212,0.25)]'
-                          : 'border-rose-500/30 bg-rose-500/[0.03] hover:bg-rose-500/[0.07] hover:border-rose-500/50 shadow-[0_0_16px_rgba(244,63,94,0.1)]'
+                          : 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-cyan-500/40 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
                       }`}
                     >
                       {/* 顶栏：套件标题 + 目标屏幕与布局徽标 + 操作菜单 */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500/20 to-purple-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300 shrink-0 shadow-sm">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/15 to-indigo-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300 shrink-0 shadow-sm">
                             <Layers className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-xs font-semibold text-slate-100 truncate group-hover:text-rose-200 transition-colors">
+                            <h3 className="text-xs font-semibold text-slate-100 truncate group-hover:text-cyan-200 transition-colors">
                               {combo.name}
                             </h3>
                             <div className="flex items-center gap-1.5 mt-0.5">
@@ -1612,7 +1612,7 @@ export const LauncherDashboard: React.FC = () => {
                         )}
                       </div>
 
-                      {/* 底栏：宽幅一键启动与平铺操作按钮 */}
+                      {/* 底栏：宽幅一键启动与平铺操作按钮 (微光实体) */}
                       {!isSelectMode ? (
                         <button
                           type="button"
@@ -1621,10 +1621,10 @@ export const LauncherDashboard: React.FC = () => {
                             e.stopPropagation();
                             handleLaunchItem(combo);
                           }}
-                          className={`w-full h-8 rounded-xl flex items-center justify-center gap-1.5 text-xs font-medium transition-all ${
+                          className={`w-full h-8 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold transition-all ${
                             isRunning
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 cursor-wait animate-pulse'
-                              : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 hover:border-rose-500/60 shadow-sm hover:shadow-[0_0_14px_rgba(244,63,94,0.25)]'
+                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 cursor-wait animate-pulse'
+                              : 'bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 hover:border-cyan-500/55 shadow-sm hover:shadow-[0_0_14px_rgba(6,182,212,0.25)]'
                           }`}
                         >
                           <Play className="w-3 h-3 fill-current" />
