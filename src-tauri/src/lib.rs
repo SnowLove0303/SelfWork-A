@@ -474,6 +474,21 @@ async fn window_close(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// 将纯 ASCII 十六进制字符串无损还原为 UTF-8 字符串
+/// 彻底规避 Windows 控制台 OEM 代码页 (GBK / CP936) 导致的中文路径截断或乱码
+fn decode_hex_to_utf8(raw_hex: &str) -> Option<String> {
+    let trimmed = raw_hex.trim();
+    if trimmed.is_empty() || trimmed.len() % 2 != 0 {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(trimmed.len() / 2);
+    for i in (0..trimmed.len()).step_by(2) {
+        let byte = u8::from_str_radix(&trimmed[i..i + 2], 16).ok()?;
+        bytes.push(byte);
+    }
+    String::from_utf8(bytes).ok()
+}
+
 /// 原生文件/目录选择器：唤起 Windows 资源管理器文件/目录选择窗口，并返回选中物理路径
 #[tauri::command]
 async fn pick_launcher_file(is_folder: Option<bool>) -> Result<Option<String>, String> {
@@ -484,9 +499,9 @@ async fn pick_launcher_file(is_folder: Option<bool>) -> Result<Option<String>, S
             use std::os::windows::process::CommandExt;
 
             let script = if is_folder == Some(true) {
-                r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '选择目标文件夹'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.SelectedPath }"#
+                r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '选择目标文件夹'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $bytes = [System.Text.Encoding]::UTF8.GetBytes($d.SelectedPath); [BitConverter]::ToString($bytes).Replace('-', '') }"#
             } else {
-                r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = '选择启动目标文件或快捷方式'; $d.Filter = '常用启动目标 (*.exe;*.lnk;*.bat;*.cmd;*.ps1)|*.exe;*.lnk;*.bat;*.cmd;*.ps1|可执行文件 (*.exe)|*.exe|快捷方式 (*.lnk)|*.lnk|脚本文件 (*.bat;*.cmd;*.ps1)|*.bat;*.cmd;*.ps1|所有文件 (*.*)|*.*'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.FileName }"#
+                r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = '选择启动目标文件或快捷方式'; $d.Filter = '常用启动目标 (*.exe;*.lnk;*.bat;*.cmd;*.ps1)|*.exe;*.lnk;*.bat;*.cmd;*.ps1|可执行文件 (*.exe)|*.exe|快捷方式 (*.lnk)|*.lnk|脚本文件 (*.bat;*.cmd;*.ps1)|*.bat;*.cmd;*.ps1|所有文件 (*.*)|*.*'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $bytes = [System.Text.Encoding]::UTF8.GetBytes($d.FileName); [BitConverter]::ToString($bytes).Replace('-', '') }"#
             };
 
             let output = Command::new("powershell")
@@ -496,11 +511,18 @@ async fn pick_launcher_file(is_folder: Option<bool>) -> Result<Option<String>, S
                 .map_err(|e| format!("唤起文件选择窗口失败: {}", e))?;
 
             if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if path.is_empty() {
+                let stdout_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if stdout_str.is_empty() {
                     Ok(None)
+                } else if let Some(path) = decode_hex_to_utf8(&stdout_str) {
+                    if path.trim().is_empty() {
+                        Ok(None)
+                    } else {
+                        Ok(Some(path.trim().to_string()))
+                    }
                 } else {
-                    Ok(Some(path))
+                    // 降级兼容：如果不是十六进制，使用原始字符串
+                    Ok(Some(stdout_str))
                 }
             } else {
                 Ok(None)
@@ -657,6 +679,13 @@ mod tests {
             .get("nonexistent_mock_service_process.exe")
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn test_decode_hex_to_utf8_chinese_path() {
+        let hex = "463A5C417070204C6F636174696F6E5C4775616E7A686920546F6E675C536B696C6C5C4D5344532D456E67696E655CE7AE97E6B395E8AEADE7BB83E69D90E696995C544453204D53445320E9878DE58699E78988";
+        let path = decode_hex_to_utf8(hex).expect("Failed to decode hex");
+        assert_eq!(path, "F:\\App Location\\Guanzhi Tong\\Skill\\MSDS-Engine\\算法训练材料\\TDS MSDS 重写版");
     }
 
     #[test]

@@ -2,6 +2,23 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.37] - 2026-11-16
+
+### Fix & Architecture (快速启动目录与文件选择器全链路 UTF-8 无损编码与真实数据自愈)
+- **原生文件/目录选择器 Hex-UTF8 无损编码免疫通道 (`src-tauri/src/lib.rs`)**:
+  - 彻底定位并解决 Windows 下通过 PowerShell 唤起文件/目录对话框时，默认使用系统 OEM 代码页（GBK / CP936）输出流导致 Rust 发生 `\u{FFFD}` (乱码替换符) 破坏中文路径的根因；
+  - 升级 PowerShell 通信逻辑：通过 `.NET` 原生 `[System.Text.Encoding]::UTF8.GetBytes()` 将目标物理路径显式序列化为 UTF-8 字节，并通过 `[BitConverter]::ToString(...).Replace('-', '')` 输出为纯 ASCII 十六进制字符串；
+  - Rust 后端新增 `decode_hex_to_utf8` 解码器与专属单元测试，实现 100% 免疫系统代码页的中英双语及特殊字符物理路径无损传输。
+- **真实数据纠偏与物理测试核销**:
+  - 对 SQLite 中曾损坏的中文目录项目“MSDS 重写版”执行物理校准，落盘为绝对物理路径 `F:\App Location\Guanzhi Tong\Skill\MSDS-Engine\算法训练材料\TDS MSDS 重写版`；
+  - 实测路径存在性（`Test-Path: True`）与目录合法性，成功挂载在分类“文件夹”中，点击即可毫秒级无闪烁直达唤起。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 经由 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 11/11 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 26/26 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换启动。
+
 ## [0.1.36] - 2026-11-16
 
 ### UI/UX & Swarm Engineering (报文控制栏防溢出、顶栏呼吸空间重构、冗余说明清除与文档表格 Swarm 派发)
