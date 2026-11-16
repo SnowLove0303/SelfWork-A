@@ -39,3 +39,5 @@ temp_sessions/
 # Local SQLite databases (data directory can be tracked or ignored as needed)
 *.sqlite-wal
 *.sqlite-shm
+
+*.lnk

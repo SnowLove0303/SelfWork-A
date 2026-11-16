@@ -2,6 +2,26 @@
 
 export type LauncherItemType = 'app' | 'script' | 'url' | 'folder' | 'bundle';
 
+// ==================== 屏幕分屏布局编排契约 (Window Snap Tiling) ====================
+
+export type WindowTilingLayout = 'none' | 'grid-4' | 'split-h' | 'split-v' | 'main-aside-3';
+
+export interface WindowSlotConfig {
+  slotId: string;
+  name: string; // 象限/分屏描述，如 "左上象限" / "右上象限"
+  targetItemId: string; // 绑定到该象限的子启动项 ID
+  xRatio: number; // 0.0 ~ 1.0 (屏幕横向起始占比)
+  yRatio: number; // 0.0 ~ 1.0 (屏幕纵向起始占比)
+  wRatio: number; // 0.0 ~ 1.0 (屏幕宽度占比)
+  hRatio: number; // 0.0 ~ 1.0 (屏幕高度占比)
+}
+
+export interface WindowLayoutConfig {
+  enabled: boolean;
+  layout: WindowTilingLayout;
+  slots: WindowSlotConfig[];
+}
+
 export interface LauncherItem {
   id: string;
   categoryId: string;
@@ -14,6 +34,7 @@ export interface LauncherItem {
   iconName?: string; // 语义图标标识 (可选)
   icon?: string; // 提取的原生 Base64 Data URL 或外部图标路径 (可选)
   bundleItemIds?: string[]; // 捆绑套件包含的子启动项 ID 列表 (仅 bundle 类型有效)
+  windowLayout?: WindowLayoutConfig; // 屏幕分屏布局编排配置 (仅 bundle 类型有效)
   createdAt: number;
   updatedAt: number;
 }

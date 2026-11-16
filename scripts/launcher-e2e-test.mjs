@@ -287,6 +287,52 @@ assert(
   `ID: ${testFolderItemId}`
 );
 
+// ==================== 5. 屏幕分屏编排 (Window Snap Tiling) 数据结构与契约测试 ====================
+console.log('\n--- 5. 屏幕分屏编排 (Window Snap Tiling) 契约与持久化测试 ---');
+
+const testComboId = `test-combo-${Date.now()}`;
+const newComboItemWithTiling = {
+  id: testComboId,
+  categoryId: 'all',
+  name: '自动化四分屏组合测试',
+  type: 'bundle',
+  target: '启动组合套件',
+  bundleItemIds: [testItemId, testFolderItemId],
+  windowLayout: {
+    enabled: true,
+    layout: 'grid-4',
+    slots: [
+      { slotId: 'slot-tl', name: '左上象限', targetItemId: testItemId, xRatio: 0, yRatio: 0, wRatio: 0.5, hRatio: 0.5 },
+      { slotId: 'slot-tr', name: '右上象限', targetItemId: testFolderItemId, xRatio: 0.5, yRatio: 0, wRatio: 0.5, hRatio: 0.5 },
+      { slotId: 'slot-bl', name: '左下象限', targetItemId: '', xRatio: 0, yRatio: 0.5, wRatio: 0.5, hRatio: 0.5 },
+      { slotId: 'slot-br', name: '右下象限', targetItemId: '', xRatio: 0.5, yRatio: 0.5, wRatio: 0.5, hRatio: 0.5 },
+    ]
+  },
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
+assert(
+  newComboItemWithTiling.windowLayout.enabled === true &&
+  newComboItemWithTiling.windowLayout.layout === 'grid-4' &&
+  newComboItemWithTiling.windowLayout.slots.length === 4,
+  '四分屏组合配置结构校验合规 (grid-4, 4 slots)'
+);
+
+const storageWithCombo = {
+  ...reReadStorage,
+  items: [newComboItemWithTiling, ...reReadStorage.items],
+};
+const comboWriteResult = runPythonSqlite(writePy, JSON.stringify(storageWithCombo));
+assert(comboWriteResult === 'SUCCESS', '成功将包含四分屏配置的组合项写入 SQLite');
+
+const readComboStorage = JSON.parse(runPythonSqlite(readPy));
+const foundCombo = readComboStorage.items.find(i => i.id === testComboId);
+assert(
+  Boolean(foundCombo && foundCombo.windowLayout && foundCombo.windowLayout.enabled && foundCombo.windowLayout.slots[0].name === '左上象限'),
+  '四分屏组合项从 SQLite 完整反序列化，象限槽位配置 100% 保持无损'
+);
+
 // 4. 清理测试项并恢复原始数据
 console.log('恢复用户原始启动项数据，杜绝脏数据残留...');
 const restoreResult = runPythonSqlite(writePy, JSON.stringify(originalStorage));

@@ -2,6 +2,31 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.38] - 2026-11-16
+
+### Feature & Architecture (快速启动组合屏幕窗口分屏编排与自动吸附平铺 - Window Snap Tiling)
+- **屏幕分屏编排类型与数据契约扩展 (`src/types/launcher.ts`)**:
+  - 新增 `WindowTilingLayout` 布局枚举类型：`none`、`grid-4`（田字四分屏 2×2）、`split-h`（左右双分屏 1:1）、`split-v`（上下双分屏 1:1）、`main-aside-3`（主辅三分屏 6:4）；
+  - 新增 `WindowSlotConfig` 象限槽位契约（定义 `slotId`、`name`、`targetItemId` 及归一化比例 `xRatio`, `yRatio`, `wRatio`, `hRatio`）；
+  - `LauncherItem` 中扩展持久化字段 `windowLayout?: WindowLayoutConfig`，在 SQLite 与内存状态间实现 100% 结构化无损往返。
+- **Win32 工作区动态获取与窗口吸附平铺原生命令 (`src-tauri/src/lib.rs`)**:
+  - 后端新增 `arrange_combo_windows(specs: Vec<WindowPlacementSpec>)` 命令；
+  - 基于 Win32 `SystemParametersInfoW(SPI_GETWORKAREA)` 实时获取主显示器排除任务栏后的物理工作区矩形（`SPI_GETWORKAREA: 0, 0, 1920, 1032`），像素级计算各象限绝对位置；
+  - 针对 Windows 资源管理器文件夹窗口，通过 `Shell.Application` COM 遍历已打开窗口与 `Document.Folder.Self.Path` 物理路径精准对齐，并针对常规应用进程主窗口调用 Win32 `SetWindowPos(HWND, NULL, x, y, w, h, SWP_NOZORDER | SWP_SHOWWINDOW)` 实现瞬间无缝吸附贴靠；
+  - 内置 `test_arrange_combo_windows_contract` 单元测试，保证空参与多象限规格输入时系统健壮性。
+- **组合弹窗可视化布局编排 UI 与启动调度管线联动 (`src/components/LauncherDashboard.tsx`)**:
+  - 在“创建/编辑启动组合”弹窗中增设【🖥️ 屏幕窗口分屏编排】高级面板与开关；
+  - 提供 4 大精美分屏预设卡片选择（田字四分屏、左右双分屏、上下双分屏、主辅三分屏）并支持“自动依序填入”；
+  - 象限槽位下拉菜单支持选择绑定的具体应用或文件夹子项；
+  - 在大盘组合卡片上渲染专属分屏徽标（`田字四分屏` / `左右双分屏` 等）；
+  - 在 `handleLaunchItem` 启动组合套件管线中，子项全部唤起后延时 350ms 自动触发 `arrange_combo_windows`，将各窗口秒级平铺吸附至指定屏幕区域，并在执行报文中输出详细停靠结果。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 12/12 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 29/29 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换启动。
+
 ## [0.1.37] - 2026-11-16
 
 ### Fix & Architecture (快速启动目录与文件选择器全链路 UTF-8 无损编码与真实数据自愈)

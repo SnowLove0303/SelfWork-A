@@ -20,6 +20,10 @@ import {
   Zap,
   CheckSquare,
   Layers,
+  Monitor,
+  LayoutGrid,
+  Columns,
+  Rows,
 } from 'lucide-react';
 import {
   LauncherItem,
@@ -29,6 +33,9 @@ import {
   DEFAULT_LAUNCHER_CATEGORY_ID,
   TelemetryLogEntry,
   TelemetryLogLevel,
+  WindowTilingLayout,
+  WindowSlotConfig,
+  WindowLayoutConfig,
 } from '../types/launcher.ts';
 import { TelemetryPanel } from './launcher/TelemetryPanel.tsx';
 import {
@@ -85,6 +92,62 @@ function renderTypeBadge(type: LauncherItemType) {
   }
 }
 
+// ==================== 屏幕分屏布局预设契约 (Window Snap Tiling Presets) ====================
+
+interface LayoutPresetDef {
+  id: WindowTilingLayout;
+  name: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string }>;
+  slots: { slotId: string; name: string; xRatio: number; yRatio: number; wRatio: number; hRatio: number }[];
+}
+
+const LAYOUT_PRESETS: LayoutPresetDef[] = [
+  {
+    id: 'grid-4',
+    name: '田字四分屏',
+    desc: '2×2 铺满 (适合4个窗口)',
+    icon: LayoutGrid,
+    slots: [
+      { slotId: 'slot-tl', name: '左上象限 (Top-Left)', xRatio: 0, yRatio: 0, wRatio: 0.5, hRatio: 0.5 },
+      { slotId: 'slot-tr', name: '右上象限 (Top-Right)', xRatio: 0.5, yRatio: 0, wRatio: 0.5, hRatio: 0.5 },
+      { slotId: 'slot-bl', name: '左下象限 (Bottom-Left)', xRatio: 0, yRatio: 0.5, wRatio: 0.5, hRatio: 0.5 },
+      { slotId: 'slot-br', name: '右下象限 (Bottom-Right)', xRatio: 0.5, yRatio: 0.5, wRatio: 0.5, hRatio: 0.5 },
+    ],
+  },
+  {
+    id: 'split-h',
+    name: '左右双分屏',
+    desc: '左右 1:1 对等排布',
+    icon: Columns,
+    slots: [
+      { slotId: 'slot-l', name: '左半屏 (Left)', xRatio: 0, yRatio: 0, wRatio: 0.5, hRatio: 1.0 },
+      { slotId: 'slot-r', name: '右半屏 (Right)', xRatio: 0.5, yRatio: 0, wRatio: 0.5, hRatio: 1.0 },
+    ],
+  },
+  {
+    id: 'split-v',
+    name: '上下双分屏',
+    desc: '上下 1:1 对等排布',
+    icon: Rows,
+    slots: [
+      { slotId: 'slot-t', name: '上半屏 (Top)', xRatio: 0, yRatio: 0, wRatio: 1.0, hRatio: 0.5 },
+      { slotId: 'slot-b', name: '下半屏 (Bottom)', xRatio: 0, yRatio: 0.5, wRatio: 1.0, hRatio: 0.5 },
+    ],
+  },
+  {
+    id: 'main-aside-3',
+    name: '主辅三分屏',
+    desc: '左主 60% / 右辅上下 40%',
+    icon: Monitor,
+    slots: [
+      { slotId: 'slot-m', name: '左侧主屏 (60%)', xRatio: 0, yRatio: 0, wRatio: 0.6, hRatio: 1.0 },
+      { slotId: 'slot-at', name: '右上辅屏', xRatio: 0.6, yRatio: 0, wRatio: 0.4, hRatio: 0.5 },
+      { slotId: 'slot-ab', name: '右下辅屏', xRatio: 0.6, yRatio: 0.5, wRatio: 0.4, hRatio: 0.5 },
+    ],
+  },
+];
+
 export const LauncherDashboard: React.FC = () => {
   // 1. 本地快速缓存优先秒开
   const [storage, setStorage] = useState<LauncherStorageData>(() => {
@@ -137,6 +200,21 @@ export const LauncherDashboard: React.FC = () => {
   const [comboFormCategoryId, setComboFormCategoryId] = useState(activeCategoryId);
   const [comboFormItemIds, setComboFormItemIds] = useState<string[]>([]);
   const [comboItemSearch, setComboItemSearch] = useState('');
+
+  // 屏幕分屏布局编排状态 (Window Snap Tiling)
+  const [comboLayoutEnabled, setComboLayoutEnabled] = useState(false);
+  const [comboLayoutType, setComboLayoutType] = useState<WindowTilingLayout>('grid-4');
+  const [comboSlotAssignments, setComboSlotAssignments] = useState<Record<string, string>>({});
+
+  // 辅助函数：根据选定布局自动依序分配槽位
+  const autoAssignSlots = useCallback((layoutType: WindowTilingLayout, itemIds: string[]) => {
+    const preset = LAYOUT_PRESETS.find((p) => p.id === layoutType) || LAYOUT_PRESETS[0];
+    const assignments: Record<string, string> = {};
+    preset.slots.forEach((slot, idx) => {
+      assignments[slot.slotId] = itemIds[idx] || '';
+    });
+    return assignments;
+  }, []);
 
   // 卡片操作菜单与执行状态反馈
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
@@ -350,6 +428,44 @@ export const LauncherDashboard: React.FC = () => {
             await handleLaunchItem(sub);
             if (i < subItems.length - 1) {
               await new Promise((r) => setTimeout(r, 150));
+            }
+          }
+
+          // 如果该组合启用了屏幕窗口分屏编排，执行精确象限停靠
+          if (item.windowLayout?.enabled && item.windowLayout.slots && item.windowLayout.slots.length > 0) {
+            appendLog(
+              item.name,
+              'info',
+              `正在对【${item.name}】进行屏幕分屏编排 (${item.windowLayout.layout})...`
+            );
+            // 短暂延时 350ms 确保各子窗口进程和 Explorer 句柄已被系统就绪创建
+            await new Promise((r) => setTimeout(r, 350));
+            const specs = item.windowLayout.slots
+              .map((slot) => {
+                const targetItem = subItems.find((s) => s.id === slot.targetItemId);
+                if (!targetItem) return null;
+                return {
+                  item_id: targetItem.id,
+                  target: targetItem.target,
+                  x_ratio: slot.xRatio,
+                  y_ratio: slot.yRatio,
+                  w_ratio: slot.wRatio,
+                  h_ratio: slot.hRatio,
+                };
+              })
+              .filter(Boolean);
+
+            if (specs.length > 0) {
+              try {
+                const placedCount = await invoke<number>('arrange_combo_windows', { specs });
+                appendLog(
+                  item.name,
+                  'success',
+                  `屏幕窗口编排完成: 成功停靠 ${placedCount}/${specs.length} 个窗口至指定象限`
+                );
+              } catch (layoutErr: any) {
+                appendLog(item.name, 'warn', `窗口编排提示: ${layoutErr?.message || layoutErr}`);
+              }
             }
           }
 
@@ -600,6 +716,11 @@ export const LauncherDashboard: React.FC = () => {
     setComboFormCategoryId(activeCategoryId);
     setComboFormItemIds(initialItemIds);
     setComboItemSearch('');
+    const defaultLayout: WindowTilingLayout =
+      initialItemIds.length >= 4 ? 'grid-4' : initialItemIds.length === 2 ? 'split-h' : 'grid-4';
+    setComboLayoutEnabled(initialItemIds.length >= 2);
+    setComboLayoutType(defaultLayout);
+    setComboSlotAssignments(autoAssignSlots(defaultLayout, initialItemIds));
     setIsComboModalOpen(true);
   };
 
@@ -608,8 +729,22 @@ export const LauncherDashboard: React.FC = () => {
     setEditingComboItem(item);
     setComboFormName(item.name);
     setComboFormCategoryId(item.categoryId);
-    setComboFormItemIds(item.bundleItemIds || []);
+    const itemIds = item.bundleItemIds || [];
+    setComboFormItemIds(itemIds);
     setComboItemSearch('');
+    if (item.windowLayout?.enabled) {
+      setComboLayoutEnabled(true);
+      setComboLayoutType(item.windowLayout.layout);
+      const assignments: Record<string, string> = {};
+      item.windowLayout.slots.forEach((s) => {
+        assignments[s.slotId] = s.targetItemId;
+      });
+      setComboSlotAssignments(assignments);
+    } else {
+      setComboLayoutEnabled(false);
+      setComboLayoutType('grid-4');
+      setComboSlotAssignments(autoAssignSlots('grid-4', itemIds));
+    }
     setIsComboModalOpen(true);
   };
 
@@ -627,6 +762,27 @@ export const LauncherDashboard: React.FC = () => {
     }
 
     const now = Date.now();
+    const curPreset = LAYOUT_PRESETS.find((p) => p.id === comboLayoutType) || LAYOUT_PRESETS[0];
+    const slotsConfig: WindowSlotConfig[] = curPreset.slots
+      .map((slot) => ({
+        slotId: slot.slotId,
+        name: slot.name,
+        targetItemId: comboSlotAssignments[slot.slotId] || '',
+        xRatio: slot.xRatio,
+        yRatio: slot.yRatio,
+        wRatio: slot.wRatio,
+        hRatio: slot.hRatio,
+      }))
+      .filter((slot) => slot.targetItemId && comboFormItemIds.includes(slot.targetItemId));
+
+    const windowLayoutConfig: WindowLayoutConfig | undefined = comboLayoutEnabled
+      ? {
+          enabled: slotsConfig.length > 0,
+          layout: comboLayoutType,
+          slots: slotsConfig,
+        }
+      : undefined;
+
     if (editingComboItem) {
       // 更新现有组合
       setStorage((prev) => ({
@@ -640,6 +796,7 @@ export const LauncherDashboard: React.FC = () => {
                 target: '启动组合套件',
                 categoryId: comboFormCategoryId,
                 bundleItemIds: comboFormItemIds,
+                windowLayout: windowLayoutConfig,
                 updatedAt: now,
               }
             : i
@@ -658,6 +815,7 @@ export const LauncherDashboard: React.FC = () => {
         type: 'bundle',
         target: '启动组合套件',
         bundleItemIds: comboFormItemIds,
+        windowLayout: windowLayoutConfig,
         createdAt: now,
         updatedAt: now,
       };
@@ -1210,14 +1368,33 @@ export const LauncherDashboard: React.FC = () => {
                         {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                       </div>
                     ) : (
-                      <span
-                        className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded border ${badge.className}`}
-                      >
-                        <badge.Icon className="w-2.5 h-2.5" />
-                        <span>
-                          {isBundle ? `组合·${subItems.length}项` : badge.label}
+                      <div className="flex items-center gap-1">
+                        <span
+                          className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded border ${badge.className}`}
+                        >
+                          <badge.Icon className="w-2.5 h-2.5" />
+                          <span>
+                            {isBundle ? `组合·${subItems.length}项` : badge.label}
+                          </span>
                         </span>
-                      </span>
+                        {isBundle && item.windowLayout?.enabled && (
+                          <span
+                            className="flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.15)]"
+                            title={`已启用屏幕自动分屏: ${item.windowLayout.layout}`}
+                          >
+                            <Monitor className="w-2.5 h-2.5 text-cyan-400" />
+                            <span>
+                              {item.windowLayout.layout === 'grid-4'
+                                ? '田字四分屏'
+                                : item.windowLayout.layout === 'split-h'
+                                ? '左右双分屏'
+                                : item.windowLayout.layout === 'split-v'
+                                ? '上下双分屏'
+                                : '主辅三分屏'}
+                            </span>
+                          </span>
+                        )}
+                      </div>
                     )}
 
                     {!isSelectMode && (
@@ -1520,6 +1697,158 @@ export const LauncherDashboard: React.FC = () => {
                     })
                   )}
                 </div>
+              </div>
+
+              {/* 屏幕窗口分屏编排配置 (Window Snap Tiling) */}
+              <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="w-4 h-4 text-cyan-400" />
+                    <div>
+                      <span className="text-xs font-semibold text-slate-200">
+                        屏幕窗口分屏编排
+                      </span>
+                      <span className="ml-1.5 text-[10px] text-slate-400">
+                        (启动时自动按象限铺满屏幕)
+                      </span>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={comboLayoutEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setComboLayoutEnabled(checked);
+                        if (checked && Object.keys(comboSlotAssignments).length === 0) {
+                          setComboSlotAssignments(autoAssignSlots(comboLayoutType, comboFormItemIds));
+                        }
+                      }}
+                      className="sr-only"
+                    />
+                    <div
+                      className={`w-8 h-4 rounded-full transition-colors relative ${
+                        comboLayoutEnabled ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-slate-700'
+                      }`}
+                    >
+                      <div
+                        className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[1px] transition-transform ${
+                          comboLayoutEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-300">
+                      {comboLayoutEnabled ? '已启用' : '未启用'}
+                    </span>
+                  </label>
+                </div>
+
+                {comboLayoutEnabled && (
+                  <div className="space-y-3 pt-2 border-t border-white/5">
+                    {/* 预设分屏样式选择卡片 */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {LAYOUT_PRESETS.map((preset) => {
+                        const isPresetActive = comboLayoutType === preset.id;
+                        const PresetIcon = preset.icon;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              setComboLayoutType(preset.id);
+                              setComboSlotAssignments(autoAssignSlots(preset.id, comboFormItemIds));
+                            }}
+                            className={`p-2 rounded-lg border text-left transition-all flex flex-col justify-between ${
+                              isPresetActive
+                                ? 'border-cyan-500/60 bg-cyan-500/15 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                                : 'border-white/10 bg-black/30 hover:border-white/20 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <PresetIcon
+                                className={`w-4 h-4 ${
+                                  isPresetActive ? 'text-cyan-400' : 'text-slate-400'
+                                }`}
+                              />
+                              {isPresetActive && (
+                                <Check className="w-3 h-3 text-cyan-400 stroke-[3]" />
+                              )}
+                            </div>
+                            <div>
+                              <div
+                                className={`text-[11px] font-medium ${
+                                  isPresetActive ? 'text-cyan-200' : 'text-slate-300'
+                                }`}
+                              >
+                                {preset.name}
+                              </div>
+                              <div className="text-[9px] text-slate-500 truncate">
+                                {preset.desc}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* 象限槽位与子启动项绑定列表 */}
+                    <div className="space-y-1.5 bg-black/40 rounded-lg p-2.5 border border-white/5">
+                      <div className="text-[11px] font-medium text-slate-400 mb-1 flex items-center justify-between">
+                        <span>象限区域指定 (绑定应用或文件夹窗口)</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setComboSlotAssignments(autoAssignSlots(comboLayoutType, comboFormItemIds));
+                          }}
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 hover:underline"
+                        >
+                          自动依序填入
+                        </button>
+                      </div>
+
+                      {(() => {
+                        const curPreset =
+                          LAYOUT_PRESETS.find((p) => p.id === comboLayoutType) || LAYOUT_PRESETS[0];
+                        const selectedSubItems = storage.items.filter((it) =>
+                          comboFormItemIds.includes(it.id)
+                        );
+
+                        return curPreset.slots.map((slot) => {
+                          const currentBoundId = comboSlotAssignments[slot.slotId] || '';
+                          return (
+                            <div
+                              key={slot.slotId}
+                              className="flex items-center justify-between gap-2 py-1 text-xs"
+                            >
+                              <div className="flex items-center gap-1.5 w-40 shrink-0 text-slate-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                                <span className="font-mono text-[11px] truncate">{slot.name}</span>
+                              </div>
+                              <select
+                                value={currentBoundId}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setComboSlotAssignments((prev) => ({
+                                    ...prev,
+                                    [slot.slotId]: val,
+                                  }));
+                                }}
+                                className="flex-1 h-7 bg-slate-900 border border-white/10 rounded px-2 text-[11px] text-slate-200 outline-none focus:border-cyan-500/50"
+                              >
+                                <option value="">-- 未分配 (保持默认位置) --</option>
+                                {selectedSubItems.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name} ({s.type})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">

@@ -474,6 +474,122 @@ async fn window_close(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// 屏幕窗口分屏编排槽位定义契约 (Window Snap Tiling)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowPlacementSpec {
+    pub target: String, // 文件夹绝对路径或应用关键字
+    pub x_ratio: f64,   // 0.0 ~ 1.0 (屏幕横向起始占比)
+    pub y_ratio: f64,   // 0.0 ~ 1.0 (屏幕纵向起始占比)
+    pub w_ratio: f64,   // 0.0 ~ 1.0 (屏幕宽度占比)
+    pub h_ratio: f64,   // 0.0 ~ 1.0 (屏幕高度占比)
+}
+
+/// 智能窗口吸附编排：将指定目标窗口自动平铺吸附至屏幕工作区的指定象限 (REQ-TILING-02)
+#[tauri::command]
+async fn arrange_combo_windows(specs: Vec<WindowPlacementSpec>) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(windows)]
+        {
+            use std::path::Path;
+            use std::process::Command;
+            use std::os::windows::process::CommandExt;
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                SystemParametersInfoW, SPI_GETWORKAREA,
+            };
+            use windows_sys::Win32::Foundation::RECT;
+
+            if specs.is_empty() {
+                return Ok(0);
+            }
+
+            // 1. 获取主显示器真实可用工作区 (精确排除 Windows 任务栏)
+            let mut work_area = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            unsafe {
+                SystemParametersInfoW(
+                    SPI_GETWORKAREA,
+                    0,
+                    &mut work_area as *mut _ as _,
+                    0,
+                );
+            }
+
+            let work_w = (work_area.right - work_area.left).max(800);
+            let work_h = (work_area.bottom - work_area.top).max(600);
+            let base_x = work_area.left;
+            let base_y = work_area.top;
+
+            // 2. 构造自动化排版 PowerShell 脚本，利用 Shell.Application 与 Win32 SetWindowPos 精准分发
+            let mut ps_script = String::from(r#"
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class WinSnap {
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+$shell = New-Object -ComObject Shell.Application
+$shellWindows = @($shell.Windows())
+"#);
+
+            let mut matched_count = 0;
+            for (idx, spec) in specs.iter().enumerate() {
+                let px = base_x + (work_w as f64 * spec.x_ratio).round() as i32;
+                let py = base_y + (work_h as f64 * spec.y_ratio).round() as i32;
+                let pw = (work_w as f64 * spec.w_ratio).round() as i32;
+                let ph = (work_h as f64 * spec.h_ratio).round() as i32;
+
+                let escaped_target = spec.target.trim().replace('\'', "''").replace('/', "\\");
+                let target_name = Path::new(&spec.target)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .replace('\'', "''");
+
+                ps_script.push_str(&format!(r#"
+$target_{idx} = '{escaped_target}'
+$name_{idx} = '{target_name}'
+$found_{idx} = $false
+foreach ($w in $shellWindows) {{
+    try {{
+        $p = $w.Document.Folder.Self.Path
+        if ($p -and ($p.TrimEnd('\') -eq $target_{idx}.TrimEnd('\') -or $w.LocationName -eq $name_{idx})) {{
+            [WinSnap]::ShowWindow($w.HWND, 9)
+            [WinSnap]::SetWindowPos($w.HWND, [IntPtr]::Zero, {px}, {py}, {pw}, {ph}, 0x0040)
+            $found_{idx} = $true
+            break
+        }}
+    }} catch {{}}
+}}
+if (-not $found_{idx}) {{
+    Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 -and ($_.MainWindowTitle -like "*$name_{idx}*" -or $_.ProcessName -like "*$name_{idx}*") }} | Select-Object -First 1 | ForEach-Object {{
+        [WinSnap]::ShowWindow($_.MainWindowHandle, 9)
+        [WinSnap]::SetWindowPos($_.MainWindowHandle, [IntPtr]::Zero, {px}, {py}, {pw}, {ph}, 0x0040)
+    }}
+}}
+"#));
+                matched_count += 1;
+            }
+
+            let mut cmd = Command::new("powershell");
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &ps_script]);
+            let _ = cmd.output();
+
+            Ok(matched_count)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = specs;
+            Ok(0)
+        }
+    })
+    .await
+    .map_err(|e| format!("执行窗口吸附编排异常: {}", e))?
+}
+
 /// 将纯 ASCII 十六进制字符串无损还原为 UTF-8 字符串
 /// 彻底规避 Windows 控制台 OEM 代码页 (GBK / CP936) 导致的中文路径截断或乱码
 fn decode_hex_to_utf8(raw_hex: &str) -> Option<String> {
@@ -583,6 +699,7 @@ pub fn run() {
             window_is_maximized,
             window_close,
             pick_launcher_file,
+            arrange_combo_windows,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
             db::db_get_all_memos,
@@ -679,6 +796,29 @@ mod tests {
             .get("nonexistent_mock_service_process.exe")
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn test_arrange_combo_windows_contract() {
+        let specs = vec![
+            WindowPlacementSpec {
+                target: "F:\\App Location\\SelfWork".to_string(),
+                x_ratio: 0.0,
+                y_ratio: 0.0,
+                w_ratio: 0.5,
+                h_ratio: 0.5,
+            },
+            WindowPlacementSpec {
+                target: "F:\\App Location\\Guanzhi Tong\\Skill\\MSDS-Engine".to_string(),
+                x_ratio: 0.5,
+                y_ratio: 0.0,
+                w_ratio: 0.5,
+                h_ratio: 0.5,
+            },
+        ];
+        let res = tauri::async_runtime::block_on(arrange_combo_windows(specs));
+        assert!(res.is_ok(), "arrange_combo_windows 应当正常执行并返回匹配数量");
+        assert_eq!(res.unwrap(), 2);
     }
 
     #[test]
