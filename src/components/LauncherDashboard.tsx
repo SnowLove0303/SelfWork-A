@@ -600,6 +600,65 @@ export const LauncherDashboard: React.FC = () => {
     );
   }, [currentItems, selectedItemIds, handleLaunchItem, appendLog]);
 
+  // 多选即时分屏平铺启动 (免预先保存直接四分屏/双分屏/三分屏)
+  const handleLaunchSelectedWithTiling = useCallback(async () => {
+    const selectedItems = currentItems.filter((i) => selectedItemIds.includes(i.id));
+    if (selectedItems.length < 2) return;
+
+    const layoutType: WindowTilingLayout =
+      selectedItems.length === 4 ? 'grid-4' : selectedItems.length === 2 ? 'split-h' : 'main-aside-3';
+    const preset = LAYOUT_PRESETS.find((p) => p.id === layoutType) || LAYOUT_PRESETS[0];
+
+    appendLog(
+      '分屏调度',
+      'info',
+      `正在以【${preset.name}】模式启动所选 ${selectedItems.length} 个项目并自动吸附平铺: ${selectedItems.map((s) => s.name).join(', ')}...`
+    );
+    setFeedback({
+      type: 'success',
+      message: `正在以【${preset.name}】启动所选 ${selectedItems.length} 项并自动吸附平铺...`,
+    });
+
+    for (let i = 0; i < selectedItems.length; i++) {
+      await handleLaunchItem(selectedItems[i]);
+      if (i < selectedItems.length - 1) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+
+    // 等待 350ms 后调用原生 arrange_combo_windows
+    await new Promise((r) => setTimeout(r, 350));
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const specs = preset.slots
+        .slice(0, selectedItems.length)
+        .map((slot, idx) => ({
+          item_id: selectedItems[idx].id,
+          target: selectedItems[idx].target,
+          x_ratio: slot.xRatio,
+          y_ratio: slot.yRatio,
+          w_ratio: slot.wRatio,
+          h_ratio: slot.hRatio,
+        }));
+
+      const placedCount = await invoke<number>('arrange_combo_windows', { specs });
+      appendLog(
+        '分屏调度',
+        'success',
+        `分屏编排完成: 成功停靠 ${placedCount}/${specs.length} 个窗口至屏幕象限`
+      );
+      setFeedback({
+        type: 'success',
+        message: `【${preset.name}】吸附平铺完成 (成功停靠 ${placedCount} 个窗口)`,
+      });
+    } catch (err: any) {
+      appendLog('分屏调度', 'warn', `分屏编排提示: ${err?.message || err}`);
+    }
+
+    setIsSelectMode(false);
+    setSelectedItemIds([]);
+  }, [currentItems, selectedItemIds, handleLaunchItem, appendLog]);
+
   // 多选切换勾选
   const handleToggleSelectItem = (id: string) => {
     setSelectedItemIds((prev) =>
@@ -1150,7 +1209,7 @@ export const LauncherDashboard: React.FC = () => {
                   type="button"
                   disabled={selectedItemIds.length === 0}
                   onClick={() => handleOpenCreateComboModal(selectedItemIds)}
-                  title="将当前已勾选的项目保存为一个新组合"
+                  title="将当前已勾选的项目保存为一个新组合并配置分屏"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
                     selectedItemIds.length > 0
                       ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]'
@@ -1160,6 +1219,25 @@ export const LauncherDashboard: React.FC = () => {
                   <Layers className="w-3.5 h-3.5 shrink-0" />
                   <span>保存为组合</span>
                 </button>
+
+                {/* 当勾选 2~4 项时，直接显示「即时分屏平铺启动」按钮 */}
+                {selectedItemIds.length >= 2 && selectedItemIds.length <= 4 && (
+                  <button
+                    type="button"
+                    onClick={handleLaunchSelectedWithTiling}
+                    title="立即以分屏平铺方式启动所选项并自动吸附象限"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-500/40 shadow-[0_0_14px_rgba(6,182,212,0.25)] transition-all tactile-btn shrink-0"
+                  >
+                    <Monitor className="w-3.5 h-3.5 shrink-0 text-cyan-300" />
+                    <span>
+                      {selectedItemIds.length === 4
+                        ? '田字四分屏启动 (4)'
+                        : selectedItemIds.length === 2
+                        ? '左右双分屏启动 (2)'
+                        : '主辅三分屏启动 (3)'}
+                    </span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -1173,7 +1251,7 @@ export const LauncherDashboard: React.FC = () => {
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span>启动所选项 ({selectedItemIds.length})</span>
+                  <span>常规启动 ({selectedItemIds.length})</span>
                 </button>
 
                 <button
@@ -1218,7 +1296,7 @@ export const LauncherDashboard: React.FC = () => {
                       setIsSelectMode(true);
                       setSelectedItemIds([]);
                     }}
-                    title="自由勾选任意多个应用或脚本同时启动"
+                    title="自由勾选任意多个应用或脚本同时启动或四分屏"
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
                   >
                     <CheckSquare className="w-3.5 h-3.5 shrink-0" />
@@ -1239,15 +1317,15 @@ export const LauncherDashboard: React.FC = () => {
                   </button>
                 )}
 
-                {/* 显式独立的新建组合按钮 (REQ-COMBO-01) */}
+                {/* 显式独立的新建组合/分屏按钮 */}
                 <button
                   type="button"
                   onClick={() => handleOpenCreateComboModal()}
-                  title="创建多项目组合套餐"
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(244,63,94,0.12)]"
+                  title="创建多项目组合套餐并编排屏幕分屏位置"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(244,63,94,0.12)]"
                 >
-                  <Layers className="w-3.5 h-3.5 shrink-0" />
-                  <span>+ 组合</span>
+                  <Monitor className="w-3.5 h-3.5 shrink-0 text-rose-300" />
+                  <span>+ 分屏组合</span>
                 </button>
 
                 {/* 添加单项启动项按钮 */}
