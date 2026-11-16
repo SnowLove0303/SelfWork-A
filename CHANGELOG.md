@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.39] - 2026-11-16
+
+### Feature & UI/UX (快速启动卡片排版防乱加固、多屏幕感知定向投放与无缝贴靠平铺)
+- **组合卡片顶栏排版重构与单字折行彻底清除 (`src/components/LauncherDashboard.tsx`)**:
+  - 彻底解决组合卡片因宽度限制导致“组合·4项”与“田字四分屏”两枚徽标发生单字竖排错乱的痛点（`组\n合\n·4\n项` 视觉扭曲）；
+  - 顶栏徽标容器注入刚性约束：`max-w-[calc(100%-24px)] overflow-hidden`，文字徽标全部加入 `whitespace-nowrap shrink-0 select-none`；
+  - 优化徽标微文案层级：数量徽标紧凑化（`组合·4`），分屏徽标优化为 `<Monitor /> 四分屏`，保障在任意卡片宽度与系统缩放比例下始终横排舒适呈现，内部大图标与名称不被挤压变形。
+- **系统多显示器拓扑实时检测与原生指令 (`src-tauri/src/lib.rs`)**:
+  - 新增 `get_system_monitors` 原生指令与 `SystemMonitorInfo` 契约，自动枚举系统所有活动物理显示器（实测精准感知本机双屏：屏幕 1 主屏 `0, 0, 1920, 1032` 与屏幕 2 副屏 `1920, 0, 1920, 1032`）；
+  - 内置 `test_get_system_monitors_contract` 单元测试，保证单屏与多屏环境下的健壮性。
+- **分屏目标显示器自由定向投放**:
+  - 在组合创建/编辑模态框中新增「目标投放屏幕」选择胶囊（仅在检测到双屏/多屏时点亮，支持一键切换 `屏幕 1 (主屏)` 或 `屏幕 2 (副屏)`）；
+  - 在多选即时分屏工具栏中同样支持快捷定向投递；
+  - `arrange_combo_windows` 支持接收选定屏幕索引，平铺吸附算法以目标显示器工作区原点与宽高作为基准，将窗口 100% 停靠至选定显示器，主副屏互不干扰。
+- **DWM 隐形边框消除大缝隙与紧密贴合平铺**:
+  - 在象限吸附算法中针对 Windows 10/11 Aero/DWM 阴影外框引入 7 像素的微观贴合补偿，相邻内部边界相互微重叠；
+  - 彻底消除相邻窗口间 14~16 像素的突兀大缝隙，实现真正无缝严密贴合（Zero Visual Gap）。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 13/13 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 30/30 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换启动。
+
 ## [0.1.38] - 2026-11-16
 
 ### Feature & Architecture (快速启动组合屏幕窗口分屏编排与自动吸附平铺 - Window Snap Tiling)

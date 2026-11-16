@@ -36,6 +36,7 @@ import {
   WindowTilingLayout,
   WindowSlotConfig,
   WindowLayoutConfig,
+  SystemMonitorInfo,
 } from '../types/launcher.ts';
 import { TelemetryPanel } from './launcher/TelemetryPanel.tsx';
 import {
@@ -205,6 +206,11 @@ export const LauncherDashboard: React.FC = () => {
   const [comboLayoutEnabled, setComboLayoutEnabled] = useState(false);
   const [comboLayoutType, setComboLayoutType] = useState<WindowTilingLayout>('grid-4');
   const [comboSlotAssignments, setComboSlotAssignments] = useState<Record<string, string>>({});
+  const [comboTargetMonitorIndex, setComboTargetMonitorIndex] = useState<number>(0);
+
+  // 系统多屏幕感知与多选定向投放状态 (Multi-Monitor Detection)
+  const [systemMonitors, setSystemMonitors] = useState<SystemMonitorInfo[]>([]);
+  const [multiSelectMonitorIndex, setMultiSelectMonitorIndex] = useState<number>(0);
 
   // 辅助函数：根据选定布局自动依序分配槽位
   const autoAssignSlots = useCallback((layoutType: WindowTilingLayout, itemIds: string[]) => {
@@ -261,6 +267,31 @@ export const LauncherDashboard: React.FC = () => {
         setIsHydrated(true);
       }
     });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 实时探测系统物理多显示器拓扑 (REQ-MULTIMONITOR-01)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMonitors = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const list = await invoke<SystemMonitorInfo[]>('get_system_monitors');
+        if (isMounted && list && list.length > 0) {
+          setSystemMonitors(list);
+          const primaryIdx = list.findIndex((m) => m.isPrimary);
+          if (primaryIdx >= 0) {
+            setMultiSelectMonitorIndex(primaryIdx);
+            setComboTargetMonitorIndex(primaryIdx);
+          }
+        }
+      } catch {
+        // Tauri 环境未就绪
+      }
+    };
+    fetchMonitors();
     return () => {
       isMounted = false;
     };
@@ -457,11 +488,18 @@ export const LauncherDashboard: React.FC = () => {
 
             if (specs.length > 0) {
               try {
-                const placedCount = await invoke<number>('arrange_combo_windows', { specs });
+                const targetMon = systemMonitors.find(
+                  (m) => m.index === item.windowLayout?.targetMonitorIndex
+                );
+                const monDesc = targetMon ? targetMon.name : '主显示器';
+                const placedCount = await invoke<number>('arrange_combo_windows', {
+                  specs,
+                  targetMonitorIndex: item.windowLayout?.targetMonitorIndex,
+                });
                 appendLog(
                   item.name,
                   'success',
-                  `屏幕窗口编排完成: 成功停靠 ${placedCount}/${specs.length} 个窗口至指定象限`
+                  `屏幕窗口编排完成: 成功停靠 ${placedCount}/${specs.length} 个窗口至 ${monDesc}`
                 );
               } catch (layoutErr: any) {
                 appendLog(item.name, 'warn', `窗口编排提示: ${layoutErr?.message || layoutErr}`);
@@ -630,6 +668,9 @@ export const LauncherDashboard: React.FC = () => {
     await new Promise((r) => setTimeout(r, 350));
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      const targetMon = systemMonitors.find((m) => m.index === multiSelectMonitorIndex);
+      const monDesc = targetMon ? targetMon.name : '当前屏幕';
+
       const specs = preset.slots
         .slice(0, selectedItems.length)
         .map((slot, idx) => ({
@@ -641,15 +682,18 @@ export const LauncherDashboard: React.FC = () => {
           h_ratio: slot.hRatio,
         }));
 
-      const placedCount = await invoke<number>('arrange_combo_windows', { specs });
+      const placedCount = await invoke<number>('arrange_combo_windows', {
+        specs,
+        targetMonitorIndex: multiSelectMonitorIndex,
+      });
       appendLog(
         '分屏调度',
         'success',
-        `分屏编排完成: 成功停靠 ${placedCount}/${specs.length} 个窗口至屏幕象限`
+        `分屏编排完成: 成功停靠 ${placedCount}/${specs.length} 个窗口至 ${monDesc}`
       );
       setFeedback({
         type: 'success',
-        message: `【${preset.name}】吸附平铺完成 (成功停靠 ${placedCount} 个窗口)`,
+        message: `【${preset.name}】无缝平铺完成 (成功停靠至 ${monDesc})`,
       });
     } catch (err: any) {
       appendLog('分屏调度', 'warn', `分屏编排提示: ${err?.message || err}`);
@@ -780,6 +824,8 @@ export const LauncherDashboard: React.FC = () => {
     setComboLayoutEnabled(initialItemIds.length >= 2);
     setComboLayoutType(defaultLayout);
     setComboSlotAssignments(autoAssignSlots(defaultLayout, initialItemIds));
+    const primIdx = systemMonitors.findIndex((m) => m.isPrimary);
+    setComboTargetMonitorIndex(primIdx >= 0 ? primIdx : 0);
     setIsComboModalOpen(true);
   };
 
@@ -794,6 +840,7 @@ export const LauncherDashboard: React.FC = () => {
     if (item.windowLayout?.enabled) {
       setComboLayoutEnabled(true);
       setComboLayoutType(item.windowLayout.layout);
+      setComboTargetMonitorIndex(item.windowLayout.targetMonitorIndex ?? 0);
       const assignments: Record<string, string> = {};
       item.windowLayout.slots.forEach((s) => {
         assignments[s.slotId] = s.targetItemId;
@@ -802,6 +849,7 @@ export const LauncherDashboard: React.FC = () => {
     } else {
       setComboLayoutEnabled(false);
       setComboLayoutType('grid-4');
+      setComboTargetMonitorIndex(0);
       setComboSlotAssignments(autoAssignSlots('grid-4', itemIds));
     }
     setIsComboModalOpen(true);
@@ -839,6 +887,7 @@ export const LauncherDashboard: React.FC = () => {
           enabled: slotsConfig.length > 0,
           layout: comboLayoutType,
           slots: slotsConfig,
+          targetMonitorIndex: comboTargetMonitorIndex,
         }
       : undefined;
 
@@ -1220,23 +1269,45 @@ export const LauncherDashboard: React.FC = () => {
                   <span>保存为组合</span>
                 </button>
 
-                {/* 当勾选 2~4 项时，直接显示「即时分屏平铺启动」按钮 */}
+                {/* 当勾选 2~4 项时，直接显示「即时分屏平铺启动」按钮与多屏投递选择 */}
                 {selectedItemIds.length >= 2 && selectedItemIds.length <= 4 && (
-                  <button
-                    type="button"
-                    onClick={handleLaunchSelectedWithTiling}
-                    title="立即以分屏平铺方式启动所选项并自动吸附象限"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-500/40 shadow-[0_0_14px_rgba(6,182,212,0.25)] transition-all tactile-btn shrink-0"
-                  >
-                    <Monitor className="w-3.5 h-3.5 shrink-0 text-cyan-300" />
-                    <span>
-                      {selectedItemIds.length === 4
-                        ? '田字四分屏启动 (4)'
-                        : selectedItemIds.length === 2
-                        ? '左右双分屏启动 (2)'
-                        : '主辅三分屏启动 (3)'}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleLaunchSelectedWithTiling}
+                      title="立即以分屏平铺方式启动所选项并自动无缝吸附指定屏幕"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-500/40 shadow-[0_0_14px_rgba(6,182,212,0.25)] transition-all tactile-btn shrink-0"
+                    >
+                      <Monitor className="w-3.5 h-3.5 shrink-0 text-cyan-300" />
+                      <span>
+                        {selectedItemIds.length === 4
+                          ? '田字四分屏启动 (4)'
+                          : selectedItemIds.length === 2
+                          ? '左右双分屏启动 (2)'
+                          : '主辅三分屏启动 (3)'}
+                      </span>
+                    </button>
+
+                    {systemMonitors.length > 1 && (
+                      <div className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded-md border border-white/10 shrink-0">
+                        <span className="text-[10px] text-slate-400">投放在:</span>
+                        {systemMonitors.map((mon) => (
+                          <button
+                            key={mon.index}
+                            type="button"
+                            onClick={() => setMultiSelectMonitorIndex(mon.index)}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all ${
+                              multiSelectMonitorIndex === mon.index
+                                ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50 font-semibold shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            {mon.isPrimary ? `屏幕${mon.index + 1}(主)` : `屏幕${mon.index + 1}(副)`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <button
@@ -1446,29 +1517,33 @@ export const LauncherDashboard: React.FC = () => {
                         {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 min-w-0 max-w-[calc(100%-24px)] overflow-hidden">
                         <span
-                          className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded border ${badge.className}`}
+                          className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap shrink-0 ${badge.className}`}
                         >
-                          <badge.Icon className="w-2.5 h-2.5" />
-                          <span>
-                            {isBundle ? `组合·${subItems.length}项` : badge.label}
+                          <badge.Icon className="w-2.5 h-2.5 shrink-0" />
+                          <span className="truncate">
+                            {isBundle ? `组合·${subItems.length}` : badge.label}
                           </span>
                         </span>
                         {isBundle && item.windowLayout?.enabled && (
                           <span
-                            className="flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.15)]"
-                            title={`已启用屏幕自动分屏: ${item.windowLayout.layout}`}
+                            className="flex items-center gap-0.5 text-[9px] font-mono px-1 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.15)] whitespace-nowrap shrink-0"
+                            title={`已启用屏幕分屏: ${item.windowLayout.layout}${
+                              typeof item.windowLayout.targetMonitorIndex === 'number'
+                                ? ` (屏幕 ${item.windowLayout.targetMonitorIndex + 1})`
+                                : ''
+                            }`}
                           >
-                            <Monitor className="w-2.5 h-2.5 text-cyan-400" />
+                            <Monitor className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
                             <span>
                               {item.windowLayout.layout === 'grid-4'
-                                ? '田字四分屏'
+                                ? '四分屏'
                                 : item.windowLayout.layout === 'split-h'
-                                ? '左右双分屏'
+                                ? '双分屏'
                                 : item.windowLayout.layout === 'split-v'
-                                ? '上下双分屏'
-                                : '主辅三分屏'}
+                                ? '双分屏'
+                                : '三分屏'}
                             </span>
                           </span>
                         )}
@@ -1823,6 +1898,35 @@ export const LauncherDashboard: React.FC = () => {
 
                 {comboLayoutEnabled && (
                   <div className="space-y-3 pt-2 border-t border-white/5">
+                    {/* 多显示器目标定向选择器 (检测到系统有多个屏幕时自动呈现) */}
+                    {systemMonitors.length > 1 && (
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-black/40 border border-white/5">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <Monitor className="w-3.5 h-3.5 text-cyan-400" />
+                          <span className="text-[11px] font-medium">目标投放屏幕:</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {systemMonitors.map((mon) => {
+                            const isChosen = comboTargetMonitorIndex === mon.index;
+                            return (
+                              <button
+                                key={mon.index}
+                                type="button"
+                                onClick={() => setComboTargetMonitorIndex(mon.index)}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-mono border transition-all ${
+                                  isChosen
+                                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.25)] font-semibold'
+                                    : 'bg-white/5 text-slate-400 border-white/10 hover:text-slate-200 hover:bg-white/10'
+                                }`}
+                              >
+                                {mon.isPrimary ? `屏幕 ${mon.index + 1} (主屏)` : `屏幕 ${mon.index + 1} (副屏)`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* 预设分屏样式选择卡片 */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {LAYOUT_PRESETS.map((preset) => {

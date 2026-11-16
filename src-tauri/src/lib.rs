@@ -474,6 +474,69 @@ async fn window_close(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RectDto {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemMonitorInfo {
+    pub index: usize,
+    pub name: String,
+    pub is_primary: bool,
+    pub work_area: RectDto,
+    pub bounds: RectDto,
+}
+
+pub fn get_system_monitors_internal() -> Vec<SystemMonitorInfo> {
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        use std::os::windows::process::CommandExt;
+
+        let ps_code = r#"Add-Type -AssemblyName System.Windows.Forms; $screens = [System.Windows.Forms.Screen]::AllScreens | Sort-Object -Property @{Expression = { -not $_.Primary }}, @{Expression = { $_.Bounds.X }}; $idx = 0; $list = @($screens | ForEach-Object { $p = $_.Primary; $name = if ($p) { "屏幕 $($idx + 1) (主屏 $($_.Bounds.Width)×$($_.Bounds.Height))" } else { "屏幕 $($idx + 1) (副屏 $($_.Bounds.Width)×$($_.Bounds.Height))" }; $obj = [PSCustomObject]@{ index = $idx; name = $name; is_primary = $p; work_area = [PSCustomObject]@{ x = [int]$_.WorkingArea.X; y = [int]$_.WorkingArea.Y; width = [int]$_.WorkingArea.Width; height = [int]$_.WorkingArea.Height }; bounds = [PSCustomObject]@{ x = [int]$_.Bounds.X; y = [int]$_.Bounds.Y; width = [int]$_.Bounds.Width; height = [int]$_.Bounds.Height } }; $idx++; $obj }); $list | ConvertTo-Json -Compress"#;
+
+        let mut cmd = Command::new("powershell.exe");
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_code]);
+
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if let Ok(list) = serde_json::from_str::<Vec<SystemMonitorInfo>>(&stdout) {
+                    if !list.is_empty() {
+                        return list;
+                    }
+                }
+                if let Ok(single) = serde_json::from_str::<SystemMonitorInfo>(&stdout) {
+                    return vec![single];
+                }
+            }
+        }
+    }
+
+    vec![SystemMonitorInfo {
+        index: 0,
+        name: "默认主显示器 (1920×1080)".to_string(),
+        is_primary: true,
+        work_area: RectDto { x: 0, y: 0, width: 1920, height: 1032 },
+        bounds: RectDto { x: 0, y: 0, width: 1920, height: 1080 },
+    }]
+}
+
+/// 获取系统连接的所有活动物理显示器及其工作区与主副屏标记 (REQ-MULTIMONITOR-01)
+#[tauri::command]
+async fn get_system_monitors() -> Result<Vec<SystemMonitorInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(get_system_monitors_internal())
+    })
+    .await
+    .map_err(|e| format!("获取系统显示器信息失败: {}", e))?
+}
+
 /// 屏幕窗口分屏编排槽位定义契约 (Window Snap Tiling)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowPlacementSpec {
@@ -484,39 +547,35 @@ pub struct WindowPlacementSpec {
     pub h_ratio: f64,   // 0.0 ~ 1.0 (屏幕高度占比)
 }
 
-/// 智能窗口吸附编排：将指定目标窗口自动平铺吸附至屏幕工作区的指定象限 (REQ-TILING-02)
+/// 智能窗口吸附编排：将指定目标窗口自动平铺吸附至指定屏幕工作区，并消除 DWM 大缝隙 (REQ-TILING-02 & REQ-SEAMLESS-01)
 #[tauri::command]
-async fn arrange_combo_windows(specs: Vec<WindowPlacementSpec>) -> Result<usize, String> {
+async fn arrange_combo_windows(
+    specs: Vec<WindowPlacementSpec>,
+    target_monitor_index: Option<usize>,
+) -> Result<usize, String> {
     tauri::async_runtime::spawn_blocking(move || {
         #[cfg(windows)]
         {
             use std::path::Path;
             use std::process::Command;
             use std::os::windows::process::CommandExt;
-            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                SystemParametersInfoW, SPI_GETWORKAREA,
-            };
-            use windows_sys::Win32::Foundation::RECT;
 
             if specs.is_empty() {
                 return Ok(0);
             }
 
-            // 1. 获取主显示器真实可用工作区 (精确排除 Windows 任务栏)
-            let mut work_area = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-            unsafe {
-                SystemParametersInfoW(
-                    SPI_GETWORKAREA,
-                    0,
-                    &mut work_area as *mut _ as _,
-                    0,
-                );
-            }
+            // 1. 获取目标显示器真实可用工作区
+            let monitors = get_system_monitors_internal();
+            let target_monitor = target_monitor_index
+                .and_then(|idx| monitors.get(idx))
+                .or_else(|| monitors.iter().find(|m| m.is_primary))
+                .or_else(|| monitors.first());
 
-            let work_w = (work_area.right - work_area.left).max(800);
-            let work_h = (work_area.bottom - work_area.top).max(600);
-            let base_x = work_area.left;
-            let base_y = work_area.top;
+            let (base_x, base_y, work_w, work_h) = if let Some(m) = target_monitor {
+                (m.work_area.x, m.work_area.y, m.work_area.width.max(800), m.work_area.height.max(600))
+            } else {
+                (0, 0, 1920, 1032)
+            };
 
             // 2. 构造自动化排版 PowerShell 脚本，利用 Shell.Application 与 Win32 SetWindowPos 精准分发
             let mut ps_script = String::from(r#"
@@ -534,12 +593,31 @@ $shell = New-Object -ComObject Shell.Application
 $shellWindows = @($shell.Windows())
 "#);
 
+            // DWM 隐形阴影边框补偿量 (像素) 消除缝隙实现紧密无缝拼接
+            const DWM_GAP_COMPENSATION: i32 = 7;
+
             let mut matched_count = 0;
             for (idx, spec) in specs.iter().enumerate() {
-                let px = base_x + (work_w as f64 * spec.x_ratio).round() as i32;
-                let py = base_y + (work_h as f64 * spec.y_ratio).round() as i32;
-                let pw = (work_w as f64 * spec.w_ratio).round() as i32;
-                let ph = (work_h as f64 * spec.h_ratio).round() as i32;
+                let mut px = base_x + (work_w as f64 * spec.x_ratio).round() as i32;
+                let mut py = base_y + (work_h as f64 * spec.y_ratio).round() as i32;
+                let mut pw = (work_w as f64 * spec.w_ratio).round() as i32;
+                let mut ph = (work_h as f64 * spec.h_ratio).round() as i32;
+
+                // 消除缝隙：为内部相邻边缘引入微重叠补偿
+                if spec.x_ratio > 0.01 {
+                    px -= DWM_GAP_COMPENSATION;
+                    pw += DWM_GAP_COMPENSATION;
+                }
+                if spec.x_ratio + spec.w_ratio < 0.98 {
+                    pw += DWM_GAP_COMPENSATION;
+                }
+                if spec.y_ratio > 0.01 {
+                    py -= 4;
+                    ph += 4;
+                }
+                if spec.y_ratio + spec.h_ratio < 0.98 {
+                    ph += DWM_GAP_COMPENSATION;
+                }
 
                 let escaped_target = spec.target.trim().replace('\'', "''").replace('/', "\\");
                 let target_name = Path::new(&spec.target)
@@ -555,7 +633,7 @@ $found_{idx} = $false
 foreach ($w in $shellWindows) {{
     try {{
         $p = $w.Document.Folder.Self.Path
-        if ($p -and ($p.TrimEnd('\') -eq $target_{idx}.TrimEnd('\') -or $w.LocationName -eq $name_{idx})) {{
+        if ($p -and ($p.TrimEnd('\\') -eq $target_{idx}.TrimEnd('\\') -or $w.LocationName -eq $name_{idx})) {{
             [WinSnap]::ShowWindow($w.HWND, 9)
             [WinSnap]::SetWindowPos($w.HWND, [IntPtr]::Zero, {px}, {py}, {pw}, {ph}, 0x0040)
             $found_{idx} = $true
@@ -583,11 +661,12 @@ if (-not $found_{idx}) {{
         #[cfg(not(windows))]
         {
             let _ = specs;
+            let _ = target_monitor_index;
             Ok(0)
         }
     })
     .await
-    .map_err(|e| format!("执行窗口吸附编排异常: {}", e))?
+    .map_err(|e| format!("分屏窗口编排任务失败: {}", e))?
 }
 
 /// 将纯 ASCII 十六进制字符串无损还原为 UTF-8 字符串
@@ -699,6 +778,7 @@ pub fn run() {
             window_is_maximized,
             window_close,
             pick_launcher_file,
+            get_system_monitors,
             arrange_combo_windows,
             db::db_get_all_tasks,
             db::db_save_all_tasks,
@@ -816,9 +896,18 @@ mod tests {
                 h_ratio: 0.5,
             },
         ];
-        let res = tauri::async_runtime::block_on(arrange_combo_windows(specs));
+        let res = tauri::async_runtime::block_on(arrange_combo_windows(specs, Some(0)));
         assert!(res.is_ok(), "arrange_combo_windows 应当正常执行并返回匹配数量");
         assert_eq!(res.unwrap(), 2);
+    }
+
+    #[test]
+    fn test_get_system_monitors_contract() {
+        let res = tauri::async_runtime::block_on(get_system_monitors());
+        assert!(res.is_ok(), "get_system_monitors 应当成功返回系统屏幕列表");
+        let monitors = res.unwrap();
+        assert!(!monitors.is_empty(), "系统至少存在一个主显示器");
+        assert!(monitors.iter().any(|m| m.is_primary), "必有一个显示器为主屏");
     }
 
     #[test]

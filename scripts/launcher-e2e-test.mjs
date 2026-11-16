@@ -301,6 +301,7 @@ const newComboItemWithTiling = {
   windowLayout: {
     enabled: true,
     layout: 'grid-4',
+    targetMonitorIndex: 1, // 指定投递到屏幕 2 (副屏)
     slots: [
       { slotId: 'slot-tl', name: '左上象限', targetItemId: testItemId, xRatio: 0, yRatio: 0, wRatio: 0.5, hRatio: 0.5 },
       { slotId: 'slot-tr', name: '右上象限', targetItemId: testFolderItemId, xRatio: 0.5, yRatio: 0, wRatio: 0.5, hRatio: 0.5 },
@@ -329,8 +330,8 @@ assert(comboWriteResult === 'SUCCESS', '成功将包含四分屏配置的组合�
 const readComboStorage = JSON.parse(runPythonSqlite(readPy));
 const foundCombo = readComboStorage.items.find(i => i.id === testComboId);
 assert(
-  Boolean(foundCombo && foundCombo.windowLayout && foundCombo.windowLayout.enabled && foundCombo.windowLayout.slots[0].name === '左上象限'),
-  '四分屏组合项从 SQLite 完整反序列化，象限槽位配置 100% 保持无损'
+  Boolean(foundCombo && foundCombo.windowLayout && foundCombo.windowLayout.enabled && foundCombo.windowLayout.slots[0].name === '左上象限' && foundCombo.windowLayout.targetMonitorIndex === 1),
+  '四分屏组合项从 SQLite 完整反序列化，象限槽位与目标屏幕 2 (副屏) 配置 100% 保持无损'
 );
 
 // 4. 清理测试项并恢复原始数据

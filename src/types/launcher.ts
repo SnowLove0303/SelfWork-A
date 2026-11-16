@@ -20,6 +20,25 @@ export interface WindowLayoutConfig {
   enabled: boolean;
   layout: WindowTilingLayout;
   slots: WindowSlotConfig[];
+  targetMonitorIndex?: number; // 目标显示器索引 (0, 1...)，若未设置则默认为主屏或当前屏
+}
+
+export interface SystemMonitorInfo {
+  index: number;
+  name: string; // 友好名称，如 "屏幕 1 (主屏 1920×1080)"
+  isPrimary: boolean;
+  workArea: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface LauncherItem {
