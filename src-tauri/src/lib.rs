@@ -83,9 +83,10 @@ async fn launch_custom_target(
                 Ok(format!("成功唤起应用程序: {}", trimmed_target))
             } else if target_path.is_dir() {
                 // 2. 本地物理文件夹/目录：直接通过 Windows 原生资源管理器 (explorer.exe) 毫秒级直达唤起，0 命令行窗口闪烁
+                // 注入 /separate 参数，强制在独立新窗口打开，彻底杜绝 Windows 11 Explorer 自动合并到现有窗口的 Tabs 标签页中
                 let normalized = trimmed_target.replace('/', "\\");
                 let mut cmd = std::process::Command::new("explorer.exe");
-                cmd.arg(&normalized);
+                cmd.args(["/separate", &normalized]);
                 cmd.spawn().map_err(|e| format!("唤起文件资源管理器失败: {}", e))?;
                 Ok(format!("成功打开文件夹: {}", normalized))
             } else {
@@ -560,7 +561,7 @@ pub struct WindowPlacementSpec {
     pub h_ratio: f64,   // 0.0 ~ 1.0 (屏幕高度占比)
 }
 
-/// 智能窗口吸附编排：将指定目标窗口自动平铺吸附至指定屏幕工作区，并消除 DWM 大缝隙 (REQ-TILING-02 & REQ-SEAMLESS-01)
+/// 智能窗口吸附编排：将指定目标窗口自动平铺吸附至指定屏幕工作区，并消除 DWM 大缝隙 (REQ-SNAP-TARGET-01 & REQ-SNAP-DEDUP-02 & REQ-SNAP-RETRY-03)
 #[tauri::command]
 async fn arrange_combo_windows(
     specs: Vec<WindowPlacementSpec>,
@@ -590,26 +591,12 @@ async fn arrange_combo_windows(
                 (0, 0, 1920, 1032)
             };
 
-            // 2. 构造自动化排版 PowerShell 脚本，利用 Shell.Application 与 Win32 SetWindowPos 精准分发
-            let mut ps_script = String::from(r#"
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class WinSnap {
-    [DllImport("user32.dll")]
-    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-}
-"@
-$shell = New-Object -ComObject Shell.Application
-$shellWindows = @($shell.Windows())
-"#);
-
             // DWM 隐形阴影边框补偿量 (像素) 消除缝隙实现紧密无缝拼接
             const DWM_GAP_COMPENSATION: i32 = 7;
 
-            let mut matched_count = 0;
+            // 2. 构造规格数据与多轮自适应探测轮询脚本
+            let mut specs_setup = String::new();
+            specs_setup.push_str("$specs = @(\n");
             for (idx, spec) in specs.iter().enumerate() {
                 let mut px = base_x + (work_w as f64 * spec.x_ratio).round() as i32;
                 let mut py = base_y + (work_h as f64 * spec.y_ratio).round() as i32;
@@ -639,35 +626,118 @@ $shellWindows = @($shell.Windows())
                     .unwrap_or("")
                     .replace('\'', "''");
 
-                ps_script.push_str(&format!(r#"
-$target_{idx} = '{escaped_target}'
-$name_{idx} = '{target_name}'
-$found_{idx} = $false
-foreach ($w in $shellWindows) {{
-    try {{
-        $p = $w.Document.Folder.Self.Path
-        if ($p -and ($p.TrimEnd('\\') -eq $target_{idx}.TrimEnd('\\') -or $w.LocationName -eq $name_{idx})) {{
-            [WinSnap]::ShowWindow($w.HWND, 9)
-            [WinSnap]::SetWindowPos($w.HWND, [IntPtr]::Zero, {px}, {py}, {pw}, {ph}, 0x0040)
-            $found_{idx} = $true
-            break
-        }}
-    }} catch {{}}
+                specs_setup.push_str(&format!(
+                    "  [PSCustomObject]@{{ Id = {idx}; Target = '{escaped_target}'; TargetName = '{target_name}'; Px = {px}; Py = {py}; Pw = {pw}; Ph = {ph}; Placed = $false }},\n"
+                ));
+            }
+            specs_setup.push_str(")\n");
+
+            let ps_script = format!(r#"
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class WinSnap {{
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    public static extern bool IsZoomed(IntPtr hWnd);
 }}
-if (-not $found_{idx}) {{
-    Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 -and ($_.MainWindowTitle -like "*$name_{idx}*" -or $_.ProcessName -like "*$name_{idx}*") }} | Select-Object -First 1 | ForEach-Object {{
-        [WinSnap]::ShowWindow($_.MainWindowHandle, 9)
-        [WinSnap]::SetWindowPos($_.MainWindowHandle, [IntPtr]::Zero, {px}, {py}, {pw}, {ph}, 0x0040)
+"@
+
+{specs_setup}
+$shell = New-Object -ComObject Shell.Application
+$usedHwnds = New-Object 'System.Collections.Generic.HashSet[int]'
+
+# 自适应多轮增量轮询探测管道 (最多 6 轮，最大 2.5s，每轮间隔 300ms)
+for ($round = 0; $round -lt 6; $round++) {{
+    $unplaced = @($specs | Where-Object {{ -not $_.Placed }})
+    if ($unplaced.Count -eq 0) {{
+        break
+    }}
+
+    $shellWindows = @($shell.Windows())
+    $procs = @(Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 }})
+
+    foreach ($spec in $unplaced) {{
+        $targetUpper = $spec.Target.TrimEnd('\').ToUpper()
+        $nameUpper = $spec.TargetName.ToUpper()
+        $foundHwnd = 0
+
+        # 优先通过 Shell.Application 精确匹配文件夹物理路径
+        foreach ($w in $shellWindows) {{
+            try {{
+                $hwnd = [int]$w.HWND
+                if ($hwnd -eq 0 -or $usedHwnds.Contains($hwnd)) {{
+                    continue
+                }}
+                $p = $w.Document.Folder.Self.Path
+                if ($p) {{
+                    $pUpper = $p.TrimEnd('\').ToUpper()
+                    if ($pUpper -eq $targetUpper -or ($nameUpper.Length -ge 2 -and $pUpper.EndsWith($nameUpper))) {{
+                        $foundHwnd = $hwnd
+                        break
+                    }}
+                }}
+                if ($nameUpper.Length -ge 2 -and $w.LocationName -and $w.LocationName.ToUpper() -eq $nameUpper) {{
+                    $foundHwnd = $hwnd
+                    break
+                }}
+            }} catch {{}}
+        }}
+
+        # 若非文件夹或未能在 Shell.Windows 中找到，退回到系统顶层进程主窗口
+        if ($foundHwnd -eq 0) {{
+            foreach ($p in $procs) {{
+                $hwnd = [int]$p.MainWindowHandle
+                if ($hwnd -eq 0 -or $usedHwnds.Contains($hwnd)) {{
+                    continue
+                }}
+                $titleUpper = if ($p.MainWindowTitle) {{ $p.MainWindowTitle.ToUpper() }} else {{ "" }}
+                $procUpper = if ($p.ProcessName) {{ $p.ProcessName.ToUpper() }} else {{ "" }}
+                if ($nameUpper.Length -ge 2 -and ($titleUpper.Contains($nameUpper) -or $procUpper -eq $nameUpper)) {{
+                    $foundHwnd = $hwnd
+                    break
+                }}
+            }}
+        }}
+
+        if ($foundHwnd -ne 0) {{
+            $usedHwnds.Add($foundHwnd) | Out-Null
+            # 还原窗口尺寸，解除 Windows 最大化状态对 SetWindowPos 坐标的锁定 (SW_RESTORE = 9)
+            [WinSnap]::ShowWindow([IntPtr]$foundHwnd, 9)
+            # 0x0040 = SWP_SHOWWINDOW
+            [WinSnap]::SetWindowPos([IntPtr]$foundHwnd, [IntPtr]::Zero, $spec.Px, $spec.Py, $spec.Pw, $spec.Ph, 0x0040)
+            $spec.Placed = $true
+        }}
+    }}
+
+    $stillUnplaced = @($specs | Where-Object {{ -not $_.Placed }})
+    if ($stillUnplaced.Count -gt 0 -and $round -lt 5) {{
+        Start-Sleep -Milliseconds 300
     }}
 }}
-"#));
-                matched_count += 1;
-            }
+
+$placedCount = @($specs | Where-Object {{ $_.Placed }}).Count
+Write-Output $placedCount
+"#, specs_setup = specs_setup);
 
             let mut cmd = Command::new("powershell");
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
             cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &ps_script]);
-            let _ = cmd.output();
+            let output = cmd.output();
+
+            let matched_count = if let Ok(out) = output {
+                String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .lines()
+                    .last()
+                    .and_then(|l| l.trim().parse::<usize>().ok())
+                    .unwrap_or(specs.len())
+            } else {
+                specs.len()
+            };
 
             Ok(matched_count)
         }

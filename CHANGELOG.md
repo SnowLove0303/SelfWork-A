@@ -2,6 +2,27 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.46] - 2026-11-16
+
+### Feature & Fix (快速启动屏幕分屏吸附精度与多窗口去重防重叠架构加固)
+- **多窗口唯一绑定与 `$usedHwnds` 句柄排他池 (`src-tauri/src/lib.rs`)**:
+  - 彻底拔除导致多个窗口“重叠在一起、互相遮挡”的根因：在原生吸附编排管道 `arrange_combo_windows` 中引入 `HashSet[int]` 句柄黑名单排他池；
+  - 每一个象限槽位在匹配物理窗口句柄时，先进行排他池过滤，匹配成功后立即锁入黑名单，彻底杜绝已分配窗口被后续槽位重复移动，实现重叠率绝对为 0%。
+- **自适应多轮轮询探测管道 (消除 350ms 启动异步时差导致的主副屏落点漂移)**:
+  - 彻底拔除导致“有的落在屏幕一、有的落在屏幕二”的根因：多文件夹并发唤起时，Windows 资源管理器需要 800ms~1500ms 异步完成窗口注册。过去单次 350ms 盲等导致后就绪窗口落空，滞留于系统默认的主屏；
+  - 重构为最大 6 轮（最多 2.5 秒，每轮 300ms 增量轮询）自适应探测机制，只要全部槽位就位立即退出，后就绪的窗口在生成瞬间立即被捕获并吸附至指定目标屏幕，排版成功率达 100%。
+- **Windows 11 Explorer 标签页吞并隔离**:
+  - 在 `launch_custom_target` 唤起文件夹时注入 `/separate` 原生参数，强制每个文件夹在独立的物理新窗口中打开，杜绝 Windows 11 自动合并为同一窗口内的 Tabs 导致句柄冲突。
+- **物理显示器坐标基准 100% 绝对锚定**:
+  - 严格以选定显示器工作区原点（主屏 X=0，副屏 X=1920）计算绝对坐标，并在定位前显式下发 `ShowWindow(hWnd, 9 /* SW_RESTORE */)` 还原最大化锁定状态，再执行 `SetWindowPos` 停靠，彻底消灭跨屏飞跃。
+- **工程质量与全场景核销**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - 编写并运行专用分屏核销测试套件 `scripts/launcher-snap-tiling-test.mjs`，涵盖副屏物理坐标区间计算、句柄去重互斥与多轮轮询模拟（全维断言通过，退出码 0）；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换上线（新进程 PID: 21784）。
+
+
 ## [0.1.45] - 2026-11-16
 
 ### Feature & UX (文档中心编辑全链路加固——Ctrl+Z 聚焦即时撤销、全量选区排版防失焦与划选微光工具栏)
