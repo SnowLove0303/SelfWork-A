@@ -88,12 +88,12 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#070a0f]/90 backdrop-blur-xl border-l border-white/[0.08] select-text min-w-0">
-      {/* 终端顶部操作栏：紧凑自适应布局，确保过滤胶囊与所有控制按钮（包括关闭 X）100% 完整露出且不溢出 */}
-      <div className="shrink-0 h-11 px-2.5 border-b border-white/[0.08] flex items-center justify-between gap-1.5 bg-black/40 min-w-0">
+      {/* 终端顶部操作栏：紧凑防溢出布局，关闭按钮预留呼吸间距，0像素超出容器 */}
+      <div className="shrink-0 h-11 px-3 border-b border-white/[0.08] flex items-center justify-between gap-1.5 bg-black/40 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 min-w-0 shrink-0">
           <Terminal className="w-3.5 h-3.5 text-brand-primary shrink-0" />
           <span className="text-xs font-semibold text-fg-primary tracking-tight font-mono whitespace-nowrap">
-            执行报文
+            报文
           </span>
           <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-white/[0.06] text-fg-muted shrink-0">
             {logs.length}
@@ -101,15 +101,15 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
         </div>
 
         {/* 控制按钮组 */}
-        <div className="flex items-center gap-1 min-w-0 shrink-0 select-none">
+        <div className="flex items-center gap-1 min-w-0 shrink-0 select-none pr-0.5">
           {/* 紧凑日志等级过滤 */}
-          <div className="flex items-center bg-white/[0.04] p-0.5 rounded border border-white/[0.06] text-[9px] shrink-0">
+          <div className="flex items-center bg-white/[0.04] p-0.5 rounded border border-white/[0.06] text-[8.5px] shrink-0">
             {(['all', 'info', 'warn', 'error'] as const).map((lvl) => (
               <button
                 key={lvl}
                 type="button"
                 onClick={() => setFilterLevel(lvl === filterLevel ? 'all' : lvl)}
-                className={`px-1 py-0.5 rounded uppercase font-mono text-[9px] transition-colors shrink-0 whitespace-nowrap ${
+                className={`px-1 py-0.5 rounded uppercase font-mono text-[8.5px] transition-colors shrink-0 whitespace-nowrap ${
                   filterLevel === lvl
                     ? 'bg-white/[0.15] text-fg-primary font-bold shadow-sm'
                     : 'text-fg-muted hover:text-fg-secondary'
@@ -160,13 +160,13 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
             <Trash2 className="w-3 h-3 shrink-0" />
           </button>
 
-          {/* 收起面板 (锁定在最右侧，始终 100% 完整可见) */}
+          {/* 收起面板 (锁定在最右侧，距右边线留出安全呼吸空间，严禁切出边界) */}
           {onClose && (
             <button
               type="button"
               onClick={onClose}
               title="收起报文面板"
-              className="h-6 w-6 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-muted hover:text-fg-primary flex items-center justify-center tactile-btn shrink-0 ml-0.5"
+              className="h-6 w-6 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-fg-muted hover:text-fg-primary flex items-center justify-center tactile-btn shrink-0 ml-1 mr-0.5"
             >
               <X className="w-3.5 h-3.5 shrink-0" />
             </button>
@@ -215,15 +215,6 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logs, onClearLog
             </div>
           ))
         )}
-      </div>
-
-      {/* 终端底部状态条 */}
-      <div className="shrink-0 h-7 px-3 border-t border-white/[0.06] bg-black/60 flex items-center justify-between text-[10px] font-mono text-fg-muted select-none min-w-0 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
-          <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse shrink-0" />
-          <span>POWERSHELL IPC DAEMON READY</span>
-        </div>
-        <div className="shrink-0 whitespace-nowrap">UTF-8 / CREATE_NO_WINDOW</div>
       </div>
     </div>
   );

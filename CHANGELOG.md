@@ -2,6 +2,29 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.36] - 2026-11-16
+
+### UI/UX & Swarm Engineering (报文控制栏防溢出、顶栏呼吸空间重构、冗余说明清除与文档表格 Swarm 派发)
+- **报文控制栏防溢出与呼吸边距收敛 (`src/components/launcher/TelemetryPanel.tsx`)**:
+  - 顶栏容器增设 `px-3` 与 `overflow-hidden` 刚性约束，关闭按钮 `✕` 专属配置右侧边距，距最右边框留出至少 10px 安全呼吸空间，0 像素超出或被截断；
+  - 优化左侧标题为精炼的“报文”徽标，过滤胶囊微调至 `text-[8.5px]`，确保在 310px 宽度下所有控制按键均舒适完整呈现。
+- **顶栏工具链呼吸节奏与内外边距重塑 (`src/components/LauncherDashboard.tsx`)**:
+  - 顶栏外层内衬由 `px-3 md:px-4` 提升为 `px-4 md:px-5`，为左右边界提供开阔的呼吸感；
+  - 操作按钮组间隙由 `gap-1.5`（6px）扩充为 `gap-2 sm:gap-2.5`（8px~10px）；
+  - 单个动作按钮（`+ 组合`、`新建项`、`多选启动`、`全启动`、`执行报文`）内衬由 `px-2.5 py-1` 增润为 `px-3 py-1.5`，彻底消除紧凑拥挤感。
+- **彻底清除报文面板底部冗余调试文本 (`src/components/launcher/TelemetryPanel.tsx`)**:
+  - 彻底删除底部的 `POWERSHELL IPC DAEMON READY UTF-8 / CREATE_NO_WINDOW` 状态栏容器及文本；
+  - 严格践行 Radical Text Economy 极简少字原则，面板底部恢复纯净沉浸视觉。
+- **文档表格（Docs & Tables）专属 Swarm 智能体成功部署**:
+  - 在 Swarm 协作集群中成功挂载专属智能体 `docs-table-worker`；
+  - 注入全权负责文档表格（Notion 风格富文本块编辑器、块转换引擎、双向链接、多维表格）功能开发与排版优化的使命简报，当前已完成全模块底座感知并处于就绪待命状态。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 经由 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 10/10 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 27/27 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换启动。
+
 ## [0.1.35] - 2026-11-16
 
 ### Architecture & UX (快速启动执行报文并列协同布局与大盘卡片自适应重排)

@@ -955,8 +955,8 @@ export const LauncherDashboard: React.FC = () => {
 
       {/* ================= 右侧启动项卡片大盘 ================= */}
       <div className="flex-1 flex flex-col min-w-0 bg-transparent overflow-hidden">
-        {/* 顶部工具栏：高度严格对齐 h-[49px]，基准底线与左栏 100% 贯穿对齐 */}
-        <div className="h-[49px] px-3 md:px-4 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0 gap-2">
+        {/* 顶部工具栏：高度严格对齐 h-[49px]，具备舒展呼吸感与充裕外内衬 */}
+        <div className="h-[49px] px-4 md:px-5 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0 gap-3">
           {/* 左侧：常规分类信息 vs 多选控制状态 */}
           {isSelectMode ? (
             <div className="flex items-center gap-2.5 min-w-0">
@@ -983,8 +983,8 @@ export const LauncherDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* 右侧动作区：动态切换常规与多选操作，支持弹性伸缩与平滑防溢出 */}
-          <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
+          {/* 右侧动作区：动态切换常规与多选操作，各按键与边界保留充分呼吸空间 */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
             {isSelectMode ? (
               <>
                 {/* 多选模式下：一键保存为新组合通道 */}
@@ -993,7 +993,7 @@ export const LauncherDashboard: React.FC = () => {
                   disabled={selectedItemIds.length === 0}
                   onClick={() => handleOpenCreateComboModal(selectedItemIds)}
                   title="将当前已勾选的项目保存为一个新组合"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
                     selectedItemIds.length > 0
                       ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]'
                       : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
@@ -1008,7 +1008,7 @@ export const LauncherDashboard: React.FC = () => {
                   disabled={selectedItemIds.length === 0}
                   onClick={handleLaunchSelected}
                   title="立即同时唤醒选中的应用或脚本"
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all tactile-btn shrink-0 ${
                     selectedItemIds.length > 0
                       ? 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40 shadow-[0_0_14px_rgba(16,185,129,0.25)]'
                       : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
@@ -1024,7 +1024,7 @@ export const LauncherDashboard: React.FC = () => {
                     setIsSelectMode(false);
                     setSelectedItemIds([]);
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-white/10 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-white/10 transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                   <span>退出</span>
@@ -1061,7 +1061,7 @@ export const LauncherDashboard: React.FC = () => {
                       setSelectedItemIds([]);
                     }}
                     title="自由勾选任意多个应用或脚本同时启动"
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
                   >
                     <CheckSquare className="w-3.5 h-3.5 shrink-0" />
                     <span>多选启动</span>
@@ -1074,7 +1074,7 @@ export const LauncherDashboard: React.FC = () => {
                     type="button"
                     onClick={handleBatchLaunchAll}
                     title="一键启动当前分类下全部项目"
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
                   >
                     <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
                     <span>全启动</span>
@@ -1086,7 +1086,7 @@ export const LauncherDashboard: React.FC = () => {
                   type="button"
                   onClick={() => handleOpenCreateComboModal()}
                   title="创建多项目组合套餐"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(244,63,94,0.12)]"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(244,63,94,0.12)]"
                 >
                   <Layers className="w-3.5 h-3.5 shrink-0" />
                   <span>+ 组合</span>
@@ -1096,7 +1096,7 @@ export const LauncherDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleOpenAddModal}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 transition-colors tactile-btn shrink-0 whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5 shrink-0" />
                   <span>新建项</span>
@@ -1107,7 +1107,7 @@ export const LauncherDashboard: React.FC = () => {
                   type="button"
                   onClick={() => setIsTelemetryOpen((prev) => !prev)}
                   title={isTelemetryOpen ? '收起执行报文面板' : '展开执行报文面板'}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
                     isTelemetryOpen
                       ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.2)]'
                       : 'bg-white/[0.04] text-fg-muted hover:text-fg-secondary border-white/[0.08]'
@@ -1362,7 +1362,7 @@ export const LauncherDashboard: React.FC = () => {
 
       {/* ================= 右侧专职执行报文并列协同面板 (REQ-TELEMETRY-NON-OVERLAY-01) ================= */}
       {isTelemetryOpen && (
-        <div className="w-[290px] xl:w-[350px] shrink-0 h-full flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-150">
+        <div className="w-[310px] xl:w-[370px] shrink-0 h-full flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-150">
           <TelemetryPanel
             logs={logs}
             onClearLogs={handleClearLogs}
