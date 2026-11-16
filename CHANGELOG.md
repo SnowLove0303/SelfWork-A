@@ -2,6 +2,23 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.34] - 2026-11-16
+
+### Fix & UI Refinement (快速启动执行报文防挤压与左侧边栏版本信息彻底清除)
+- **快速启动执行报文默认收起与右侧悬浮抽屉防挤压改造 (`src/components/LauncherDashboard.tsx`)**:
+  - 将执行报文面板状态 `isTelemetryOpen` 默认初始值由 `true` 调整为 `false`（默认完全收起），保持大盘纯净清爽；
+  - 重构报文面板 DOM 拓扑，脱离常规 Flex 伸缩排版流，改为绝对定位右侧抽屉 `absolute right-0 top-0 bottom-0 z-30`，配合 `backdrop-blur-2xl`、高透明黑底与 `shadow-[-12px_0_30px_rgba(0,0,0,0.7)]` 深邃悬浮投影；
+  - 彻底解决窗口化或尺寸缩小模式下执行报文面板与顶栏操作按钮（`+ 新建项`、`+ 组合`、`全启动`）以及大盘卡片发生挤压、排版回流或文字截断的问题。
+- **左侧主导航栏底部版本号与分割线彻底清除 (`src/components/Sidebar.tsx`)**:
+  - 彻底移除侧边栏底部包含 `v0.1.0-alpha` 文本的标签容器以及上方 `border-t border-border-default/40` 分割横线；
+  - 主导航菜单列表平滑铺满左侧栏底部，视觉层级更加纯净统一。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 经由 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 10/10 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实行为测试套件 27/27 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并热替换，在交互式桌面会话中稳定运行。
+
 ## [0.1.33] - 2026-11-16
 
 ### Feature & Architecture (快速启动项新增支持启动指定路径物理文件夹功能)

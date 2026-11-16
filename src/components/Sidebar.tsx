@@ -127,16 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* 底部微弱版本状态标识 */}
-      <div className="p-2 border-t border-border-default/40 flex items-center justify-center">
-        <span
-          className={`text-[9px] font-mono text-fg-muted/40 transition-all duration-200 overflow-hidden whitespace-nowrap ${
-            collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'
-          }`}
-        >
-          v0.1.0-alpha
-        </span>
-      </div>
+
     </aside>
   );
 };
