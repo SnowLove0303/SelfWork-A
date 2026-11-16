@@ -24,6 +24,7 @@ import {
   LayoutGrid,
   Columns,
   Rows,
+  AppWindow,
 } from 'lucide-react';
 import {
   LauncherItem,
@@ -398,6 +399,15 @@ export const LauncherDashboard: React.FC = () => {
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [storage.items, activeCategoryId, searchQuery]);
+
+  // 派生分屏组合套件列表与常规单品列表 (单拎显示重构)
+  const comboSuites = useMemo(() => {
+    return currentItems.filter((item) => item.type === 'bundle');
+  }, [currentItems]);
+
+  const standardItems = useMemo(() => {
+    return currentItems.filter((item) => item.type !== 'bundle');
+  }, [currentItems]);
 
   // 可用于组成 Bundle 套件的全部候选子项 (排除 bundle 自身以防死循环)
   const candidateBundleItems = useMemo(() => {
@@ -1449,243 +1459,353 @@ export const LauncherDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* 启动项卡片大盘网格 (自适应多列晶体网格) */}
-        <div className="flex-1 overflow-y-auto p-4 min-w-0">
-          <div
-            className="grid gap-3.5"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(136px, 1fr))' }}
-          >
-            {/* 首卡：+ 添加快速启动项 (多选模式下隐藏) */}
-            {!isSelectMode && (
-              <div
-                onClick={handleOpenAddModal}
-                className="group relative flex flex-col items-center justify-center h-36 rounded-2xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
-              >
-                <div className="p-2.5 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
-                  <Plus className="w-4 h-4" />
+        {/* 启动项主容器：分屏组合套件置顶专区 + 常规快速启动项晶体网格 */}
+        <div className="flex-1 overflow-y-auto p-4 min-w-0 space-y-6">
+          {/* ================= 置顶专区：屏幕分屏与工作流套件 (单拎专区展示) ================= */}
+          {comboSuites.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300">
+                    <Layers className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-200">
+                    屏幕分屏与工作流套件 ({comboSuites.length})
+                  </span>
                 </div>
-                <span className="mt-2 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
-                  添加启动项
+                <span className="text-[11px] text-slate-500">
+                  一键顺序唤醒多窗口并自动对齐吸附指定屏幕
                 </span>
               </div>
-            )}
 
-            {/* 启动项卡片列表 */}
-            {currentItems.map((item) => {
-              const badge = renderTypeBadge(item.type);
-              const isRunning = runningItemIds[item.id];
-              const isMenuOpen = activeMenuDocId === item.id;
-              const isSelected = selectedItemIds.includes(item.id);
-              const isBundle = item.type === 'bundle';
-
-              // 获取该组合包含的子项目对象集合
-              const subItems = isBundle
-                ? (item.bundleItemIds || [])
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                {comboSuites.map((combo) => {
+                  const isRunning = runningItemIds[combo.id];
+                  const isMenuOpen = activeMenuDocId === combo.id;
+                  const isSelected = selectedItemIds.includes(combo.id);
+                  const subItems = (combo.bundleItemIds || [])
                     .map((subId) => storage.items.find((it) => it.id === subId))
-                    .filter(Boolean) as LauncherItem[]
-                : [];
+                    .filter(Boolean) as LauncherItem[];
 
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    if (isSelectMode) {
-                      handleToggleSelectItem(item.id);
-                    } else {
-                      handleLaunchItem(item);
-                    }
-                  }}
-                  title={item.name}
-                  className={`group relative flex flex-col justify-between h-36 rounded-2xl border cursor-pointer transition-all duration-200 p-3 overflow-hidden select-none ${
-                    isSelectMode && isSelected
-                      ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_18px_rgba(6,182,212,0.25)]'
-                      : isBundle
-                      ? 'border-rose-500/30 bg-rose-500/[0.03] hover:bg-rose-500/[0.08] hover:border-rose-500/50 shadow-[0_0_16px_rgba(244,63,94,0.12)]'
-                      : 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
-                  }`}
-                >
-                  {/* 顶栏：多选复选框 / 类型 Badge 与下拉设置菜单 */}
-                  <div className="flex items-center justify-between gap-1.5">
-                    {isSelectMode ? (
-                      <div
-                        className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                          isSelected
-                            ? 'bg-cyan-500 border-cyan-400 text-black shadow-sm'
-                            : 'border-white/20 bg-black/40 group-hover:border-cyan-400/60'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 min-w-0 max-w-[calc(100%-24px)] overflow-hidden">
-                        <span
-                          className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap shrink-0 ${badge.className}`}
-                        >
-                          <badge.Icon className="w-2.5 h-2.5 shrink-0" />
-                          <span className="truncate">
-                            {isBundle ? `组合·${subItems.length}` : badge.label}
-                          </span>
-                        </span>
-                        {isBundle && item.windowLayout?.enabled && (
-                          <span
-                            className="flex items-center gap-0.5 text-[9px] font-mono px-1 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.15)] whitespace-nowrap shrink-0"
-                            title={`已启用屏幕分屏: ${item.windowLayout.layout}${
-                              typeof item.windowLayout.targetMonitorIndex === 'number'
-                                ? ` (屏幕 ${item.windowLayout.targetMonitorIndex + 1})`
-                                : ''
+                  return (
+                    <div
+                      key={combo.id}
+                      onClick={() => {
+                        if (isSelectMode) {
+                          handleToggleSelectItem(combo.id);
+                        }
+                      }}
+                      className={`group relative rounded-2xl border transition-all duration-200 p-4 select-none flex flex-col justify-between ${
+                        isSelectMode && isSelected
+                          ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_18px_rgba(6,182,212,0.25)]'
+                          : 'border-rose-500/30 bg-rose-500/[0.03] hover:bg-rose-500/[0.07] hover:border-rose-500/50 shadow-[0_0_16px_rgba(244,63,94,0.1)]'
+                      }`}
+                    >
+                      {/* 顶栏：套件标题 + 目标屏幕与布局徽标 + 操作菜单 */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500/20 to-purple-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300 shrink-0 shadow-sm">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-xs font-semibold text-slate-100 truncate group-hover:text-rose-200 transition-colors">
+                              {combo.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {combo.windowLayout?.enabled ? (
+                                <span className="flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+                                  <Monitor className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                                  <span>
+                                    {typeof combo.windowLayout.targetMonitorIndex === 'number'
+                                      ? `屏幕 ${combo.windowLayout.targetMonitorIndex + 1} · `
+                                      : ''}
+                                    {combo.windowLayout.layout === 'grid-4'
+                                      ? '四分屏'
+                                      : combo.windowLayout.layout === 'split-h'
+                                      ? '左右双分屏'
+                                      : combo.windowLayout.layout === 'split-v'
+                                      ? '上下双分屏'
+                                      : '三分屏'}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-slate-400">
+                                  常规顺序唤起
+                                </span>
+                              )}
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {subItems.length} 个应用
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 多选模式复选框 / 操作菜单 */}
+                        {isSelectMode ? (
+                          <div
+                            className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 mt-1 ${
+                              isSelected
+                                ? 'bg-cyan-500 border-cyan-400 text-black shadow-sm'
+                                : 'border-white/20 bg-black/40 group-hover:border-cyan-400/60'
                             }`}
                           >
-                            <Monitor className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
-                            <span>
-                              {item.windowLayout.layout === 'grid-4'
-                                ? '四分屏'
-                                : item.windowLayout.layout === 'split-h'
-                                ? '双分屏'
-                                : item.windowLayout.layout === 'split-v'
-                                ? '双分屏'
-                                : '三分屏'}
-                            </span>
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {!isSelectMode && (
-                      <div
-                        className="relative flex-shrink-0"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActiveMenuDocId(isMenuOpen ? null : item.id)
-                          }
-                          title="设置与更多"
-                          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* 下拉菜单浮层 */}
-                        {isMenuOpen && (
-                          <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        ) : (
+                          <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
-                              onClick={() => {
-                                if (isBundle) {
-                                  handleOpenEditComboModal(item);
-                                } else {
-                                  handleOpenEditModal(item);
-                                }
-                                setActiveMenuDocId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                              type="button"
+                              onClick={() => setActiveMenuDocId(isMenuOpen ? null : combo.id)}
+                              title="设置与更多"
+                              className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
                             >
-                              <Edit2 className="w-3 h-3" />
-                              <span>{isBundle ? '编辑组合' : '编辑设置'}</span>
+                              <MoreVertical className="w-3.5 h-3.5" />
                             </button>
-                            <div className="h-px bg-white/5 my-1" />
-                            <button
-                              onClick={() => {
-                                handleDeleteItem(item.id);
-                                setActiveMenuDocId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              <span>删除</span>
-                            </button>
+                            {isMenuOpen && (
+                              <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                                <button
+                                  onClick={() => {
+                                    handleOpenEditComboModal(combo);
+                                    setActiveMenuDocId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                  <span>编辑组合</span>
+                                </button>
+                                <div className="h-px bg-white/5 my-1" />
+                                <button
+                                  onClick={() => {
+                                    handleDeleteItem(combo.id);
+                                    setActiveMenuDocId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>删除</span>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 / 组合层叠 */}
-                  <div className="my-auto flex flex-col items-center justify-center min-w-0">
-                    <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                      {isBundle ? (
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-purple-500/20 border border-rose-500/35 flex items-center justify-center text-rose-300 group-hover:scale-110 group-hover:bg-rose-500/30 transition-all duration-200 shadow-[0_0_14px_rgba(244,63,94,0.25)]">
-                          <Layers className="w-5 h-5" />
-                        </div>
-                      ) : item.icon && item.icon.startsWith('data:image/') ? (
-                        <img
-                          src={item.icon}
-                          alt={item.name}
-                          className="w-10 h-10 object-contain rounded-xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-200"
-                        />
+                      {/* 中栏：包含应用预览胶囊微缩标签流 */}
+                      <div className="bg-black/25 rounded-xl p-2 mb-3 border border-white/5 min-h-[38px] flex flex-wrap items-center gap-1.5">
+                        {subItems.length > 0 ? (
+                          subItems.map((sItem) => (
+                            <div
+                              key={sItem.id}
+                              title={sItem.target || sItem.name}
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-[10px] text-slate-300"
+                            >
+                              {sItem.icon && sItem.icon.startsWith('data:image/') ? (
+                                <img src={sItem.icon} alt="" className="w-3 h-3 object-contain rounded" />
+                              ) : (
+                                <AppWindow className="w-2.5 h-2.5 text-slate-400" />
+                              )}
+                              <span className="truncate max-w-[90px]">{sItem.name}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-[10px] text-slate-500">尚未配置任何子应用</span>
+                        )}
+                      </div>
+
+                      {/* 底栏：宽幅一键启动与平铺操作按钮 */}
+                      {!isSelectMode ? (
+                        <button
+                          type="button"
+                          disabled={isRunning}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLaunchItem(combo);
+                          }}
+                          className={`w-full h-8 rounded-xl flex items-center justify-center gap-1.5 text-xs font-medium transition-all ${
+                            isRunning
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 cursor-wait animate-pulse'
+                              : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 hover:border-rose-500/60 shadow-sm hover:shadow-[0_0_14px_rgba(244,63,94,0.25)]'
+                          }`}
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>
+                            {isRunning ? '正在唤起并布局...' : `启动套件并平铺 (${subItems.length}项)`}
+                          </span>
+                        </button>
                       ) : (
-                        <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/15 group-hover:border-cyan-500/30 transition-all duration-200 shadow-inner">
-                          <badge.Icon className="w-5 h-5" />
+                        <div className="h-8 flex items-center justify-center text-xs text-slate-400">
+                          {isSelected ? '已选中套件' : '点击勾选'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ================= 常规单品快速启动项大盘网格 ================= */}
+          <div className="space-y-2">
+            {comboSuites.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 text-xs font-semibold text-slate-400">
+                <span>快速启动项 ({standardItems.length})</span>
+              </div>
+            )}
+
+            <div
+              className="grid gap-3.5"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(136px, 1fr))' }}
+            >
+              {/* 首卡：+ 添加快速启动项 (多选模式下隐藏) */}
+              {!isSelectMode && (
+                <div
+                  onClick={handleOpenAddModal}
+                  className="group relative flex flex-col items-center justify-center h-36 rounded-2xl border-2 border-dashed border-white/15 hover:border-cyan-500/50 bg-white/[0.02] hover:bg-cyan-500/[0.06] cursor-pointer transition-all duration-200 shadow-sm hover:shadow-[0_0_18px_rgba(6,182,212,0.15)]"
+                >
+                  <div className="p-2.5 rounded-full bg-cyan-500/15 text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/25 transition-all duration-200 shadow-[0_0_14px_rgba(6,182,212,0.2)]">
+                    <Plus className="w-4 h-4" />
+                  </div>
+                  <span className="mt-2 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
+                    添加启动项
+                  </span>
+                </div>
+              )}
+
+              {/* 常规单品启动项卡片列表 (无 bundle 挤压，恢复纯粹单品卡片排版) */}
+              {standardItems.map((item) => {
+                const badge = renderTypeBadge(item.type);
+                const isRunning = runningItemIds[item.id];
+                const isMenuOpen = activeMenuDocId === item.id;
+                const isSelected = selectedItemIds.includes(item.id);
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      if (isSelectMode) {
+                        handleToggleSelectItem(item.id);
+                      } else {
+                        handleLaunchItem(item);
+                      }
+                    }}
+                    title={item.name}
+                    className={`group relative flex flex-col justify-between h-36 rounded-2xl border cursor-pointer transition-all duration-200 p-3 overflow-hidden select-none ${
+                      isSelectMode && isSelected
+                        ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_18px_rgba(6,182,212,0.25)]'
+                        : 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
+                    }`}
+                  >
+                    {/* 顶栏：多选复选框 / 类型 Badge 与下拉设置菜单 */}
+                    <div className="flex items-center justify-between gap-1.5">
+                      {isSelectMode ? (
+                        <div
+                          className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                            isSelected
+                              ? 'bg-cyan-500 border-cyan-400 text-black shadow-sm'
+                              : 'border-white/20 bg-black/40 group-hover:border-cyan-400/60'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 min-w-0 max-w-[calc(100%-24px)] overflow-hidden">
+                          <span
+                            className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap shrink-0 ${badge.className}`}
+                          >
+                            <badge.Icon className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{badge.label}</span>
+                          </span>
+                        </div>
+                      )}
+
+                      {!isSelectMode && (
+                        <div
+                          className="relative flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveMenuDocId(isMenuOpen ? null : item.id)
+                            }
+                            title="设置与更多"
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 下拉菜单浮层 */}
+                          {isMenuOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                              <button
+                                onClick={() => {
+                                  handleOpenEditModal(item);
+                                  setActiveMenuDocId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>编辑设置</span>
+                              </button>
+                              <div className="h-px bg-white/5 my-1" />
+                              <button
+                                onClick={() => {
+                                  handleDeleteItem(item.id);
+                                  setActiveMenuDocId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>删除</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    <h3
-                      className={`mt-2 text-xs font-semibold truncate max-w-full text-center tracking-tight px-1 transition-colors ${
-                        isBundle
-                          ? 'text-slate-100 group-hover:text-rose-200'
-                          : 'text-slate-200 group-hover:text-cyan-300'
-                      }`}
-                    >
-                      {item.name}
-                    </h3>
-
-                    {/* 组合内含成员微缩图标堆叠预览 (Avatar Stack) */}
-                    {isBundle && subItems.length > 0 && (
-                      <div className="flex items-center justify-center -space-x-1 mt-1">
-                        {subItems.slice(0, 4).map((sItem) => (
-                          <div
-                            key={sItem.id}
-                            title={sItem.name}
-                            className="w-3.5 h-3.5 rounded-full border border-black/80 bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 shadow-sm"
-                          >
-                            {sItem.icon && sItem.icon.startsWith('data:image/') ? (
-                              <img
-                                src={sItem.icon}
-                                alt={sItem.name}
-                                className="w-3 h-3 object-contain"
-                              />
-                            ) : (
-                              <span className="text-[6px] text-slate-400 font-mono font-bold leading-none">
-                                {sItem.name.slice(0, 1)}
-                              </span>
-                            )}
+                    {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 */}
+                    <div className="my-auto flex flex-col items-center justify-center min-w-0">
+                      <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                        {item.icon && item.icon.startsWith('data:image/') ? (
+                          <img
+                            src={item.icon}
+                            alt={item.name}
+                            className="w-10 h-10 object-contain rounded-xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/15 group-hover:border-cyan-500/30 transition-all duration-200 shadow-inner">
+                            <badge.Icon className="w-5 h-5" />
                           </div>
-                        ))}
-                        {subItems.length > 4 && (
-                          <span className="text-[8px] font-mono text-slate-400 pl-1 font-semibold leading-none">
-                            +{subItems.length - 4}
-                          </span>
                         )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* 极简底栏交互：悬浮微光与运行响应 */}
-                  <div className="h-5 flex items-center justify-center text-[10px] text-slate-500 font-mono">
-                    {isRunning ? (
-                      <span className="flex items-center gap-1 text-cyan-400 font-medium animate-pulse">
-                        <Play className="w-2.5 h-2.5 fill-current" />
-                        <span>唤起中...</span>
-                      </span>
-                    ) : isSelectMode ? (
-                      <span className="text-slate-400 font-sans">
-                        {isSelected ? '已选中' : '点击选择'}
-                      </span>
-                    ) : isBundle ? (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 group-hover:bg-rose-500/25 text-rose-300 font-medium text-[9px] border border-rose-500/30 group-hover:scale-105 transition-all shadow-sm">
-                        <Play className="w-2 h-2 fill-current" />
-                        <span>启动组合</span>
-                      </span>
-                    ) : (
-                      <span className="opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity">
-                        点击快速启动
-                      </span>
-                    )}
+                      <h3 className="mt-2 text-xs font-semibold truncate max-w-full text-center tracking-tight px-1 transition-colors text-slate-200 group-hover:text-cyan-300">
+                        {item.name}
+                      </h3>
+                    </div>
+
+                    {/* 极简底栏交互：悬浮微光与运行响应 */}
+                    <div className="h-5 flex items-center justify-center text-[10px] text-slate-500 font-mono">
+                      {isRunning ? (
+                        <span className="flex items-center gap-1 text-cyan-400 font-medium animate-pulse">
+                          <Play className="w-2.5 h-2.5 fill-current" />
+                          <span>唤起中...</span>
+                        </span>
+                      ) : isSelectMode ? (
+                        <span className="text-slate-400 font-sans">
+                          {isSelected ? '已选中' : '点击选择'}
+                        </span>
+                      ) : (
+                        <span className="opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity">
+                          点击快速启动
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
