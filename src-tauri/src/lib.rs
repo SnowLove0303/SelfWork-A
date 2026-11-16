@@ -91,8 +91,21 @@ async fn launch_custom_target(
             } else {
                 // 3. 快捷方式 (.lnk)、网页 URL 或脚本指令：通过 Windows 原生通道唤起
                 // 若包含本地磁盘绝对路径但物理不存在，返回明确的错误提示 (REQ-LAUNCHER-FOLDER-06)
-                let is_local_path = trimmed_target.contains(":\\") || trimmed_target.contains(":/") || trimmed_target.starts_with("\\\\");
-                if is_local_path && !target_path.exists() {
+                // 注意：必须明确排除网络协议 URL (http://, https://, ftp://, mailto:)，防止 URL 中的 ":/" 被误判为本地磁盘路径
+                let is_url = trimmed_target.starts_with("http://")
+                    || trimmed_target.starts_with("https://")
+                    || trimmed_target.starts_with("ftp://")
+                    || trimmed_target.starts_with("mailto:");
+
+                let is_local_disk_path = !is_url
+                    && (
+                        (trimmed_target.len() >= 3
+                            && trimmed_target.as_bytes()[1] == b':'
+                            && (trimmed_target.as_bytes()[2] == b'\\' || trimmed_target.as_bytes()[2] == b'/'))
+                        || trimmed_target.starts_with("\\\\")
+                    );
+
+                if is_local_disk_path && !target_path.exists() {
                     return Err(format!("目标路径不存在或无法访问: {}", trimmed_target));
                 }
 
@@ -929,6 +942,22 @@ mod tests {
             assert!(res.is_err(), "不存在的物理路径应当返回错误拦截");
             let err_msg = res.unwrap_err();
             assert!(err_msg.contains("不存在或无法访问"), "错误提示需包含明确描述: {}", err_msg);
+        }
+    }
+
+    #[test]
+    fn test_launch_custom_target_url_bypass_disk_check() {
+        #[cfg(windows)]
+        {
+            // 验证带 ":/" 的标准网络链接不会被误判为本地物理磁盘路径而抛出 "不存在或无法访问" 错误
+            let res = tauri::async_runtime::block_on(launch_custom_target(
+                "https://chatgpt.com/c/6af57c45-9840-83ea-84c2-1018ec7ed633".to_string(),
+                None,
+                None,
+            ));
+            if let Err(ref e) = res {
+                assert!(!e.contains("目标路径不存在或无法访问"), "URL 链接绝不能触发本地磁盘不存在拦截: {}", e);
+            }
         }
     }
 }

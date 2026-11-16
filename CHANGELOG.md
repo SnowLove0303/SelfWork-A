@@ -2,6 +2,24 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.41] - 2026-11-16
+
+### Bug Fix (快速启动网页 URL 直达目标协议判定解耦与误拦截修复)
+- **目标路径协议解耦与精准识别 (`src-tauri/src/lib.rs`)**:
+  - 彻底修复点击「常用网页直达」分类中的网址项（如 `https://chatgpt.com/...`、`https://github.com`）时，因链接中包含 `":/"` 被误识别为本地物理磁盘驱动器路径、进而因在本地文件系统中检测不到对应物理文件而抛出 `启动失败: 目标路径不存在或无法访问` 的缺陷；
+  - 显式定义标准网络协议白名单（`http://`、`https://`、`ftp://`、`mailto:` 等），严格限制本地磁盘驱动路径校验仅对真正的盘符驱动（如 `C:\`、`C:/`）与 UNC 共享路径生效；
+  - 网络 URL 直达项目放行至系统默认浏览器通道无感秒开，提供丝滑的网页跳转体验。
+- **本地不存在路径防御承重墙保全**:
+  - 对真正不存在的本地文件/目录（如 `Z:\NotExistFolder`），持续保持强防御性拦截并返回明确错误提示，杜绝静默失败；
+  - 新增 `test_launch_custom_target_url_bypass_disk_check` 单元测试，将网络链接放行纳入长期回归防线。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 30/30 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换上线（新进程 PID: 28384）。
+
+
 ## [0.1.40] - 2026-11-16
 
 ### Feature & UI/UX (快速启动分屏组合单拎专区展示与宽幅卡片重构)
