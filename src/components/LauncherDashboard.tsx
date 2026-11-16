@@ -817,7 +817,7 @@ export const LauncherDashboard: React.FC = () => {
   return (
     <div className="flex-1 flex overflow-hidden bg-transparent select-none relative">
       {/* ================= 左侧分类管理侧栏 ================= */}
-      <div className="w-48 lg:w-56 border-r border-white/[0.08] bg-black/20 backdrop-blur-md flex flex-col shrink-0">
+      <div className="w-44 lg:w-52 border-r border-white/[0.08] bg-black/20 backdrop-blur-md flex flex-col shrink-0">
         {/* 侧栏顶标：高度严格对齐 h-[49px]，基准线与思维导图/待办清单 100% 贯穿对齐 */}
         <div className="h-[49px] px-3.5 flex items-center justify-between border-b border-white/[0.08] bg-white/[0.01] shrink-0 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
@@ -1033,7 +1033,7 @@ export const LauncherDashboard: React.FC = () => {
             ) : (
               <>
                 {/* 搜索框：内嵌紧凑形态 */}
-                <div className="relative w-32 sm:w-36 md:w-44 min-w-[90px] shrink-0">
+                <div className="relative w-28 sm:w-36 md:w-44 min-w-[70px] shrink">
                   <Search className="w-3.5 h-3.5 text-fg-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -1360,9 +1360,9 @@ export const LauncherDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= 右侧专职执行报文悬浮抽屉 (REQ-TELEMETRY-RESPONSIVE-01) ================= */}
+      {/* ================= 右侧专职执行报文并列协同面板 (REQ-TELEMETRY-NON-OVERLAY-01) ================= */}
       {isTelemetryOpen && (
-        <div className="absolute right-0 top-0 bottom-0 z-30 w-[340px] xl:w-[400px] h-full flex flex-col overflow-hidden bg-slate-950/95 backdrop-blur-2xl border-l border-white/10 shadow-[-12px_0_30px_rgba(0,0,0,0.7)] animate-in slide-in-from-right duration-200">
+        <div className="w-[290px] xl:w-[350px] shrink-0 h-full flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-150">
           <TelemetryPanel
             logs={logs}
             onClearLogs={handleClearLogs}

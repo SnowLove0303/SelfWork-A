@@ -2,6 +2,27 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.35] - 2026-11-16
+
+### Architecture & UX (快速启动执行报文并列协同布局与大盘卡片自适应重排)
+- **非覆盖式并列协同 Flex 布局重构 (`src/components/LauncherDashboard.tsx`)**:
+  - 响应用户“报文展开后，图标界面要相对应调整，不能让报文界面覆盖掉主界面内容”的指示；
+  - 彻底废除 `absolute` 浮层方案，将报文面板重构为快速启动容器内的直接并列子列（`w-[290px] xl:w-[350px] shrink-0 h-full`）；
+  - 主大盘容器配置 `flex-1 min-w-0`，当报文展开时其排版宽度自适应缩窄让出位置，两者无缝并列，覆盖遮挡率严格降至 **0%**。
+- **大盘卡片网格响应式流式重排**:
+  - 依托 CSS Grid `repeat(auto-fill, minmax(136px, 1fr))` 机制，在报文展开宽度缩窄时，自动计算并由 5 列缩减为 3~4 列；
+  - 启动项卡片向下平滑流式重排，无任何一张卡片发生截断或被报文面板覆盖，卡片内容 100% 完整可见。
+- **顶栏工具链防挤压与自适应保护增强**:
+  - 搜索框设为弹性伸缩 `min-w-[70px] w-28 sm:w-36 md:w-44 shrink`，空间紧张时自适应微缩；
+  - 顶栏所有核心按钮（`多选启动`、`全启动`、`+ 组合`、`新建项`、`执行报文`）锁定 `whitespace-nowrap shrink-0` 与紧凑微边距，文字绝不折行成单字；
+  - 微调左侧分类侧栏为 `w-44 lg:w-52`，为主大盘额外释放 16px~32px 黄金排版宽度。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 经由 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 10/10 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 27/27 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 物理覆盖，在交互式桌面会话中稳定运行。
+
 ## [0.1.34] - 2026-11-16
 
 ### Fix & UI Refinement (快速启动执行报文防挤压与左侧边栏版本信息彻底清除)
