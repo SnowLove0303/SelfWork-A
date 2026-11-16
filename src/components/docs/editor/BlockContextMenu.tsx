@@ -4,6 +4,7 @@ import { BlockType } from '../../../types/docs.ts';
 import {
   Bold,
   Italic,
+  Underline,
   Strikethrough,
   Code as CodeIcon,
   Eraser,
@@ -25,7 +26,7 @@ export interface BlockContextMenuProps {
   hasSelection: boolean;
   selectedText: string;
   currentBlockType: BlockType;
-  onApplyFormat: (format: 'bold' | 'italic' | 'strike' | 'code' | 'clear') => void;
+  onApplyFormat: (format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear') => void;
   onApplyColor?: (color: string) => void;
   onApplyHighlight?: (highlight: string) => void;
   onTurnInto: (type: BlockType) => void;
@@ -167,39 +168,52 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           <div className="text-[10px] uppercase font-mono tracking-wider text-slate-500 mb-1 px-1">
             {hasSelection ? '选区排版格式' : '快捷排版'}
           </div>
-          <div className="flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/5">
+          <div className="flex items-center gap-0.5 bg-white/[0.03] p-1 rounded-xl border border-white/5">
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onApplyFormat('bold')}
-              className="flex-1 py-1 px-1.5 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+              className="flex-1 py-1 px-1 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
               title="加粗 (Ctrl+B)"
             >
               <Bold size={13} />
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onApplyFormat('italic')}
-              className="flex-1 py-1 px-1.5 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+              className="flex-1 py-1 px-1 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
               title="斜体 (Ctrl+I)"
             >
               <Italic size={13} />
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onApplyFormat('underline')}
+              className="flex-1 py-1 px-1 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+              title="下划线 (Ctrl+U)"
+            >
+              <Underline size={13} />
+            </button>
+            <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onApplyFormat('strike')}
-              className="flex-1 py-1 px-1.5 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+              className="flex-1 py-1 px-1 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
               title="删除线"
             >
               <Strikethrough size={13} />
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onApplyFormat('code')}
-              className="flex-1 py-1 px-1.5 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+              className="flex-1 py-1 px-1 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
               title="行内代码"
             >
               <CodeIcon size={13} />
             </button>
             <div className="w-px h-3.5 bg-white/10 mx-0.5" />
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onApplyFormat('clear')}
-              className="flex-1 py-1 px-1.5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors"
+              className="flex-1 py-1 px-1 flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors"
               title="清除格式"
             >
               <Eraser size={13} />
@@ -215,6 +229,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           <div className="space-y-0.5 pr-0.5">
             {/* 普通正文 */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onTurnInto('p')}
               onMouseEnter={() => setHeadingSubmenuOpen(false)}
               className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
@@ -243,6 +258,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
             {/* 待办清单 */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onTurnInto('todo')}
               onMouseEnter={() => setHeadingSubmenuOpen(false)}
               className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
@@ -253,6 +269,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
             {/* 项目符号 */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onTurnInto('bullet')}
               onMouseEnter={() => setHeadingSubmenuOpen(false)}
               className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
@@ -263,6 +280,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
             {/* 引用区块 */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onTurnInto('quote')}
               onMouseEnter={() => setHeadingSubmenuOpen(false)}
               className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
@@ -273,6 +291,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
             {/* 代码块 */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onTurnInto('code')}
               onMouseEnter={() => setHeadingSubmenuOpen(false)}
               className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
@@ -287,6 +306,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         {hasSelection && (
           <div className="pt-1 border-t border-white/5 flex items-center gap-1 text-[11px] text-slate-400">
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={onCopy}
               className="flex-1 py-1 px-2 rounded-lg hover:bg-white/10 flex items-center justify-center gap-1.5 hover:text-white transition-colors"
               title="复制选中文本"
@@ -295,6 +315,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
               <span>复制</span>
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={onCut}
               className="flex-1 py-1 px-2 rounded-lg hover:bg-white/10 flex items-center justify-center gap-1.5 hover:text-white transition-colors"
               title="剪切选中文本"
@@ -325,6 +346,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             选择标题层级
           </div>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleSelectHeading('h1')}
             className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center justify-between hover:bg-white/10 text-slate-300 hover:text-white transition-colors group"
           >
@@ -335,6 +357,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             <span className="text-[10px] text-slate-500 font-mono">H1</span>
           </button>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleSelectHeading('h2')}
             className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center justify-between hover:bg-white/10 text-slate-300 hover:text-white transition-colors group"
           >
@@ -345,6 +368,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             <span className="text-[10px] text-slate-500 font-mono">H2</span>
           </button>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleSelectHeading('h3')}
             className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center justify-between hover:bg-white/10 text-slate-300 hover:text-white transition-colors group"
           >

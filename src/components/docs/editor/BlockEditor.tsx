@@ -83,11 +83,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       // 当焦点处于普通文本输入框(非文档内容)时，优先允许默认行为
       const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') &&
-        activeEl !== titleInputRef.current
-      ) {
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
         return;
       }
 
@@ -195,8 +191,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     isStructural?: boolean
   ) => {
     const now = Date.now();
-    // 结构性改变或超过 1.5 秒打字停顿，自动备份入撤销历史栈
-    if (isStructural || now - lastTypingTimeRef.current > 1500) {
+    const prevBlock = blocksRef.current.find((b) => b.id === blockId);
+    const prevContent = prevBlock?.content || '';
+
+    // 快照分词切分准则：结构性变更、初始首字、停顿超800ms或标点符号切分
+    const timeDiff = now - lastTypingTimeRef.current;
+    const isPunctuation = /[\s，。！？,.!?:;]$/.test(content);
+    const hasLengthChange = Math.abs(content.length - prevContent.length) >= 2;
+
+    if (
+      isStructural ||
+      (prevContent === '' && content !== '') ||
+      timeDiff > 800 ||
+      (isPunctuation && hasLengthChange && timeDiff > 400)
+    ) {
       pushUndo(blocksRef.current);
     }
     lastTypingTimeRef.current = now;

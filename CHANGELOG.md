@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.45] - 2026-11-16
+
+### Feature & UX (文档中心编辑全链路加固——Ctrl+Z 聚焦即时撤销、全量选区排版防失焦与划选微光工具栏)
+- **Ctrl+Z / Ctrl+Y 聚焦打字状态下即时屏幕回退 (`src/components/docs/editor/BlockItem.tsx` / `BlockEditor.tsx`)**:
+  - 彻底拔除导致撤销屏显无反应的元凶：引入 `isLocalInputRef` 精准区分本地敲键盘输入与外部撤销重做状态同步；
+  - 移除了过去对聚焦状态（`activeElement === editorRef.current`）下 innerHTML 刷新的阻断逻辑，确保当用户在当前编辑框内打字后按下 `Ctrl+Z` 时，屏幕上的文字即刻、肉眼可见地回退至历史版本，并在回退后平滑将光标锚定在文字末尾；
+  - 重构快照分词策略，在遇到空格、标点符号（，。！？,.!?:;）、换行、停顿超 800ms 或结构性改变时自动生成撤销快照，实现逐词/逐句细腻平滑回退；
+  - 全局按键分发排除原生 `<input>` 与 `<textarea>`，互不干扰原生系统输入框。
+- **划选文本即时浮动微光工具栏 (`src/components/docs/editor/FloatingFormatToolbar.tsx`)**:
+  - 新增轻量级选区浮动工具栏组件，在用户鼠标划选一段文字（Selection range > 0）后，自适应在其正上方弹出暗夜微光操作条；
+  - 包含 `[B]` 加粗、`[I]` 斜体、`[U]` 下划线、`[S]` 删除线、`[</>]` 行内代码与 `[🧹]` 彻底清除格式 6 大高频工具，无需右键即可 1 键排版。
+- **全量文本工具排查与 Mousedown 防失焦保护 (`src/components/docs/editor/BlockContextMenu.tsx` / `BlockItem.tsx`)**:
+  - 彻底治愈“选中文本后使用文本工具只有部分文本有效”的顽疾：为上下文菜单和浮动工具条所有按钮统一注入 `onMouseDown={(e) => e.preventDefault()}`，彻底杜绝鼠标点击按钮瞬间导致编辑器失焦与选区坍缩；
+  - 新增下划线 `<u>` 原生排版支持与快捷键 `Ctrl+U`；
+  - 升级行内代码与彻底清除格式引擎：清除格式能够递归遍历并彻底剥离嵌套的 `<code>`、`<del>`、`<span>` 等所有装饰标签，恢复为绝对纯净基线文本；
+  - 块级转换（Turn into）在蜕变前自动抓取当前最新编辑文本，彻底避免内容丢失。
+- **工程质量与全链路交互审计**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - 升级针对用户真实操作路径的端到端交互审计套件 `scripts/docs-editor-interaction-test.mjs`，包含打字回滚、整句加粗覆盖、清除格式彻底性与撤销重做序列全维断言通过（退出码 0）；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换上线（新进程 PID: 38772）。
+
+
 ## [0.1.44] - 2026-11-16
 
 ### Feature & UX (文档中心编辑交互全链路重构——所见即所得富文本、撤销重做历史栈与防抖持久化)

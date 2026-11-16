@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { DocBlock, BlockType } from '../../../types/docs.ts';
 import { SlashMenu, SLASH_MENU_ITEMS } from './SlashMenu.tsx';
 import { BlockContextMenu } from './BlockContextMenu.tsx';
+import { FloatingFormatToolbar } from './FloatingFormatToolbar.tsx';
 import {
   Plus,
   Trash2,
@@ -34,7 +35,8 @@ function markdownToHtml(raw: string): string {
     raw.includes('<del>') ||
     raw.includes('<code>') ||
     raw.includes('<b>') ||
-    raw.includes('<i>')
+    raw.includes('<i>') ||
+    raw.includes('<u>')
   ) {
     return raw;
   }
@@ -61,6 +63,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   autoFocus,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
+  const isLocalInputRef = useRef(false);
+
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
@@ -71,13 +75,32 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [savedSelectionText, setSavedSelectionText] = useState('');
   const savedRangeRef = useRef<Range | null>(null);
 
-  // 1. 初始化并同步内容：仅当当前元素未聚焦时更新 innerHTML，杜绝打字时光标瞬移
+  // 划选浮动微光工具栏状态
+  const [floatingToolbarOpen, setFloatingToolbarOpen] = useState(false);
+  const [floatingToolbarPos, setFloatingToolbarPos] = useState({ top: 0, left: 0 });
+
+  // 1. 初始化与外部状态同步：解耦本地打字与撤销/重做
   useEffect(() => {
+    // 若本次变化是由本地输入触发，清理标记并跳过，杜绝打字时光标重置
+    if (isLocalInputRef.current) {
+      isLocalInputRef.current = false;
+      return;
+    }
+
+    // 来自外部（Undo、Redo、加载）的更新：强制同步 innerHTML 并将光标平滑置于末尾
     if (editorRef.current) {
       const targetHtml = markdownToHtml(block.content);
-      if (document.activeElement !== editorRef.current) {
-        if (editorRef.current.innerHTML !== targetHtml) {
-          editorRef.current.innerHTML = targetHtml;
+      if (editorRef.current.innerHTML !== targetHtml) {
+        editorRef.current.innerHTML = targetHtml;
+        if (document.activeElement === editorRef.current) {
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            range.selectNodeContents(editorRef.current);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
         }
       }
     }
@@ -98,9 +121,46 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     }
   }, [autoFocus]);
 
-  // 3. 处理文本输入与行首 Markdown 语法糖
+  // 3. 选区检测与浮动工具条调度
+  const checkSelection = () => {
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !editorRef.current) {
+        setFloatingToolbarOpen(false);
+        return;
+      }
+
+      if (!editorRef.current.contains(sel.anchorNode)) {
+        setFloatingToolbarOpen(false);
+        return;
+      }
+
+      const text = sel.toString().trim();
+      if (text.length > 0 && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        savedRangeRef.current = range.cloneRange();
+        setSavedSelectionText(text);
+
+        const rect = range.getBoundingClientRect();
+        setFloatingToolbarPos({
+          top: rect.top - 46,
+          left: Math.max(16, rect.left + rect.width / 2 - 110),
+        });
+        setFloatingToolbarOpen(true);
+      } else {
+        setFloatingToolbarOpen(false);
+      }
+    }, 15);
+  };
+
+  const handleMouseUp = () => {
+    checkSelection();
+  };
+
+  // 4. 处理文本输入与行首 Markdown 语法糖
   const handleInput = () => {
     if (!editorRef.current) return;
+    isLocalInputRef.current = true;
     const rawHtml = editorRef.current.innerHTML;
     const rawText = editorRef.current.innerText || '';
 
@@ -155,31 +215,22 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     onUpdate(rawHtml);
   };
 
-  // 4. 键盘事件快捷流 (Enter / Backspace / Tab / Arrow / Shortcuts)
+  // 5. 键盘事件快捷流 (Enter / Backspace / Tab / Arrow / Shortcuts)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // 快捷排版组合键支持
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
       e.preventDefault();
-      document.execCommand('bold', false);
-      if (editorRef.current) {
-        onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
-      }
+      handleApplyFormat('bold');
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
       e.preventDefault();
-      document.execCommand('italic', false);
-      if (editorRef.current) {
-        onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
-      }
+      handleApplyFormat('italic');
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
       e.preventDefault();
-      document.execCommand('underline', false);
-      if (editorRef.current) {
-        onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
-      }
+      handleApplyFormat('underline');
       return;
     }
 
@@ -302,7 +353,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     }
   };
 
-  // 5. 右键上下文菜单捕获与选区冻结
+  // 6. 右键上下文菜单捕获与选区冻结
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -319,12 +370,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     setSavedSelectionText(text);
     setContextMenuPos({ x: e.clientX, y: e.clientY });
     setContextMenuOpen(true);
+    setFloatingToolbarOpen(false);
   };
 
-  // 6. 原生富文本排版应用：严格保持原选区，彻底杜绝光标跳动与星号残留
+  // 7. 原生富文本排版应用：严格锁定选区，消除失焦与局部失效
   const handleApplyFormat = (
-    format: 'bold' | 'italic' | 'strike' | 'code' | 'clear'
+    format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear'
   ) => {
+    editorRef.current?.focus();
+
     if (savedRangeRef.current) {
       const selection = window.getSelection();
       if (selection) {
@@ -333,27 +387,44 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
     }
 
-    editorRef.current?.focus();
-
     if (format === 'bold') {
       document.execCommand('bold', false);
     } else if (format === 'italic') {
       document.execCommand('italic', false);
+    } else if (format === 'underline') {
+      document.execCommand('underline', false);
     } else if (format === 'strike') {
       document.execCommand('strikeThrough', false);
     } else if (format === 'clear') {
       document.execCommand('removeFormat', false);
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && editorRef.current) {
+        const styledElements = editorRef.current.querySelectorAll('code, del, strike, span');
+        styledElements.forEach((el) => {
+          if (sel.containsNode(el, true)) {
+            const textNode = document.createTextNode(el.textContent || '');
+            el.parentNode?.replaceChild(textNode, el);
+          }
+        });
+      }
     } else if (format === 'code') {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-        const range = selection.getRangeAt(0);
-        const codeEl = document.createElement('code');
-        codeEl.className =
-          'px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs';
-        codeEl.textContent = range.toString();
-        range.deleteContents();
-        range.insertNode(codeEl);
-        selection.removeAllRanges();
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const range = sel.getRangeAt(0);
+        const parentCode = range.commonAncestorContainer.parentElement?.closest('code');
+        if (parentCode && editorRef.current?.contains(parentCode)) {
+          // 解包已有代码块
+          const textNode = document.createTextNode(parentCode.textContent || '');
+          parentCode.parentNode?.replaceChild(textNode, parentCode);
+        } else {
+          const codeEl = document.createElement('code');
+          codeEl.className =
+            'px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs';
+          const frag = range.extractContents();
+          codeEl.appendChild(frag);
+          range.insertNode(codeEl);
+          sel.removeAllRanges();
+        }
       }
     }
 
@@ -361,18 +432,21 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
     }
     setContextMenuOpen(false);
+    setFloatingToolbarOpen(false);
   };
 
-  // 7. 块类型转换 (Turn Into)
+  // 8. 块类型转换 (Turn Into)
   const handleTurnInto = (newType: BlockType) => {
-    onUpdate(block.content, newType, undefined, true);
+    const currentHtml = editorRef.current?.innerHTML || block.content;
+    onUpdate(currentHtml, newType, undefined, true);
     setContextMenuOpen(false);
+    setFloatingToolbarOpen(false);
     setTimeout(() => {
       editorRef.current?.focus();
     }, 50);
   };
 
-  // 8. 剪贴板动作
+  // 9. 剪贴板动作
   const handleCopy = () => {
     if (savedSelectionText) {
       navigator.clipboard.writeText(savedSelectionText);
@@ -391,7 +465,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     setContextMenuOpen(false);
   };
 
-  // 9. 选择斜杠菜单中的类型
+  // 10. 选择斜杠菜单中的类型
   const handleSelectBlockType = (newType: BlockType) => {
     setSlashMenuOpen(false);
     if (editorRef.current) {
@@ -404,7 +478,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     }, 50);
   };
 
-  // 10. 待办复选框打勾切换
+  // 11. 待办复选框打勾切换
   const handleToggleTodo = () => {
     const isChecked = Boolean(block.properties?.checked);
     onUpdate(
@@ -546,7 +620,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         <div className="w-1 self-stretch bg-sky-500/40 rounded-full mr-3 shrink-0 my-0.5" />
       )}
 
-      {/* 文本内容编辑与富文本渲染容器 (持久挂载 contentEditable，零 DOM 切换) */}
+      {/* 文本内容编辑与富文本渲染容器 */}
       <div
         className={`flex-1 min-w-0 ${
           block.blockType === 'code'
@@ -560,6 +634,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           suppressContentEditableWarning={true}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
+          onKeyUp={checkSelection}
+          onMouseUp={handleMouseUp}
           onContextMenu={handleContextMenu}
           data-placeholder={getPlaceholder()}
           className={`w-full outline-none focus:outline-none min-h-[1.5rem] break-words cursor-text select-text ${getBlockStyle()} ${
@@ -567,6 +643,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           }`}
         />
       </div>
+
+      {/* 划选即时浮动微光工具栏 */}
+      {floatingToolbarOpen && (
+        <FloatingFormatToolbar
+          position={floatingToolbarPos}
+          onApplyFormat={handleApplyFormat}
+          onClose={() => setFloatingToolbarOpen(false)}
+        />
+      )}
 
       {/* 斜杠指令菜单 */}
       {slashMenuOpen && (
