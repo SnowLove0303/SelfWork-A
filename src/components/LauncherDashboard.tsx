@@ -1551,7 +1551,7 @@ export const LauncherDashboard: React.FC = () => {
       {/* ================= 专属启动组合创建与编辑模态框 (REQ-COMBO-01 & REK-COMBO-02) ================= */}
       {isComboModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950/95 p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300">
@@ -1901,7 +1901,14 @@ export const LauncherDashboard: React.FC = () => {
                       <button
                         key={t}
                         type="button"
-                        onClick={() => setFormType(t)}
+                        onClick={() => {
+                          if (t === 'bundle') {
+                            setIsItemModalOpen(false);
+                            handleOpenCreateComboModal();
+                          } else {
+                            setFormType(t);
+                          }
+                        }}
                         className={`py-1 rounded text-xs flex items-center justify-center gap-1 transition-all ${
                           formType === t
                             ? 'bg-white/15 text-slate-100 font-semibold shadow-sm'
