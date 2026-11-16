@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DocPage, DocBlock, BlockType } from '../../../types/docs.ts';
 import { BlockItem } from './BlockItem.tsx';
 import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
@@ -7,6 +7,8 @@ import {
   ListTree,
   PanelRightClose,
   PanelRightOpen,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 
 interface BlockEditorProps {
@@ -35,6 +37,80 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [showOutline, setShowOutline] = useState(true);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
+  // 引用最新 blocks 状态，杜绝闭包陈旧问题
+  const blocksRef = useRef<DocBlock[]>(blocks);
+  blocksRef.current = blocks;
+
+  // 历史栈 (Undo / Redo)
+  const undoStackRef = useRef<DocBlock[][]>([]);
+  const redoStackRef = useRef<DocBlock[][]>([]);
+  const lastTypingTimeRef = useRef<number>(0);
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 压入 Undo 栈
+  const pushUndo = useCallback((snapshot: DocBlock[]) => {
+    undoStackRef.current.push(JSON.parse(JSON.stringify(snapshot)));
+    if (undoStackRef.current.length > 50) {
+      undoStackRef.current.shift();
+    }
+    redoStackRef.current = [];
+  }, []);
+
+  // 执行撤销 (Ctrl+Z)
+  const handleUndo = useCallback(async () => {
+    if (undoStackRef.current.length === 0) return;
+    const previous = undoStackRef.current.pop()!;
+    redoStackRef.current.push(JSON.parse(JSON.stringify(blocksRef.current)));
+    setBlocks(previous);
+    blocksRef.current = previous;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    await saveDocBlocks(page.id, previous);
+  }, [page.id]);
+
+  // 执行重做 (Ctrl+Y / Ctrl+Shift+Z)
+  const handleRedo = useCallback(async () => {
+    if (redoStackRef.current.length === 0) return;
+    const next = redoStackRef.current.pop()!;
+    undoStackRef.current.push(JSON.parse(JSON.stringify(blocksRef.current)));
+    setBlocks(next);
+    blocksRef.current = next;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    await saveDocBlocks(page.id, next);
+  }, [page.id]);
+
+  // 全局撤销/重做快捷键监听
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 当焦点处于普通文本输入框(非文档内容)时，优先允许默认行为
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') &&
+        activeEl !== titleInputRef.current
+      ) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [handleUndo, handleRedo]);
+
   // 1. 加载块流
   useEffect(() => {
     let isMounted = true;
@@ -55,9 +131,14 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               updatedAt: Date.now(),
             };
             setBlocks([defaultBlock]);
+            blocksRef.current = [defaultBlock];
           } else {
-            setBlocks(fetched.sort((a, b) => a.sortOrder - b.sortOrder));
+            const sorted = fetched.sort((a, b) => a.sortOrder - b.sortOrder);
+            setBlocks(sorted);
+            blocksRef.current = sorted;
           }
+          undoStackRef.current = [];
+          redoStackRef.current = [];
         }
       } catch (err) {
         console.error('Failed to load blocks:', err);
@@ -68,6 +149,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     fetchBlocks();
     return () => {
       isMounted = false;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveDocBlocks(page.id, blocksRef.current);
+      }
     };
   }, [page.id]);
 
@@ -101,14 +186,22 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     }
   };
 
-  // 4. 更新块内容与属性
-  const handleUpdateBlock = async (
+  // 4. 更新块内容与属性 (支持防抖保存与结构变更入栈)
+  const handleUpdateBlock = (
     blockId: string,
     content: string,
     blockType?: BlockType,
-    properties?: Record<string, any>
+    properties?: Record<string, any>,
+    isStructural?: boolean
   ) => {
-    const nextBlocks = blocks.map((b) => {
+    const now = Date.now();
+    // 结构性改变或超过 1.5 秒打字停顿，自动备份入撤销历史栈
+    if (isStructural || now - lastTypingTimeRef.current > 1500) {
+      pushUndo(blocksRef.current);
+    }
+    lastTypingTimeRef.current = now;
+
+    const nextBlocks = blocksRef.current.map((b) => {
       if (b.id !== blockId) return b;
       return {
         ...b,
@@ -119,24 +212,31 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       };
     });
     setBlocks(nextBlocks);
-    await saveDocBlocks(page.id, nextBlocks);
+    blocksRef.current = nextBlocks;
+
+    // 500ms 防抖保存至底层 SQLite
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveDocBlocks(page.id, nextBlocks);
+    }, 500);
   };
 
   // 5. 在指定块下方插入新块
   const handleInsertBelow = async (currentBlockId: string, blockType: BlockType = 'p') => {
-    const idx = blocks.findIndex((b) => b.id === currentBlockId);
+    pushUndo(blocksRef.current);
+    const idx = blocksRef.current.findIndex((b) => b.id === currentBlockId);
     const newBlockId = 'b_' + Date.now();
     const newBlock: DocBlock = {
       id: newBlockId,
       pageId: page.id,
       blockType,
       content: '',
-      sortOrder: (blocks[idx]?.sortOrder || 0) + 1,
+      sortOrder: (blocksRef.current[idx]?.sortOrder || 0) + 1,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    const nextBlocks = [...blocks];
+    const nextBlocks = [...blocksRef.current];
     nextBlocks.splice(idx + 1, 0, newBlock);
 
     // 重新规整序号
@@ -145,13 +245,16 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     });
 
     setBlocks(nextBlocks);
+    blocksRef.current = nextBlocks;
     setFocusedBlockId(newBlockId);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await saveDocBlocks(page.id, nextBlocks);
   };
 
   // 6. 删除块
   const handleDeleteBlock = async (blockId: string) => {
-    if (blocks.length <= 1) {
+    pushUndo(blocksRef.current);
+    if (blocksRef.current.length <= 1) {
       // 保持至少一个空块
       const resetBlock: DocBlock = {
         id: 'b_' + Date.now(),
@@ -163,34 +266,38 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         updatedAt: Date.now(),
       };
       setBlocks([resetBlock]);
+      blocksRef.current = [resetBlock];
       setFocusedBlockId(resetBlock.id);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       await saveDocBlocks(page.id, [resetBlock]);
       return;
     }
 
-    const idx = blocks.findIndex((b) => b.id === blockId);
-    const prevBlock = blocks[idx - 1] || blocks[idx + 1];
-    const nextBlocks = blocks.filter((b) => b.id !== blockId);
+    const idx = blocksRef.current.findIndex((b) => b.id === blockId);
+    const prevBlock = blocksRef.current[idx - 1] || blocksRef.current[idx + 1];
+    const nextBlocks = blocksRef.current.filter((b) => b.id !== blockId);
 
     setBlocks(nextBlocks);
+    blocksRef.current = nextBlocks;
     if (prevBlock) {
       setFocusedBlockId(prevBlock.id);
     }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await saveDocBlocks(page.id, nextBlocks);
   };
 
   // 7. 焦点移动
   const handleFocusPrev = (currentBlockId: string) => {
-    const idx = blocks.findIndex((b) => b.id === currentBlockId);
-    if (idx > 0 && blocks[idx - 1]) {
-      setFocusedBlockId(blocks[idx - 1].id);
+    const idx = blocksRef.current.findIndex((b) => b.id === currentBlockId);
+    if (idx > 0 && blocksRef.current[idx - 1]) {
+      setFocusedBlockId(blocksRef.current[idx - 1].id);
     }
   };
 
   const handleFocusNext = (currentBlockId: string) => {
-    const idx = blocks.findIndex((b) => b.id === currentBlockId);
-    if (idx >= 0 && idx < blocks.length - 1 && blocks[idx + 1]) {
-      setFocusedBlockId(blocks[idx + 1].id);
+    const idx = blocksRef.current.findIndex((b) => b.id === currentBlockId);
+    if (idx >= 0 && idx < blocksRef.current.length - 1 && blocksRef.current[idx + 1]) {
+      setFocusedBlockId(blocksRef.current[idx + 1].id);
     }
   };
 
@@ -205,20 +312,39 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <span className="text-[11px] text-slate-500">{blocks.length} 个块</span>
         </div>
 
-        {/* 右侧大纲控制入口：当大纲折叠时展示展开按钮 */}
-        {!showOutline && (
-          <button
-            onClick={() => setShowOutline(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 rounded-lg transition-colors select-none"
-            title="展开目录大纲"
-          >
-            <PanelRightOpen size={13} className="text-sky-400" />
-            <span>目录大纲</span>
-            {outlineHeadings.length > 0 && (
-              <span className="text-[10px] text-slate-500 font-mono">({outlineHeadings.length})</span>
-            )}
-          </button>
-        )}
+        {/* 右侧动作栏：撤销/重做快捷入口与大纲控制入口 */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-white/[0.03] border border-white/5 rounded-lg p-0.5 select-none">
+            <button
+              onClick={() => handleUndo()}
+              className="p-1 hover:bg-white/10 text-slate-400 hover:text-slate-200 rounded transition-colors"
+              title="撤销 (Ctrl+Z)"
+            >
+              <Undo2 size={13} />
+            </button>
+            <button
+              onClick={() => handleRedo()}
+              className="p-1 hover:bg-white/10 text-slate-400 hover:text-slate-200 rounded transition-colors"
+              title="重做 (Ctrl+Y / Ctrl+Shift+Z)"
+            >
+              <Redo2 size={13} />
+            </button>
+          </div>
+
+          {!showOutline && (
+            <button
+              onClick={() => setShowOutline(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 rounded-lg transition-colors select-none"
+              title="展开目录大纲"
+            >
+              <PanelRightOpen size={13} className="text-sky-400" />
+              <span>目录大纲</span>
+              {outlineHeadings.length > 0 && (
+                <span className="text-[10px] text-slate-500 font-mono">({outlineHeadings.length})</span>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 主工作区：左侧正文编辑区（标题靠左） + 右侧目录大纲栏（相对向右缩进伴随索引） */}
@@ -272,8 +398,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   key={block.id}
                   block={block}
                   autoFocus={focusedBlockId === block.id}
-                  onUpdate={(content, blockType, properties) =>
-                    handleUpdateBlock(block.id, content, blockType, properties)
+                  onUpdate={(content, blockType, properties, isStructural) =>
+                    handleUpdateBlock(block.id, content, blockType, properties, isStructural)
                   }
                   onDelete={() => handleDeleteBlock(block.id)}
                   onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}

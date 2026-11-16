@@ -2,6 +2,32 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.44] - 2026-11-16
+
+### Feature & UX (文档中心编辑交互全链路重构——所见即所得富文本、撤销重做历史栈与防抖持久化)
+- **持久挂载 `contentEditable` 与纯正富文本渲染 (`src/components/docs/editor/BlockItem.tsx`)**:
+  - 彻底废除原有在未聚焦 `<div>` 与聚焦 `<textarea>` 之间频繁卸载/重挂载的模式，消除 DOM 切换导致的焦点脱离、选区丢失与光标瞬移至末尾的顽疾；
+  - 彻底终结在文本中直接插入裸露 Markdown `**` 与 `*` 号的做法，升级为真实行内 HTML 富文本（`<strong>`、`<em>`、`<del>`、`<code>`），实现输入与排版即时所见即所得；
+  - 原生绑定 `Ctrl+B`（加粗）、`Ctrl+I`（斜体）、`Ctrl+U`（下划线）快捷键；
+  - 划选右键上下文菜单（`BlockContextMenu`）排版动作通过调用 `document.execCommand` 在当前 DOM 选区直接应用格式，并在排版后严格保持原选区，彻底解决排版后选区丢失与光标乱跳问题；
+  - 内置存量兼容转换器 `markdownToHtml`，自动将存量 Markdown 语法平滑升级为现代富文本，杜绝旧文档星号残留。
+- **全生命周期撤销/重做 (Undo / Redo) 历史栈 (`src/components/docs/editor/BlockEditor.tsx`)**:
+  - 在文档编辑器顶层构建 `undoStackRef` 与 `redoStackRef` 历史管理栈（支持最大 50 步撤销深度与内存限制保护）；
+  - 全局监听 `Ctrl+Z`（撤销）与 `Ctrl+Y` / `Ctrl+Shift+Z`（重做），覆盖文字连续输入快照、格式排版、块类型转换、块插入与块删除；
+  - 顶栏右侧新增精致暗晶体撤销与重做操作按钮，方便鼠标点击操作；
+  - 目录大纲（Outline）标题文本提取算法强化，过滤并剥离富文本与 Markdown 标记，始终保证目录干净清晰。
+- **500ms 智能防抖持久化 (Debounced Persistence)**:
+  - 解决原有打字每按一个字符即直接无防抖 `await saveDocBlocks` 导致底层 SQLite 高频并发竞争和界面微卡顿的问题，引入 500ms 智能合并防抖，大幅优化编辑流畅度与响应速度；
+  - 页面卸载或切换时自动清理定时器并立即刷盘保证数据绝对不丢。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 30/30 全维断言通过（退出码 0）；
+  - `docs-editor-interaction-test.mjs` 富文本与撤销交互全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换上线（新进程 PID: 6236）。
+
+
 ## [0.1.43] - 2026-11-16
 
 ### Feature & UI/UX (快速启动卡片排版极简化、新建项按钮统一与文字去噪)
