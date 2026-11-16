@@ -33,7 +33,8 @@ fn workbench_ping(client_time_ms: Option<u64>) -> Result<PingResponse, String> {
 
 /// 通用桌面启动命令：支持启动本地可执行程序、快捷方式 (.lnk)、目录或 URL 网址
 /// 针对 Windows 下本地 .exe 采用原生独立进程启动，未指定工作目录时自动继承其父目录以确保同级依赖加载
-/// 针对 .lnk 快捷方式、URL 网址与文件夹，通过 Windows 原生通道可靠唤起
+/// 针对物理文件夹，通过 Windows 原生 explorer.exe 毫秒级直达唤起，彻底杜绝命令行黑框闪烁
+/// 针对 .lnk 快捷方式与 URL 网址，通过 Windows 原生通道可靠唤起
 #[tauri::command]
 async fn launch_custom_target(
     target: String,
@@ -80,8 +81,21 @@ async fn launch_custom_target(
 
                 cmd.spawn().map_err(|e| format!("启动应用程序失败: {}", e))?;
                 Ok(format!("成功唤起应用程序: {}", trimmed_target))
+            } else if target_path.is_dir() {
+                // 2. 本地物理文件夹/目录：直接通过 Windows 原生资源管理器 (explorer.exe) 毫秒级直达唤起，0 命令行窗口闪烁
+                let normalized = trimmed_target.replace('/', "\\");
+                let mut cmd = std::process::Command::new("explorer.exe");
+                cmd.arg(&normalized);
+                cmd.spawn().map_err(|e| format!("唤起文件资源管理器失败: {}", e))?;
+                Ok(format!("成功打开文件夹: {}", normalized))
             } else {
-                // 2. 快捷方式 (.lnk)、文件夹路径、网页 URL 或非直连文件：通过 Windows 原生通道唤起
+                // 3. 快捷方式 (.lnk)、网页 URL 或脚本指令：通过 Windows 原生通道唤起
+                // 若包含本地磁盘绝对路径但物理不存在，返回明确的错误提示 (REQ-LAUNCHER-FOLDER-06)
+                let is_local_path = trimmed_target.contains(":\\") || trimmed_target.contains(":/") || trimmed_target.starts_with("\\\\");
+                if is_local_path && !target_path.exists() {
+                    return Err(format!("目标路径不存在或无法访问: {}", trimmed_target));
+                }
+
                 let mut ps_script = format!("Start-Process -FilePath '{}'", trimmed_target.replace('\'', "''"));
                 if let Some(arg_str) = args {
                     let trimmed_args = arg_str.trim();
@@ -643,5 +657,20 @@ mod tests {
             .get("nonexistent_mock_service_process.exe")
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn test_launch_custom_target_nonexistent_path() {
+        #[cfg(windows)]
+        {
+            let res = tauri::async_runtime::block_on(launch_custom_target(
+                "Z:\\NonExistentMockFolder_123456".to_string(),
+                None,
+                None,
+            ));
+            assert!(res.is_err(), "不存在的物理路径应当返回错误拦截");
+            let err_msg = res.unwrap_err();
+            assert!(err_msg.contains("不存在或无法访问"), "错误提示需包含明确描述: {}", err_msg);
+        }
     }
 }

@@ -406,14 +406,15 @@ export const LauncherDashboard: React.FC = () => {
         });
 
         const duration = Math.round(performance.now() - t0);
+        const actionVerb = item.type === 'folder' ? '打开文件夹' : '拉起';
         appendLog(
           item.name,
           'success',
-          `已成功拉起: ${item.name} (耗时 ${duration}ms)`
+          `已成功${actionVerb}: ${item.name} (耗时 ${duration}ms)`
         );
         setFeedback({
           type: 'success',
-          message: `已成功拉起: ${item.name}`,
+          message: `已成功${actionVerb}: ${item.name}`,
         });
         return true;
       } catch (err: unknown) {
@@ -691,24 +692,30 @@ export const LauncherDashboard: React.FC = () => {
 
       setFormTarget(pickedPath);
 
-      // 智能提取文件名（去除路径与扩展名）作为推荐默认名称
+      // 智能提取文件名或目录名作为推荐默认名称
       const normalized = pickedPath.replace(/\\/g, '/');
       const baseName = normalized.split('/').pop() || '';
       const dotIndex = baseName.lastIndexOf('.');
-      const pureName = dotIndex > 0 ? baseName.slice(0, dotIndex) : baseName;
+      const pureName = isFolder
+        ? baseName
+        : dotIndex > 0
+        ? baseName.slice(0, dotIndex)
+        : baseName;
 
       if (!formName.trim()) {
         setFormName(pureName);
       }
 
-      // 依据扩展名智能自动纠偏类型
-      const ext = dotIndex > 0 ? baseName.slice(dotIndex + 1).toLowerCase() : '';
-      if (['exe', 'lnk'].includes(ext)) {
-        setFormType('app');
-      } else if (['bat', 'cmd', 'ps1'].includes(ext)) {
-        setFormType('script');
-      } else if (isFolder) {
+      // 依据类型与扩展名智能自动纠偏类型
+      if (isFolder) {
         setFormType('folder');
+      } else {
+        const ext = dotIndex > 0 ? baseName.slice(dotIndex + 1).toLowerCase() : '';
+        if (['exe', 'lnk'].includes(ext)) {
+          setFormType('app');
+        } else if (['bat', 'cmd', 'ps1'].includes(ext)) {
+          setFormType('script');
+        }
       }
     } catch (err) {
       console.error('Failed to pick launcher file:', err);
@@ -1730,7 +1737,7 @@ export const LauncherDashboard: React.FC = () => {
                         type="button"
                         onClick={handlePickFile}
                         className="px-3 h-8 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5 text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap shadow-[0_0_10px_rgba(6,182,212,0.1)]"
-                        title="打开 Windows 资源管理器选择文件"
+                        title={formType === 'folder' ? '打开 Windows 资源管理器选择文件夹' : '打开 Windows 资源管理器选择文件'}
                       >
                         <FolderOpen className="w-3.5 h-3.5 shrink-0" />
                         <span>浏览选择</span>

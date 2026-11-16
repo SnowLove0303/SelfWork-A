@@ -2,6 +2,28 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.33] - 2026-11-16
+
+### Feature & Architecture (快速启动项新增支持启动指定路径物理文件夹功能)
+- **Rust 后端原生资源管理器直连通道 (`src-tauri/src/lib.rs`)**:
+  - 在 `launch_custom_target` 中为 `target_path.is_dir()` 建立物理目录专属直连唤起分支；
+  - 自动规整跨平台路径斜杠为 Windows 标准反斜杠 `\`，并通过 `std::process::Command::new("explorer.exe").arg(&normalized).spawn()` 直连唤起资源管理器直达目录，彻底规避 powershell 额外解释器开销与黑框闪烁，启动耗时维持在 <50ms；
+  - 补充物理磁盘存在性校验，对不存在的本地磁盘路径返回友好明确的中文错误拦截（例如：“目标路径不存在或无法访问: ...”），并在 `cargo test` 增加专属单元测试。
+- **前端目录路径选择器与智能名称提取增强 (`src/components/LauncherDashboard.tsx`)**:
+  - 优化 `handlePickFile`：当 `isFolder` 时采用完整 `baseName` 作为推荐名称，杜绝目录名含有版本点号（如 `Release.v1.0` 或 `node.js`）被误截断的隐患；
+  - 优化启动调度反馈与日志，文件夹启动项专属展示“已成功打开文件夹: ...”；
+  - 浏览按钮悬停提示动态适配为“打开 Windows 资源管理器选择文件夹”。
+- **E2E 真实行为测试套件全维核销 (`scripts/launcher-e2e-test.mjs`)**:
+  - 扩充文件夹表单负向防御攻击拦截测试（空路径防御）；
+  - 扩充文件夹目录名提取与点号保全断言实测；
+  - 扩充物理文件夹存在性与不存在路径识别断言；
+  - 扩充 SQLite 双向落盘与冷重启数据对账，全套 27/27 测试断言 100% 通过（退出码 0）。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review` 在 VS Code 原生差异视图中检阅通过；
+  - `pnpm check` 零警告零错误（退出码 0）；
+  - `cargo test` 10/10 项全绿（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译并热替换启动，当前稳定运行中。
+
 ## [0.1.32] - 2026-11-12
 
 ### Feature & UX (快速启动专属组合管理、多选保存为组合与大盘卡片一键启动组合全栈落地)

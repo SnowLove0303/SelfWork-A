@@ -69,6 +69,10 @@ assert(!r5.valid && r5.error === '请填写目标路径、网址或脚本指令�
 const r6 = simulateFormValidation('bundle', '每日工作套件', '', []);
 assert(!r6.valid && r6.error === '请至少勾选一个包含在捆绑套件中的应用或脚本！', '空捆绑套件勾选防御拦截 (bundle)', r6.error);
 
+// 攻击 7: 缺少目标路径拦截 (folder 类型) (REQ-LAUNCHER-FOLDER-01)
+const r7 = simulateFormValidation('folder', '工程目录', '');
+assert(!r7.valid && r7.error === '请填写目标路径、网址或脚本指令！', '空目标路径输入防御拦截 (folder)', r7.error);
+
 // ==================== 2. 网页直达类型 (url) 域名自动推导测试 ====================
 console.log('\n--- 2. 网页直达 (URL) 智能推导与录入契约测试 ---');
 
@@ -90,6 +94,20 @@ function deriveUrlName(urlInput) {
 assert(deriveUrlName('https://github.com/trending') === 'Github', 'GitHub 链接自动推导名称', 'Github');
 assert(deriveUrlName('https://www.bilibili.com/video') === 'Bilibili', 'Bilibili 链接去 www 自动推导名称', 'Bilibili');
 assert(deriveUrlName('https://google.com/search') === 'Google', 'Google 链接自动推导名称', 'Google');
+
+// ==================== 2.1 文件夹类型 (folder) 智能名称提取与点号保全测试 ====================
+console.log('\n--- 2.1 文件夹 (Folder) 智能推导与名称点号保全实测 ---');
+
+function deriveFolderName(pickedPath, isFolder = true) {
+  const normalized = pickedPath.replace(/\\/g, '/');
+  const baseName = normalized.split('/').pop() || '';
+  const dotIndex = baseName.lastIndexOf('.');
+  return isFolder ? baseName : dotIndex > 0 ? baseName.slice(0, dotIndex) : baseName;
+}
+
+assert(deriveFolderName('F:\\App Location\\SelfWork', true) === 'SelfWork', '标准文件夹路径自动提取目录名', 'SelfWork');
+assert(deriveFolderName('C:/Users/Administrator/Project.v1.0', true) === 'Project.v1.0', '带点号版本号的文件夹名称防误截断', 'Project.v1.0');
+assert(deriveFolderName('D:\\Apps\\tools\\node.js', true) === 'node.js', 'node.js 目录完整保留不误作后缀剥离', 'node.js');
 
 // ==================== 3. 应用程序 (app) 原生图标提取与真实进程唤起实测 ====================
 console.log('\n--- 3. 本地应用 (App) 原生图标提取与执行管道测试 ---');
@@ -163,6 +181,15 @@ const scriptOutput = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Co
 
 assert(scriptOutput === 'SelfWork Launcher E2E PASS', '执行脚本指令并捕获标准输出', scriptOutput);
 
+// ==================== 4.1 物理文件夹 (folder) 资源管理器通道与存在性断言测试 ====================
+console.log('\n--- 4.1 物理文件夹 (Folder) 原生通道与路径校验测试 ---');
+
+const testFolderPath = 'F:\\App Location\\SelfWork';
+assert(fs.existsSync(testFolderPath) && fs.statSync(testFolderPath).isDirectory(), '本地物理测试目录存在且为有效文件夹', testFolderPath);
+
+const nonExistentFolder = 'Z:\\NonExistentMockFolder_123456';
+assert(!fs.existsSync(nonExistentFolder), '不存在的物理路径正确识别为非物理存在', nonExistentFolder);
+
 // ==================== 5. SQLite 物理数据库双向落盘与冷重启对账实测 ====================
 console.log('\n--- 5. SQLite 物理落盘与冷重启数据对账实测 ---');
 
@@ -200,6 +227,7 @@ console.log(`当前存储中已有 ${originalItemsCount} 个启动项，${origin
 
 // 2. 模拟前端创建新项并通过 Python stdin 写入落盘
 const testItemId = `item-test-e2e-${Date.now()}`;
+const testFolderItemId = `folder-test-e2e-${Date.now()}`;
 const newTestItem = {
   id: testItemId,
   categoryId: originalStorage.categories[0]?.id || 'cat-tools',
@@ -212,9 +240,20 @@ const newTestItem = {
   updatedAt: Date.now(),
 };
 
+const newTestFolderItem = {
+  id: testFolderItemId,
+  categoryId: originalStorage.categories[0]?.id || 'cat-tools',
+  name: '自动化测试工程目录',
+  type: 'folder',
+  target: testFolderPath,
+  description: '由 E2E 真实测试套件创建的文件夹验证卡片',
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
 const updatedStorage = {
   ...originalStorage,
-  items: [newTestItem, ...originalStorage.items],
+  items: [newTestFolderItem, newTestItem, ...originalStorage.items],
 };
 
 const writePy = `
@@ -239,6 +278,13 @@ assert(
   Boolean(foundItem && foundItem.name === '自动化测试启动项' && foundItem.target === testExePath),
   '新添加项目成功落盘至 SQLite，跨实例读取验证通过',
   `ID: ${testItemId}`
+);
+
+const foundFolderItem = reReadStorage.items.find((i) => i.id === testFolderItemId);
+assert(
+  Boolean(foundFolderItem && foundFolderItem.name === '自动化测试工程目录' && foundFolderItem.type === 'folder' && foundFolderItem.target === testFolderPath),
+  '新添加文件夹项目成功落盘至 SQLite，跨实例验证字段与类型保全',
+  `ID: ${testFolderItemId}`
 );
 
 // 4. 清理测试项并恢复原始数据
