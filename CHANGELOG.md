@@ -2,6 +2,26 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.43] - 2026-11-16
+
+### Feature & UI/UX (快速启动卡片排版极简化、新建项按钮统一与文字去噪)
+- **顶栏 `[+ 新建项]` 统一暗夜晶体风格 (`src/components/LauncherDashboard.tsx`)**:
+  - 将 `[+ 新建项]` 调整为与相邻的 `[多选启动]`、`[全启动]`、`[分屏组合]` 完全一致的 **Secondary Ghost 暗夜晶体** 样式（`h-8 rounded-xl bg-white/[0.04] border-white/10 hover:border-cyan-500/30 text-slate-300 hover:text-white`，带青色 `+` 图标）；
+  - 顶栏 5 个操作按钮实现 100% 像素级一致的材质、半透明度与呼吸感，彻底消除单独高亮造成的突兀感。
+- **组合卡片顶栏去冗余与模式排版规整**:
+  - 彻底删除了组合卡片顶栏散落脱节的 `N 个应用` 裸露文本；
+  - 标题下方仅保留一个纯粹整齐的模式胶囊（如 `[常规顺序唤起]` 或 `[屏幕 1 · 四分屏]`），数量直接在底栏大按钮 `[▶️ 启动套件并平铺 (N项)]` 与中栏成员流中展示。
+- **单品卡片全面移除左上角类型文字标签**:
+  - 彻底移除了大盘中所有启动项卡片左上角多余的 `[应用]`、`[网址]`、`[脚本]`、`[文件夹]` 等文字标签徽标；
+  - 卡片全面回归纯粹的 **40x40 原生高清大图标 + 居中标题 + 极简磨砂底板** 极简美学，彻底消灭视觉噪音。
+- **工程质量与承重墙保全**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - `launcher-e2e-test.mjs` 真实用户行为测试 30/30 全维断言通过（退出码 0）；
+  - 单文件绿色生产可执行文件 `SelfWork.exe` 成功编译构建并通过 `scripts/replace-and-launch.mjs` 安全热替换上线（新进程 PID: 20572）。
+
+
 ## [0.1.42] - 2026-11-16
 
 ### Feature & UI/UX (快速启动全局按钮设计体系与调色板收敛重构)

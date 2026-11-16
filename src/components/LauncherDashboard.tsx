@@ -1409,13 +1409,13 @@ export const LauncherDashboard: React.FC = () => {
                   <span>分屏组合</span>
                 </button>
 
-                {/* 添加单项启动项按钮 (Primary Hero 绝对主行动焦点) */}
+                {/* 添加单项启动项按钮 (Secondary Ghost 统一暗晶体规范) */}
                 <button
                   type="button"
                   onClick={handleOpenAddModal}
-                  className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 border border-cyan-400 shadow-[0_0_16px_rgba(6,182,212,0.35)] transition-all tactile-btn shrink-0 whitespace-nowrap"
+                  className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 hover:border-cyan-500/30 transition-all tactile-btn shrink-0 whitespace-nowrap"
                 >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                  <Plus className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
                   <span>新建项</span>
                 </button>
 
@@ -1533,9 +1533,6 @@ export const LauncherDashboard: React.FC = () => {
                                   常规顺序唤起
                                 </span>
                               )}
-                              <span className="text-[10px] font-mono text-slate-400">
-                                {subItems.length} 个应用
-                              </span>
                             </div>
                           </div>
                         </div>
@@ -1695,8 +1692,8 @@ export const LauncherDashboard: React.FC = () => {
                         : 'border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/40 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
                     }`}
                   >
-                    {/* 顶栏：多选复选框 / 类型 Badge 与下拉设置菜单 */}
-                    <div className="flex items-center justify-between gap-1.5">
+                    {/* 顶栏：多选复选框与下拉设置菜单 (彻底取消类型文字标签，纯粹极简留白) */}
+                    <div className="flex items-center justify-between gap-1.5 h-4">
                       {isSelectMode ? (
                         <div
                           className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
@@ -1708,14 +1705,7 @@ export const LauncherDashboard: React.FC = () => {
                           {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 min-w-0 max-w-[calc(100%-24px)] overflow-hidden">
-                          <span
-                            className={`flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap shrink-0 ${badge.className}`}
-                          >
-                            <badge.Icon className="w-2.5 h-2.5 shrink-0" />
-                            <span className="truncate">{badge.label}</span>
-                          </span>
-                        </div>
+                        <div />
                       )}
 
                       {!isSelectMode && (
