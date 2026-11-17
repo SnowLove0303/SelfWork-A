@@ -2,6 +2,45 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.50] - 2026-11-17
+
+### Feature & Architecture (文档代码块语法高亮与行号基建 & 快速启动文件夹直达与组合分屏排障)
+- **文档中心代码块语法高亮引擎与行号呈现 (`src/components/docs/editor/codeHighlight.ts` / `BlockItem.tsx`)**:
+  - **自研轻量零依赖语法着色引擎**：支持 Python、JavaScript/TypeScript、Rust、SQL、Bash/Shell、JSON、HTML、CSS、Go、C/C++、Java 等语言的分级高亮着色：
+    - 关键字（蓝青）：`text-sky-400 font-medium`
+    - 字符串（薄荷绿）：`text-emerald-400`
+    - 注释（灰绿/石墨色）：`text-slate-500 italic`
+    - 数字/常量（橙/琥珀）：`text-amber-400` / `text-amber-300`
+    - 内置函数/API（天蓝）：`text-cyan-300`
+    - HTML 实体转义（`<`、`>`、`&`）自动防护，杜绝泛型与标签渲染冲突；
+  - **光标与选区绝对保护 (`getCaretOffset` / `restoreCaretOffset`)**：
+    - 实现字符级光标偏移量计算与精准还原算法，在打字输入、粘贴代码及下拉菜单切换语言时，语法着色即时渲染且光标与选区绝不丢失、不跳动；
+    - 挂载 `isComposingRef` 中文输入法（IME）合成态保护与 `handlePaste` 纯文本粘贴拦截；
+  - **行号呈现列与 1:1 像素级基准对齐**：
+    - 左侧独立渲染行号列（`min-w-[2.5rem]`、右对齐、`border-r border-white/10`、`text-slate-600`、`select-none`）；
+    - 与右侧代码编辑区共享 `leading-relaxed`，保证大字号及多行换行下行号与代码行绝对 1:1 像素级对齐；
+    - 悬浮胶囊栏新增 `ListOrdered` 按钮，支持一键切换行号显隐；
+  - **既有工学 100% 保全**：
+    - 16px 微软雅黑字号、Tab 缩进 2 空格、Enter 多行换行、一键复制、自动换行开关无损继承。
+
+- **快速启动文件夹精准直达与组合分屏平铺全链路排障 (`src-tauri/src/lib.rs` / `LauncherDashboard.tsx`)**:
+  - **根除文件夹退回到“此电脑/文档”缺陷**：
+    - 拔除 Windows 原生 `explorer.exe` 不支持的 `/separate` 非法参数，改由原生标准目录参数唤起，确保 100% 秒级直达用户指定的本地文件夹；
+  - **三层高可靠窗口捕获与分屏吸附 (`arrange_combo_windows`)**：
+    - 突破 Windows 11 Explorer 标签页与不同桌面会话导致的 HWND 捕获失败盲区；
+    - 引入基于 `EnumDesktopWindows`（`WinSta0/Default`）的顶级桌面窗口枚举体系，精准捕获 `CabinetWClass`（文件资源管理器）及所有活动应用窗口真实句柄与标题；
+    - 配合 `Shell.Application.Windows()` 路径比对与 `MainWindowHandle`，实现三层立体容灾捕获与毫秒级四分屏/双分屏精准平铺；
+  - **前端启动项路径输入全量清洗与规范化**：
+    - 在文件选取与表单落库时，统一剥离外层多余双引号并将正斜杠转换为 Windows 标准反斜杠，保证文件、程序（.exe）、物理目录与 .lnk 快捷方式的绝对路径 100% 格式纯净。
+
+- **工程质量与全维验证**:
+  - 所有代码变更均已通过 VS Code 原生视图通道供用户把控；
+  - 编写并运行专用代码块语法着色与行号测试套件 `scripts/doc-codeblock-syntax-test.mjs`（6/6 断言全绿，退出码 0）；
+  - 编写并运行快速启动路径与分屏吸附集成验证套件 `scripts/launcher-target-snap-verify.mjs`（3/3 断言全绿，退出码 0）；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）。
+
+
 ## [0.1.49] - 2026-11-17
 
 ### Feature & UX (文档中心代码块智能识别、悬浮微光操作胶囊栏与击键工学基建)

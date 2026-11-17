@@ -128,11 +128,12 @@ async fn launch_custom_target(
                     Ok(format!("成功唤起应用程序: {}", trimmed_target))
                 }
             } else if target_path.is_dir() {
-                // 2. 本地物理文件夹/目录：直接通过 Windows 原生资源管理器 (explorer.exe) 毫秒级直达唤起，0 命令行窗口闪烁
-                // 注入 /separate 参数，强制在独立新窗口打开，彻底杜绝 Windows 11 Explorer 自动合并到现有窗口的 Tabs 标签页中
+                // 2. 本地物理文件夹/目录：直接通过 Windows 原生 explorer.exe 毫秒级直达独立唤起，0 命令行窗口闪烁
+                // 修复：Windows 资源管理器 explorer.exe 不支持 /separate 参数，传入会导致 explorer 解析失败并错误退回到默认的“此电脑/文档”；
+                // 现直接以原生规范传递目录路径参数，彻底确保精准直达指定文件夹
                 let normalized = trimmed_target.replace('/', "\\");
                 let mut cmd = std::process::Command::new("explorer.exe");
-                cmd.args(["/separate", &normalized]);
+                cmd.arg(&normalized);
                 cmd.creation_flags(0x00000200 | 0x00000008);
                 cmd.spawn().map_err(|e| format!("唤起文件资源管理器失败: {}", e))?;
                 Ok(format!("成功打开文件夹: {}", normalized))
@@ -711,7 +712,10 @@ async fn arrange_combo_windows(
             let ps_script = format!(r#"
 Add-Type -TypeDefinition @"
 using System;
+using System.Text;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+
 public class WinSnap {{
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
@@ -719,6 +723,61 @@ public class WinSnap {{
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")]
     public static extern bool IsZoomed(IntPtr hWnd);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr OpenWindowStation(string lpszWinSta, bool fInherit, uint dwDesiredAccess);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetProcessWindowStation(IntPtr hWinSta);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr OpenDesktop(string lpszDesktop, uint dwFlags, bool fInherit, uint dwDesiredAccess);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool EnumDesktopWindows(IntPtr hDesktop, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    public class WinEntry {{
+        public IntPtr Hwnd;
+        public uint Pid;
+        public string ClassName;
+        public string Title;
+    }}
+
+    public static List<WinEntry> TopWindows = new List<WinEntry>();
+
+    private static bool EnumCallback(IntPtr hWnd, IntPtr lParam) {{
+        if (!IsWindowVisible(hWnd)) return true;
+        uint pid = 0;
+        GetWindowThreadProcessId(hWnd, out pid);
+        StringBuilder sbT = new StringBuilder(256);
+        GetWindowText(hWnd, sbT, 256);
+        StringBuilder sbC = new StringBuilder(256);
+        GetClassName(hWnd, sbC, 256);
+        string t = sbT.ToString();
+        string c = sbC.ToString();
+        if (t.Length > 0 && c != "Progman" && c != "WorkerW" && !c.Contains("IME")) {{
+            TopWindows.Add(new WinEntry {{ Hwnd = hWnd, Pid = pid, ClassName = c, Title = t }});
+        }}
+        return true;
+    }}
+
+    public static WinEntry[] SnapshotTopWindows() {{
+        TopWindows.Clear();
+        IntPtr hWinsta = OpenWindowStation("WinSta0", false, 0x00020000 | 0x037F);
+        if (hWinsta != IntPtr.Zero) {{
+            SetProcessWindowStation(hWinsta);
+            IntPtr hDesk = OpenDesktop("Default", 0, false, 0x00020000 | 0x01FF);
+            if (hDesk != IntPtr.Zero) {{
+                EnumDesktopWindows(hDesk, new EnumWindowsProc(EnumCallback), IntPtr.Zero);
+            }}
+        }}
+        return TopWindows.ToArray();
+    }}
 }}
 "@
 
@@ -735,6 +794,7 @@ for ($round = 0; $round -lt 6; $round++) {{
 
     $shellWindows = @($shell.Windows())
     $procs = @(Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 }})
+    $topWins = @([WinSnap]::SnapshotTopWindows())
 
     foreach ($spec in $unplaced) {{
         $targetUpper = $spec.Target.TrimEnd('\').ToUpper()
@@ -763,7 +823,22 @@ for ($round = 0; $round -lt 6; $round++) {{
             }} catch {{}}
         }}
 
-        # 若非文件夹或未能在 Shell.Windows 中找到，退回到系统顶层进程主窗口
+        # 第二层：遍历 WinSta0/Default 桌面顶级窗口（覆盖原生 CabinetWClass 文件夹窗口及主进程窗口）
+        if ($foundHwnd -eq 0) {{
+            foreach ($tw in $topWins) {{
+                $hwnd = [int]$tw.Hwnd
+                if ($hwnd -eq 0 -or $usedHwnds.Contains($hwnd)) {{
+                    continue
+                }}
+                $tUpper = $tw.Title.ToUpper()
+                if ($nameUpper.Length -ge 2 && ($tUpper.Contains($nameUpper) || ($targetUpper.Length -ge 2 && $tUpper.Contains($targetUpper)))) {{
+                    $foundHwnd = $hwnd
+                    break
+                }}
+            }}
+        }}
+
+        # 第三层：若仍未匹配，退回到系统顶层进程主窗口 (MainWindowHandle)
         if ($foundHwnd -eq 0) {{
             foreach ($p in $procs) {{
                 $hwnd = [int]$p.MainWindowHandle

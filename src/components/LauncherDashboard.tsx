@@ -966,11 +966,13 @@ export const LauncherDashboard: React.FC = () => {
 
       if (!pickedPath) return;
 
-      setFormTarget(pickedPath);
+      // 规范化路径：统一使用标准反斜杠，并去除首尾空白与包裹的双引号
+      const cleanPath = pickedPath.trim().replace(/^"(.*)"$/, '$1').replace(/\//g, '\\');
+      setFormTarget(cleanPath);
 
       // 智能提取文件名或目录名作为推荐默认名称
-      const normalized = pickedPath.replace(/\\/g, '/');
-      const baseName = normalized.split('/').pop() || '';
+      const pathSegments = cleanPath.split('\\').filter(Boolean);
+      const baseName = pathSegments.pop() || '';
       const dotIndex = baseName.lastIndexOf('.');
       const pureName = isFolder
         ? baseName
@@ -1000,7 +1002,7 @@ export const LauncherDashboard: React.FC = () => {
 
   const handleSaveItem = async () => {
     const trimmedName = formName.trim();
-    const trimmedTarget = formTarget.trim();
+    let trimmedTarget = formTarget.trim();
 
     if (!trimmedName) {
       alert('请填写启动项名称！');
@@ -1010,6 +1012,11 @@ export const LauncherDashboard: React.FC = () => {
     if (formType !== 'bundle' && !trimmedTarget) {
       alert('请填写目标路径、网址或脚本指令！');
       return;
+    }
+
+    // 针对本地文件、可执行程序与文件夹，统一规范化路径：剥离首尾多余双引号并将正斜杠转换为 Windows 标准反斜杠
+    if (formType === 'app' || formType === 'folder') {
+      trimmedTarget = trimmedTarget.replace(/^"(.*)"$/, '$1').trim().replace(/\//g, '\\');
     }
 
     if (formType === 'bundle' && formBundleItemIds.length === 0) {

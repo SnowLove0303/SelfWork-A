@@ -11,7 +11,13 @@ import {
   Copy,
   WrapText,
   ChevronDown,
+  ListOrdered,
 } from 'lucide-react';
+import {
+  highlightCode,
+  getCaretOffset,
+  restoreCaretOffset,
+} from './codeHighlight.ts';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -85,6 +91,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
+  const isComposingRef = useRef(false);
 
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
@@ -100,9 +107,12 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [floatingToolbarOpen, setFloatingToolbarOpen] = useState(false);
   const [floatingToolbarPos, setFloatingToolbarPos] = useState({ top: 0, left: 0 });
 
-  // 代码块专属状态：复制反馈与语言下拉菜单
+  // 代码块专属状态：复制反馈与语言下拉菜单、动态行数
   const [copiedCode, setCopiedCode] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [lineCount, setLineCount] = useState(() =>
+    Math.max(1, (block.content || '').split('\n').length)
+  );
 
   // 1. 初始化与外部状态同步：解耦本地打字与撤销/重做
   useEffect(() => {
@@ -114,22 +124,32 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
     // 来自外部（Undo、Redo、加载）的更新：强制同步 innerHTML 并将光标平滑置于末尾
     if (editorRef.current) {
-      const targetHtml = markdownToHtml(block.content);
-      if (editorRef.current.innerHTML !== targetHtml) {
-        editorRef.current.innerHTML = targetHtml;
-        if (document.activeElement === editorRef.current) {
-          const sel = window.getSelection();
-          if (sel) {
-            const range = document.createRange();
-            range.selectNodeContents(editorRef.current);
-            range.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(range);
+      if (block.blockType === 'code') {
+        const lang = (block.properties?.language as string) || 'plaintext';
+        const targetHtml = highlightCode(block.content, lang);
+        if (editorRef.current.innerHTML !== targetHtml) {
+          editorRef.current.innerHTML = targetHtml;
+        }
+        const lines = Math.max(1, (block.content || '').split('\n').length);
+        setLineCount(lines);
+      } else {
+        const targetHtml = markdownToHtml(block.content);
+        if (editorRef.current.innerHTML !== targetHtml) {
+          editorRef.current.innerHTML = targetHtml;
+          if (document.activeElement === editorRef.current) {
+            const sel = window.getSelection();
+            if (sel) {
+              const range = document.createRange();
+              range.selectNodeContents(editorRef.current);
+              range.collapse(false);
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
           }
         }
       }
     }
-  }, [block.id, block.content]);
+  }, [block.id, block.content, block.blockType, block.properties?.language]);
 
   // 2. 自动对焦与光标定位至末尾
   useEffect(() => {
@@ -182,10 +202,61 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     checkSelection();
   };
 
+  // 代码块即时语法染色与光标选区无损同步
+  const handleCodeInput = () => {
+    if (!editorRef.current) return;
+    isLocalInputRef.current = true;
+    const rawText = editorRef.current.innerText || '';
+    const caret = getCaretOffset(editorRef.current);
+    const currentLang = (block.properties?.language as string) || 'plaintext';
+    const targetHtml = highlightCode(rawText, currentLang);
+    if (editorRef.current.innerHTML !== targetHtml) {
+      editorRef.current.innerHTML = targetHtml;
+      restoreCaretOffset(editorRef.current, caret);
+    }
+    const lines = Math.max(1, rawText.split('\n').length);
+    setLineCount(lines);
+    onUpdate(rawText);
+  };
+
+  // 代码块粘贴拦截：防止外部脏 HTML 污染，实现纯文本平滑注入与无损染色
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (block.blockType === 'code') {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      if (!text || !editorRef.current) return;
+      isLocalInputRef.current = true;
+      const caret = getCaretOffset(editorRef.current);
+      const currentText = editorRef.current.innerText || '';
+      const before = currentText.slice(0, caret.start);
+      const after = currentText.slice(caret.end);
+      const newText = before + text + after;
+      const newCaretPos = caret.start + text.length;
+      const currentLang = (block.properties?.language as string) || 'plaintext';
+      const targetHtml = highlightCode(newText, currentLang);
+      editorRef.current.innerHTML = targetHtml;
+      restoreCaretOffset(editorRef.current, { start: newCaretPos, end: newCaretPos });
+      const lines = Math.max(1, newText.split('\n').length);
+      setLineCount(lines);
+      onUpdate(newText);
+    }
+  };
+
   // 4. 处理文本输入与行首 Markdown 语法糖
   const handleInput = () => {
     if (!editorRef.current) return;
     isLocalInputRef.current = true;
+
+    // 代码块输入走专属即时语法染色流
+    if (block.blockType === 'code') {
+      if (isComposingRef.current) {
+        onUpdate(editorRef.current.innerText || '');
+        return;
+      }
+      handleCodeInput();
+      return;
+    }
+
     const rawHtml = editorRef.current.innerHTML;
     const rawText = editorRef.current.innerText || '';
 
@@ -327,7 +398,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           sel.removeAllRanges();
           sel.addRange(range);
           if (editorRef.current) {
-            onUpdate(editorRef.current.innerHTML);
+            handleCodeInput();
           }
         }
         return;
@@ -346,7 +417,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           sel.removeAllRanges();
           sel.addRange(range);
           if (editorRef.current) {
-            onUpdate(editorRef.current.innerHTML);
+            handleCodeInput();
           }
         } else {
           document.execCommand('insertLineBreak');
@@ -719,6 +790,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       {(() => {
         const currentLang = (block.properties?.language as string) || 'plaintext';
         const isWrap = Boolean(block.properties?.wrap);
+        const isLineNumbersEnabled = block.properties?.lineNumbers !== false;
 
         return (
           <div
@@ -754,10 +826,20 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                           key={lang.id}
                           type="button"
                           onClick={() => {
+                            const currentText = editorRef.current?.innerText ?? block.content;
+                            const isFocused = document.activeElement === editorRef.current;
+                            const caret = isFocused && editorRef.current ? getCaretOffset(editorRef.current) : null;
+                            const nextLang = lang.id;
+                            if (editorRef.current) {
+                              editorRef.current.innerHTML = highlightCode(currentText, nextLang);
+                              if (isFocused && caret) {
+                                restoreCaretOffset(editorRef.current, caret);
+                              }
+                            }
                             onUpdate(
-                              editorRef.current?.innerHTML || block.content,
+                              currentText,
                               'code',
-                              { ...block.properties, language: lang.id },
+                              { ...block.properties, language: nextLang },
                               true
                             );
                             setShowLangMenu(false);
@@ -774,13 +856,35 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                   )}
                 </div>
 
+                {/* 行号显示切换 */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onUpdate(
+                      editorRef.current?.innerText || block.content,
+                      'code',
+                      { ...block.properties, lineNumbers: !isLineNumbersEnabled },
+                      true
+                    );
+                  }}
+                  className={`p-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                    isLineNumbersEnabled
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/10'
+                  }`}
+                  title={isLineNumbersEnabled ? '隐藏行号' : '显示行号'}
+                >
+                  <ListOrdered size={12} />
+                </button>
+
                 {/* 代码换行切换 */}
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     onUpdate(
-                      editorRef.current?.innerHTML || block.content,
+                      editorRef.current?.innerText || block.content,
                       'code',
                       { ...block.properties, wrap: !isWrap },
                       true
@@ -821,26 +925,66 @@ export const BlockItem: React.FC<BlockItemProps> = ({
               </div>
             )}
 
-            <div
-              ref={editorRef}
-              contentEditable={true}
-              suppressContentEditableWarning={true}
-              onInput={handleInput}
-              onKeyDown={handleKeyDown}
-              onKeyUp={checkSelection}
-              onMouseUp={handleMouseUp}
-              onContextMenu={handleContextMenu}
-              data-placeholder={getPlaceholder()}
-              className={`w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
-                block.blockType === 'code'
-                  ? isWrap
-                    ? 'whitespace-pre-wrap break-words'
-                    : 'whitespace-pre overflow-x-auto no-scrollbar'
-                  : 'break-words'
-              } ${
-                isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
-              }`}
-            />
+            {block.blockType === 'code' ? (
+              <div className="flex font-mono text-sm leading-relaxed overflow-hidden">
+                {/* 行号呈现列 */}
+                {isLineNumbersEnabled && (
+                  <div
+                    className="select-none py-0.5 pr-3 pl-1 text-right text-slate-600 font-mono text-xs leading-relaxed border-r border-white/10 shrink-0 select-none"
+                    style={{ minWidth: '2.5rem' }}
+                    aria-hidden="true"
+                  >
+                    {Array.from({ length: lineCount }, (_, i) => (
+                      <div key={i + 1} className="leading-relaxed select-none">
+                        {i + 1}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* 代码编辑区 */}
+                <div
+                  ref={editorRef}
+                  contentEditable={true}
+                  suppressContentEditableWarning={true}
+                  onInput={handleInput}
+                  onKeyDown={handleKeyDown}
+                  onKeyUp={checkSelection}
+                  onMouseUp={handleMouseUp}
+                  onPaste={handlePaste}
+                  onCompositionStart={() => {
+                    isComposingRef.current = true;
+                  }}
+                  onCompositionEnd={() => {
+                    isComposingRef.current = false;
+                    handleInput();
+                  }}
+                  onContextMenu={handleContextMenu}
+                  data-placeholder={getPlaceholder()}
+                  className={`flex-1 py-0.5 ${
+                    isLineNumbersEnabled ? 'pl-3' : 'pl-1'
+                  } outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
+                    isWrap
+                      ? 'whitespace-pre-wrap break-words'
+                      : 'whitespace-pre overflow-x-auto no-scrollbar'
+                  }`}
+                />
+              </div>
+            ) : (
+              <div
+                ref={editorRef}
+                contentEditable={true}
+                suppressContentEditableWarning={true}
+                onInput={handleInput}
+                onKeyDown={handleKeyDown}
+                onKeyUp={checkSelection}
+                onMouseUp={handleMouseUp}
+                onContextMenu={handleContextMenu}
+                data-placeholder={getPlaceholder()}
+                className={`w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} break-words ${
+                  isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
+                }`}
+              />
+            )}
           </div>
         );
       })()}
