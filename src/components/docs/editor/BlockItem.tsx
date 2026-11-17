@@ -8,7 +8,28 @@ import {
   Trash2,
   Check,
   Table,
+  Copy,
+  WrapText,
+  ChevronDown,
 } from 'lucide-react';
+
+export const SUPPORTED_CODE_LANGUAGES = [
+  { id: 'python', name: 'Python' },
+  { id: 'javascript', name: 'JavaScript' },
+  { id: 'typescript', name: 'TypeScript' },
+  { id: 'rust', name: 'Rust' },
+  { id: 'sql', name: 'SQL' },
+  { id: 'shell', name: 'Bash / Shell' },
+  { id: 'powershell', name: 'PowerShell' },
+  { id: 'json', name: 'JSON' },
+  { id: 'html', name: 'HTML' },
+  { id: 'css', name: 'CSS' },
+  { id: 'c', name: 'C / C++' },
+  { id: 'go', name: 'Go' },
+  { id: 'java', name: 'Java' },
+  { id: 'markdown', name: 'Markdown' },
+  { id: 'plaintext', name: 'Plain Text' },
+] as const;
 
 interface BlockItemProps {
   block: DocBlock;
@@ -78,6 +99,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 划选浮动微光工具栏状态
   const [floatingToolbarOpen, setFloatingToolbarOpen] = useState(false);
   const [floatingToolbarPos, setFloatingToolbarPos] = useState({ top: 0, left: 0 });
+
+  // 代码块专属状态：复制反馈与语言下拉菜单
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
 
   // 1. 初始化与外部状态同步：解耦本地打字与撤销/重做
   useEffect(() => {
@@ -172,6 +197,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         onInsertBelow('p');
         return;
       }
+
+      // 匹配行首代码块语法糖 ``` 或 ```python + 空格/换行
+      const codeMatch = rawText.match(/^```([a-zA-Z0-9_-]*)\s$/) || rawText.match(/^```([a-zA-Z0-9_-]*)\n$/);
+      if (codeMatch) {
+        const lang = codeMatch[1].toLowerCase() || 'plaintext';
+        editorRef.current.innerHTML = '';
+        onUpdate('', 'code', { language: lang, wrap: false }, true);
+        return;
+      }
       const match = rawText.match(/^(#{1,3}|\[\]|\[ \]|---|-|\*|>)\s(.*)$/);
       if (match) {
         const trigger = match[1];
@@ -217,6 +251,21 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   // 5. 键盘事件快捷流 (Enter / Backspace / Tab / Arrow / Shortcuts)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 段落行首直接敲空格或回车触发 ```<lang> 代码块蜕变
+    if (block.blockType === 'p') {
+      const text = editorRef.current?.innerText?.trim() || '';
+      if (e.key === ' ' || e.key === 'Enter') {
+        const codePrefixMatch = text.match(/^```([a-zA-Z0-9_-]*)$/);
+        if (codePrefixMatch) {
+          e.preventDefault();
+          const lang = codePrefixMatch[1].toLowerCase() || 'plaintext';
+          if (editorRef.current) editorRef.current.innerHTML = '';
+          onUpdate('', 'code', { language: lang, wrap: false }, true);
+          return;
+        }
+      }
+    }
+
     // 快捷排版组合键支持
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
       e.preventDefault();
@@ -263,12 +312,56 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
     }
 
-    // 代码块内回车：插入换行，不退出块
+    // 代码块专属击键工学：Tab 缩进插入空格、Enter 单块多行、空块退格平滑回退
     if (block.blockType === 'code') {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          const spaceNode = document.createTextNode('  ');
+          range.insertNode(spaceNode);
+          range.setStartAfter(spaceNode);
+          range.setEndAfter(spaceNode);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          if (editorRef.current) {
+            onUpdate(editorRef.current.innerHTML);
+          }
+        }
+        return;
+      }
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        document.execCommand('insertLineBreak');
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          const brNode = document.createTextNode('\n');
+          range.insertNode(brNode);
+          range.setStartAfter(brNode);
+          range.setEndAfter(brNode);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          if (editorRef.current) {
+            onUpdate(editorRef.current.innerHTML);
+          }
+        } else {
+          document.execCommand('insertLineBreak');
+        }
         return;
+      }
+
+      if (e.key === 'Backspace') {
+        const text = editorRef.current?.innerText?.trim() || '';
+        if (text === '') {
+          e.preventDefault();
+          if (editorRef.current) editorRef.current.innerHTML = '';
+          onUpdate('', 'p', undefined, true);
+          return;
+        }
       }
     }
 
@@ -515,8 +608,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         return '二级标题...';
       case 'h3':
         return '三级标题...';
-      case 'code':
-        return '// 输入或粘贴代码...';
+      case 'code': {
+        const lang = (block.properties?.language as string) || '';
+        return lang ? `// 输入或粘贴 ${lang} 代码...` : '// 输入或粘贴代码...';
+      }
       default:
         return "输入文本，或按 '/' 唤出菜单...";
     }
@@ -621,28 +716,134 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       )}
 
       {/* 文本内容编辑与富文本渲染容器 */}
-      <div
-        className={`flex-1 min-w-0 ${
-          block.blockType === 'code'
-            ? 'p-3 bg-slate-950/80 border border-white/10 rounded-xl my-1 shadow-inner'
-            : ''
-        }`}
-      >
-        <div
-          ref={editorRef}
-          contentEditable={true}
-          suppressContentEditableWarning={true}
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
-          onKeyUp={checkSelection}
-          onMouseUp={handleMouseUp}
-          onContextMenu={handleContextMenu}
-          data-placeholder={getPlaceholder()}
-          className={`w-full outline-none focus:outline-none min-h-[1.5rem] break-words cursor-text select-text ${getBlockStyle()} ${
-            isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
-          }`}
-        />
-      </div>
+      {(() => {
+        const currentLang = (block.properties?.language as string) || 'plaintext';
+        const isWrap = Boolean(block.properties?.wrap);
+
+        return (
+          <div
+            className={`flex-1 min-w-0 ${
+              block.blockType === 'code'
+                ? 'p-3.5 bg-slate-950/85 border border-white/10 rounded-xl my-1.5 shadow-inner relative group/code'
+                : ''
+            }`}
+          >
+            {/* 代码块右上角悬浮微光操作胶囊栏 */}
+            {block.blockType === 'code' && (
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-20 select-none opacity-0 group-hover/code:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
+                {/* 语言选择切换器 */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setShowLangMenu(!showLangMenu)}
+                    className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-mono text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors cursor-pointer"
+                    title="切换编程语言"
+                  >
+                    <span>{SUPPORTED_CODE_LANGUAGES.find((l) => l.id === currentLang)?.name || currentLang}</span>
+                    <ChevronDown size={11} className="opacity-60" />
+                  </button>
+
+                  {showLangMenu && (
+                    <div
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="absolute right-0 top-full mt-1 w-36 max-h-56 overflow-y-auto bg-slate-900/95 border border-white/15 rounded-lg shadow-2xl py-1 z-50 text-xs backdrop-blur-md"
+                    >
+                      {SUPPORTED_CODE_LANGUAGES.map((lang) => (
+                        <button
+                          key={lang.id}
+                          type="button"
+                          onClick={() => {
+                            onUpdate(
+                              editorRef.current?.innerHTML || block.content,
+                              'code',
+                              { ...block.properties, language: lang.id },
+                              true
+                            );
+                            setShowLangMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-1 hover:bg-sky-500/15 flex items-center justify-between transition-colors ${
+                            currentLang === lang.id ? 'text-sky-400 font-semibold bg-sky-500/10' : 'text-slate-300'
+                          }`}
+                        >
+                          <span>{lang.name}</span>
+                          {currentLang === lang.id && <Check size={12} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 代码换行切换 */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onUpdate(
+                      editorRef.current?.innerHTML || block.content,
+                      'code',
+                      { ...block.properties, wrap: !isWrap },
+                      true
+                    );
+                  }}
+                  className={`p-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                    isWrap
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/10'
+                  }`}
+                  title={isWrap ? '代码自动换行中 (点击切换为横向滚动)' : '保持单行横向滚动 (点击切换为自动换行)'}
+                >
+                  <WrapText size={12} />
+                </button>
+
+                {/* 一键复制代码 */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const text = editorRef.current?.innerText || block.content;
+                    navigator.clipboard.writeText(text);
+                    setCopiedCode(true);
+                    setTimeout(() => setCopiedCode(false), 1800);
+                  }}
+                  className="p-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                  title="复制代码到剪贴板"
+                >
+                  {copiedCode ? (
+                    <>
+                      <Check size={12} className="text-emerald-400" />
+                      <span className="text-[10px] text-emerald-400 font-medium">已复制</span>
+                    </>
+                  ) : (
+                    <Copy size={12} />
+                  )}
+                </button>
+              </div>
+            )}
+
+            <div
+              ref={editorRef}
+              contentEditable={true}
+              suppressContentEditableWarning={true}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              onKeyUp={checkSelection}
+              onMouseUp={handleMouseUp}
+              onContextMenu={handleContextMenu}
+              data-placeholder={getPlaceholder()}
+              className={`w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
+                block.blockType === 'code'
+                  ? isWrap
+                    ? 'whitespace-pre-wrap break-words'
+                    : 'whitespace-pre overflow-x-auto no-scrollbar'
+                  : 'break-words'
+              } ${
+                isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
+              }`}
+            />
+          </div>
+        );
+      })()}
 
       {/* 划选即时浮动微光工具栏 */}
       {floatingToolbarOpen && (

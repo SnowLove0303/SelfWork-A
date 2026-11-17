@@ -2,6 +2,28 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.49] - 2026-11-17
+
+### Feature & UX (文档中心代码块智能识别、悬浮微光操作胶囊栏与击键工学基建)
+- **文档中心代码块智能识别与行首 Markdown 语法糖 (`src/components/docs/editor/BlockItem.tsx`)**:
+  - 深度对标 Notion Python 知识库标准，支持行首输入 ```<lang>```（如 ```python```、```js```、``````）敲击空格或回车瞬间自动蜕变为代码块；
+  - 自动将捕获的语言代号存入 `block.properties.language`，并自适应动态呈现占位符（如 `// 输入或粘贴 python 代码...`）。
+- **代码块右上角悬浮微光操作胶囊栏 (Floating Action Bar)**:
+  - 鼠标悬停（Hover）或处于编辑态时右上角自动浮现暗色玻璃态微光操作条；
+  - **语言切换器（Language Picker）**：支持内置 15 种主流编程与标记语言（Python、JavaScript、TypeScript、Rust、SQL、Bash、JSON 等）带高亮选择；
+  - **一键复制代码（Copy to Clipboard）**：点击提取纯净代码文本写入系统剪贴板，呈现绿色对勾与“已复制”即时视觉反馈；
+  - **代码换行开关（Line Wrap Toggle）**：支持在“单行水平横向滚动”与“按容器宽度自动折行”之间无缝切换。
+- **专业击键工学与缩进调度保护**:
+  - 代码块内按下 `Tab` 键直接插入 2 个标准空格缩进，绝不将焦点跳离当前编辑器；
+  - 代码块内按下 `Enter` 键执行多行换行，绝不破坏拆分当前块；
+  - 空代码块按下 `Backspace` 键自动平滑降级回退为普通段落。
+- **工程质量与全维验证**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - 编写并运行专用代码块测试套件 `scripts/doc-codeblock-test.mjs`（全维断言通过，退出码 0）；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）。
+
+
 ## [0.1.48] - 2026-11-17
 
 ### Feature & Architecture (快速启动外部进程生命周期解耦、Windows Shell 独立脱壳与文档排版阶梯升级)
