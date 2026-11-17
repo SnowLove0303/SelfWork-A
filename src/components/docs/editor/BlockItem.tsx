@@ -11,6 +11,7 @@ import {
   Copy,
   WrapText,
   ChevronDown,
+  ChevronRight,
   ListOrdered,
 } from 'lucide-react';
 import {
@@ -93,6 +94,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   seqNumber,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
   const isComposingRef = useRef(false);
 
@@ -283,7 +285,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         onUpdate('', 'code', { language: lang, wrap: false }, true);
         return;
       }
-      const match = rawText.match(/^(#{1,3}|\[\]|\[ \]|---|-|\*|>)\s(.*)$/);
+      const match = rawText.match(/^(#{1,3}|\[\]|\[ \]|---|-|\*|>|>>|\d+\.)[\s\u00A0](.*)$/);
       if (match) {
         const trigger = match[1];
         const rest = match[2];
@@ -298,6 +300,12 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           initialProps = { checked: false };
         } else if (trigger === '-' || trigger === '*') nextType = 'bullet';
         else if (trigger === '>') nextType = 'quote';
+        else if (trigger === '>>') {
+          nextType = 'toggle';
+          initialProps = { isCollapsed: false };
+        } else if (/^\d+\.$/.test(trigger)) {
+          nextType = 'numbered';
+        }
 
         if (nextType !== 'p') {
           editorRef.current.innerHTML = rest;
@@ -554,7 +562,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   // 7. 原生富文本排版应用：严格锁定选区，消除失焦与局部失效
   const handleApplyFormat = (
-    format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear'
+    format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear' | 'color' | 'highlight',
+    colorValue?: string
   ) => {
     editorRef.current?.focus();
 
@@ -585,6 +594,30 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             el.parentNode?.replaceChild(textNode, el);
           }
         });
+      }
+    } else if (format === 'color' && colorValue) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const range = sel.getRangeAt(0);
+        const span = document.createElement('span');
+        span.style.color = colorValue;
+        const frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+        sel.removeAllRanges();
+      }
+    } else if (format === 'highlight' && colorValue) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const range = sel.getRangeAt(0);
+        const span = document.createElement('span');
+        span.style.backgroundColor = colorValue;
+        span.style.padding = '0.1rem 0.3rem';
+        span.style.borderRadius = '0.25rem';
+        const frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+        sel.removeAllRanges();
       }
     } else if (format === 'code') {
       const sel = window.getSelection();
@@ -668,6 +701,28 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     );
   };
 
+  // 12. 折叠列表折叠/展开与详情编辑流
+  const isToggleCollapsed = Boolean(block.properties?.isCollapsed);
+  const handleToggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onUpdate(
+      editorRef.current?.innerHTML || block.content,
+      block.blockType,
+      { ...block.properties, isCollapsed: !isToggleCollapsed },
+      true
+    );
+  };
+
+  const handleDetailsInput = () => {
+    if (!detailsRef.current) return;
+    onUpdate(
+      editorRef.current?.innerHTML || block.content,
+      block.blockType,
+      { ...block.properties, details: detailsRef.current.innerHTML },
+      false
+    );
+  };
+
   // 获取不同块类型的特定样式类
   const getBlockStyle = () => {
     switch (block.blockType) {
@@ -679,6 +734,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         return 'text-lg font-semibold text-slate-200 leading-snug';
       case 'quote':
         return 'italic text-slate-300 text-base leading-relaxed';
+      case 'toggle':
+        return 'text-base font-semibold text-slate-100 leading-relaxed';
       case 'code':
         return 'font-mono text-sm text-rose-300 leading-relaxed';
       default:
@@ -694,6 +751,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         return '二级标题...';
       case 'h3':
         return '三级标题...';
+      case 'toggle':
+        return '折叠列表标题...';
       case 'code': {
         const lang = (block.properties?.language as string) || '';
         return lang ? `// 输入或粘贴 ${lang} 代码...` : '// 输入或粘贴代码...';
@@ -934,6 +993,25 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         <div className="w-1 self-stretch bg-sky-500/40 rounded-full mr-3 shrink-0 my-0.5" />
       )}
 
+      {/* 折叠列表三角指示器 */}
+      {block.blockType === 'toggle' && (
+        <div className="pt-1 pr-1.5 shrink-0 select-none">
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleToggleCollapse}
+            className="w-5 h-5 rounded hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-emerald-400 transition-colors"
+            title={isToggleCollapsed ? '展开内容' : '收起内容'}
+          >
+            <ChevronRight
+              size={14}
+              className={`transition-transform duration-200 ${
+                isToggleCollapsed ? '' : 'rotate-90 text-emerald-400'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
       {/* 文本内容编辑与富文本渲染容器 */}
       {(() => {
         const currentLang = (block.properties?.language as string) || 'plaintext';
@@ -1132,6 +1210,21 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                   isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
                 }`}
               />
+            )}
+
+            {/* 折叠块展开的详情内容区域 */}
+            {block.blockType === 'toggle' && !isToggleCollapsed && (
+              <div className="w-full pl-4 border-l-2 border-emerald-500/30 ml-0.5 mt-1.5 mb-1 animate-in fade-in duration-150">
+                <div
+                  ref={detailsRef}
+                  contentEditable={true}
+                  suppressContentEditableWarning={true}
+                  onInput={handleDetailsInput}
+                  dangerouslySetInnerHTML={{ __html: (block.properties?.details as string) || '' }}
+                  data-placeholder="输入展开后的折叠内容..."
+                  className="w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-sm text-slate-300 leading-relaxed break-words"
+                />
+              </div>
             )}
           </div>
         );

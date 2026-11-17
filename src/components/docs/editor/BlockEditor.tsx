@@ -173,12 +173,42 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       .filter((item) => item.text !== '');
   }, [blocks]);
 
-  // 3. 点击大纲平滑滚动至对应锚点
+  // 2.5 实时文档阅读与字符统计 (防抖响应)
+  const docStats = useMemo(() => {
+    let rawText = '';
+    blocks.forEach((b) => {
+      const clean = b.content.replace(/<[^>]+>/g, ' ');
+      rawText += ' ' + clean;
+      if (b.properties?.details && typeof b.properties.details === 'string') {
+        rawText += ' ' + b.properties.details.replace(/<[^>]+>/g, ' ');
+      }
+    });
+
+    const chineseChars = (rawText.match(/[\u4e00-\u9fa5]/g) || []).length;
+    const englishWords = (rawText.replace(/[\u4e00-\u9fa5]/g, ' ').match(/[a-zA-Z0-9_-]+/g) || []).length;
+    const totalWords = chineseChars + englishWords;
+    const readTime = Math.max(1, Math.ceil(totalWords / 300));
+    const totalChars = rawText.replace(/\s+/g, '').length;
+
+    return {
+      chineseChars,
+      englishWords,
+      totalWords,
+      readTime,
+      totalChars,
+    };
+  }, [blocks]);
+
+  // 3. 点击大纲平滑滚动至对应锚点并微光聚焦
   const handleScrollToHeading = (blockId: string) => {
     const el = document.getElementById(`block-${blockId}`);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setFocusedBlockId(blockId);
+      el.classList.add('bg-white/[0.04]', 'rounded-lg');
+      setTimeout(() => {
+        el.classList.remove('bg-white/[0.04]', 'rounded-lg');
+      }, 1200);
     }
   };
 
@@ -317,7 +347,18 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <FileText size={14} className="text-sky-400" />
           <span className="truncate font-medium text-slate-200">{page.title || '无标题文档'}</span>
           <span className="text-slate-600">·</span>
-          <span className="text-[11px] text-slate-500">{blocks.length} 个块</span>
+          <span className="text-[11px] text-slate-500">{blocks.length} 块</span>
+          <span className="text-slate-600">·</span>
+          <span
+            className="text-[11px] text-slate-400 font-mono"
+            title={`中文字数: ${docStats.chineseChars}，英文字词: ${docStats.englishWords}，总字符: ${docStats.totalChars}`}
+          >
+            {docStats.totalWords} 字/词
+          </span>
+          <span className="text-slate-600">·</span>
+          <span className="text-[11px] text-emerald-400/80 font-mono">
+            ~{docStats.readTime} 分钟阅读
+          </span>
         </div>
 
         {/* 右侧动作栏：撤销/重做快捷入口与大纲控制入口 */}
@@ -484,6 +525,18 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 ))}
               </div>
             )}
+
+            {/* 底部阅读指标小结 */}
+            <div className="pt-2.5 mt-2 border-t border-white/5 text-[11px] text-slate-400 font-mono space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">文档字数</span>
+                <span className="text-slate-200">{docStats.totalWords}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">预计阅读</span>
+                <span className="text-emerald-400 font-sans">~{docStats.readTime} 分钟</span>
+              </div>
+            </div>
           </div>
         )}
       </div>

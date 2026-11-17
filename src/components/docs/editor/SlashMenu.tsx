@@ -13,6 +13,7 @@ import {
   Minus,
   Table,
   MessageSquare,
+  ChevronRight,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -102,6 +103,12 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     label: '多维表格',
     desc: '插入结构化多维数据库',
     icon: <Table size={14} className="text-indigo-400" />,
+  },
+  {
+    type: 'toggle',
+    label: '折叠列表',
+    desc: '可展开与收起内容的折叠块',
+    icon: <ChevronRight size={14} className="text-emerald-400" />,
   },
 ];
 
