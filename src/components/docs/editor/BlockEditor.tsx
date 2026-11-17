@@ -358,7 +358,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       {/* 主工作区：左侧正文编辑区（标题靠左） + 右侧目录大纲栏（相对向右缩进伴随索引） */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 页面内容正文区域 (标题与正文靠左主导阅读线) */}
-        <div className="flex-1 overflow-y-auto px-8 lg:px-12 py-8 min-w-0">
+        <div className="flex-1 overflow-y-auto px-8 lg:px-12 py-8 min-w-0 doc-typography">
           <div className="max-w-3xl lg:max-w-4xl space-y-4">
             {/* 文档图标与大标题 (字号精调为优雅收敛的 text-2xl font-semibold) */}
             <div className="space-y-2 mb-6">
@@ -395,7 +395,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 value={page.title}
                 onChange={(e) => onUpdatePageTitle(e.target.value)}
                 placeholder="无标题文档"
-                className="w-full text-2xl font-semibold text-white bg-transparent border-none outline-none placeholder-slate-600 leading-snug tracking-tight"
+                className="w-full text-3xl font-bold text-white bg-transparent border-none outline-none placeholder-slate-600 leading-snug tracking-tight"
               />
             </div>
 
@@ -420,7 +420,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             {/* 底部点击空白插入块 */}
             <div
               onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'p')}
-              className="py-12 cursor-text flex items-center justify-center text-xs text-slate-600 hover:text-slate-400 transition-colors"
+              className="py-12 cursor-text flex items-center justify-center text-sm text-slate-500 hover:text-slate-300 transition-colors"
             >
               点击此处添加新段落，或按 '/' 唤出格式菜单...
             </div>

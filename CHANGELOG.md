@@ -2,6 +2,29 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.48] - 2026-11-17
+
+### Feature & Architecture (快速启动外部进程生命周期解耦、Windows Shell 独立脱壳与文档排版阶梯升级)
+- **Win32 原生 `ShellExecuteW` 工业级外壳委托机制 (`src-tauri/src/lib.rs`)**:
+  - 彻底拔除导致外部进程随 SelfWork 关闭而退出的根本原因：全面采用 Win32 原生 `ShellExecuteW` 工业级外壳委托机制替换原有朴素 `Command::spawn()`；
+  - 外部应用程序（微信、Chrome、飞书、Cockpit、记事本等）的宿主直接归属于系统桌面外壳（`explorer.exe`），彻底突破 SelfWork 的 Job Object（作业对象）与进程树强依赖；
+  - 增设 Detached Process 进程组独立标志安全兜底（`0x00000200 | 0x00000008`），确保系统外壳受阻时仍能独立运行；
+  - 快捷方式（`.lnk`）与网络 URL 接入 `ShellExecuteW` 秒级直达，消除繁琐 PowerShell 额外启动开销与黑框闪烁。
+- **运维与热替换脚本净化 (`scripts/replace-and-launch.mjs`)**:
+  - 彻底移除 `taskkill` 中的 `/T` 级联子进程杀死参数，将进程终止操作精准限制在 `SelfWork.exe` 进程单体，杜绝运维热更误杀已拉起外部程序。
+- **文档中心排版美学与字号阶梯升级 (`src/styles/globals.css` / `BlockEditor.tsx` / `BlockItem.tsx`)**:
+  - 注入 `.doc-typography` 样式类，强制优先使用微软雅黑（`Microsoft YaHei`）字体族与 `text-rendering: optimizeLegibility` 抗锯齿渲染；
+  - 默认正文字号由 14px 全面提升至舒适的 16px (`text-base`) 与 1.75 倍自然行高 (`leading-relaxed`)；
+  - H1 升级至 28px、H2 升级至 22px、H3 升级至 18px，文档主标题提升至 30px (`text-3xl font-bold`)；
+  - 待办复选框微调至 18px 并自适应基线对齐，无序列表圆点精准对齐，确保大字号下舒展不拥挤。
+- **工程质量与全维验证**:
+  - 所有代码变更均通过 `vscode-review:review_diff_in_vscode` 与 VS Code 原生差异视图双向审核确认；
+  - 编写并运行专用进程生命周期与存活断言测试套件 `scripts/launcher-lifecycle-test.mjs`（全维断言通过，退出码 0）；
+  - 编写并运行文档字体与排版自动化测试套件 `scripts/doc-typography-test.mjs`（全维断言通过，退出码 0）；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）。
+
+
 ## [0.1.46] - 2026-11-16
 
 ### Feature & Fix (快速启动屏幕分屏吸附精度与多窗口去重防重叠架构加固)

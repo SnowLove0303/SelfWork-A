@@ -493,17 +493,17 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const getBlockStyle = () => {
     switch (block.blockType) {
       case 'h1':
-        return 'text-2xl font-bold text-white leading-tight';
+        return 'text-[28px] font-bold text-white leading-tight';
       case 'h2':
-        return 'text-xl font-semibold text-slate-100 leading-snug';
+        return 'text-[22px] font-semibold text-slate-100 leading-snug';
       case 'h3':
-        return 'text-base font-semibold text-slate-200 leading-snug';
+        return 'text-lg font-semibold text-slate-200 leading-snug';
       case 'quote':
-        return 'italic text-slate-300 text-sm leading-relaxed';
+        return 'italic text-slate-300 text-base leading-relaxed';
       case 'code':
-        return 'font-mono text-xs text-rose-300 leading-relaxed';
+        return 'font-mono text-sm text-rose-300 leading-relaxed';
       default:
-        return 'text-sm text-slate-200 leading-relaxed';
+        return 'text-base text-slate-200 leading-relaxed';
     }
   };
 
@@ -572,7 +572,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     <div
       id={`block-${block.id}`}
       onContextMenu={handleContextMenu}
-      className="group relative flex items-start py-0.5 my-0.5"
+      className="group relative flex items-start py-1 my-0.5"
     >
       {/* 悬浮操作侧柄 */}
       <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">
@@ -594,10 +594,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
       {/* 待办复选框 */}
       {block.blockType === 'todo' && (
-        <div className="pt-1.5 pr-2 shrink-0 select-none">
+        <div className="pt-1.5 pr-2.5 shrink-0 select-none">
           <button
             onClick={handleToggleTodo}
-            className={`w-4 h-4 rounded flex items-center justify-center transition-all ${
+            className={`w-[18px] h-[18px] rounded flex items-center justify-center transition-all ${
               isChecked
                 ? 'bg-cyan-500 text-black shadow-sm'
                 : 'border border-white/20 hover:border-cyan-400 bg-white/5'
@@ -610,7 +610,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
       {/* 无序列表圆点 */}
       {block.blockType === 'bullet' && (
-        <div className="pt-2 pr-2.5 shrink-0 select-none">
+        <div className="pt-2.5 pr-3 shrink-0 select-none">
           <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
         </div>
       )}

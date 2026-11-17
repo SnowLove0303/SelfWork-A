@@ -39,6 +39,16 @@ body {
 }
 
 /* ==========================================================================
+   文档中心排版美学与字体族不变量 (Document Typography Invariants)
+   ========================================================================== */
+.doc-typography {
+  font-family: "Microsoft YaHei", "微软雅黑", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
    抗挤压不变量与几何保护 (Anti-Squish Invariant Classes)
    ========================================================================== */
 .anti-squish {

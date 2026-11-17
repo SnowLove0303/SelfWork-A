@@ -31,10 +31,30 @@ fn workbench_ping(client_time_ms: Option<u64>) -> Result<PingResponse, String> {
     })
 }
 
+#[cfg(windows)]
+#[link(name = "shell32")]
+extern "system" {
+    fn ShellExecuteW(
+        hwnd: isize,
+        lpOperation: *const u16,
+        lpFile: *const u16,
+        lpParameters: *const u16,
+        lpDirectory: *const u16,
+        nShowCmd: i32,
+    ) -> isize;
+}
+
+#[cfg(windows)]
+fn str_to_wide_null(s: &str) -> Vec<u16> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+}
+
 /// 通用桌面启动命令：支持启动本地可执行程序、快捷方式 (.lnk)、目录或 URL 网址
-/// 针对 Windows 下本地 .exe 采用原生独立进程启动，未指定工作目录时自动继承其父目录以确保同级依赖加载
-/// 针对物理文件夹，通过 Windows 原生 explorer.exe 毫秒级直达唤起，彻底杜绝命令行黑框闪烁
-/// 针对 .lnk 快捷方式与 URL 网址，通过 Windows 原生通道可靠唤起
+/// 针对 Windows 下本地 .exe 优先通过原生 ShellExecuteW 委托桌面外壳 (explorer.exe) 独立拉起，彻底脱离父进程生命周期与作业容器限制
+/// 针对物理文件夹，通过 Windows 原生 explorer.exe /separate 毫秒级直达独立窗口唤起
+/// 针对 .lnk 快捷方式与 URL 网址，通过 Windows 原生 ShellExecuteW 秒级直达，消除 powershell 额外开销与黑框闪烁
 #[tauri::command]
 async fn launch_custom_target(
     target: String,
@@ -58,41 +78,67 @@ async fn launch_custom_target(
                 .map_or(false, |ext| ext.eq_ignore_ascii_case("exe"));
 
             if is_exe && target_path.exists() {
-                // 1. 本地可执行文件 (.exe): 直接原生独立进程启动，彻底规避 cmd.exe 引号截断
-                let mut cmd = std::process::Command::new(trimmed_target);
-                if let Some(arg_str) = args {
-                    let trimmed_args = arg_str.trim();
-                    if !trimmed_args.is_empty() {
-                        cmd.args(trimmed_args.split_whitespace());
-                    }
-                }
-
-                // 工作目录自动推导：未显式指定时，自动设置为可执行文件所在的父目录，解决微信/飞书等找不到同级 DLL 闪退
-                if let Some(dir) = working_dir {
+                // 1. 本地可执行文件 (.exe): 优先通过 Windows 原生 ShellExecuteW 委托桌面外壳 (explorer.exe) 独立拉起
+                // 彻底脱离 SelfWork 的 Job Object 与进程树依赖，保证 SelfWork 关闭/退出时外部应用持续正常存活
+                let effective_dir = if let Some(ref dir) = working_dir {
                     let trimmed_dir = dir.trim();
                     if !trimmed_dir.is_empty() {
-                        cmd.current_dir(trimmed_dir);
-                    } else if let Some(parent) = target_path.parent() {
-                        cmd.current_dir(parent);
+                        Some(trimmed_dir.to_string())
+                    } else {
+                        target_path.parent().map(|p| p.display().to_string())
                     }
-                } else if let Some(parent) = target_path.parent() {
-                    cmd.current_dir(parent);
-                }
+                } else {
+                    target_path.parent().map(|p| p.display().to_string())
+                };
 
-                cmd.spawn().map_err(|e| format!("启动应用程序失败: {}", e))?;
-                Ok(format!("成功唤起应用程序: {}", trimmed_target))
+                let op_wide = str_to_wide_null("open");
+                let file_wide = str_to_wide_null(trimmed_target);
+                let params_wide = args.as_ref().map(|a| str_to_wide_null(a.trim()));
+                let dir_wide = effective_dir.as_ref().map(|d| str_to_wide_null(d.trim()));
+
+                let ret = unsafe {
+                    ShellExecuteW(
+                        0,
+                        op_wide.as_ptr(),
+                        file_wide.as_ptr(),
+                        params_wide.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+                        dir_wide.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+                        1, // SW_SHOWNORMAL
+                    )
+                };
+
+                // ShellExecuteW 返回值 > 32 表示系统外壳成功拉起进程
+                if ret > 32 {
+                    Ok(format!("成功唤起应用程序: {}", trimmed_target))
+                } else {
+                    // 安全兜底：若系统外壳拉起受阻，降级使用注入脱离控制台与独立进程组标志的原生 Command
+                    let mut cmd = std::process::Command::new(trimmed_target);
+                    if let Some(ref arg_str) = args {
+                        let trimmed_args = arg_str.trim();
+                        if !trimmed_args.is_empty() {
+                            cmd.args(trimmed_args.split_whitespace());
+                        }
+                    }
+                    if let Some(ref dir) = effective_dir {
+                        cmd.current_dir(dir);
+                    }
+                    // 0x00000200 = CREATE_NEW_PROCESS_GROUP, 0x00000008 = DETACHED_PROCESS
+                    cmd.creation_flags(0x00000200 | 0x00000008);
+                    cmd.spawn().map_err(|e| format!("启动应用程序失败: {}", e))?;
+                    Ok(format!("成功唤起应用程序: {}", trimmed_target))
+                }
             } else if target_path.is_dir() {
                 // 2. 本地物理文件夹/目录：直接通过 Windows 原生资源管理器 (explorer.exe) 毫秒级直达唤起，0 命令行窗口闪烁
                 // 注入 /separate 参数，强制在独立新窗口打开，彻底杜绝 Windows 11 Explorer 自动合并到现有窗口的 Tabs 标签页中
                 let normalized = trimmed_target.replace('/', "\\");
                 let mut cmd = std::process::Command::new("explorer.exe");
                 cmd.args(["/separate", &normalized]);
+                cmd.creation_flags(0x00000200 | 0x00000008);
                 cmd.spawn().map_err(|e| format!("唤起文件资源管理器失败: {}", e))?;
                 Ok(format!("成功打开文件夹: {}", normalized))
             } else {
-                // 3. 快捷方式 (.lnk)、网页 URL 或脚本指令：通过 Windows 原生通道唤起
+                // 3. 快捷方式 (.lnk)、网页 URL 或脚本指令：优先通过 ShellExecuteW 委托原生通道秒级直达
                 // 若包含本地磁盘绝对路径但物理不存在，返回明确的错误提示 (REQ-LAUNCHER-FOLDER-06)
-                // 注意：必须明确排除网络协议 URL (http://, https://, ftp://, mailto:)，防止 URL 中的 ":/" 被误判为本地磁盘路径
                 let is_url = trimmed_target.starts_with("http://")
                     || trimmed_target.starts_with("https://")
                     || trimmed_target.starts_with("ftp://")
@@ -110,29 +156,59 @@ async fn launch_custom_target(
                     return Err(format!("目标路径不存在或无法访问: {}", trimmed_target));
                 }
 
-                let mut ps_script = format!("Start-Process -FilePath '{}'", trimmed_target.replace('\'', "''"));
-                if let Some(arg_str) = args {
-                    let trimmed_args = arg_str.trim();
-                    if !trimmed_args.is_empty() {
-                        ps_script.push_str(&format!(" -ArgumentList '{}'", trimmed_args.replace('\'', "''")));
+                // 优先通过 ShellExecuteW 唤起快捷方式与网页 URL，消除 powershell 启动开销与黑框闪烁
+                let effective_dir = working_dir.as_deref().or_else(|| {
+                    if target_path.exists() {
+                        target_path.parent().and_then(|p| p.to_str())
+                    } else {
+                        None
                     }
-                }
-                if let Some(dir) = working_dir {
-                    let trimmed_dir = dir.trim();
-                    if !trimmed_dir.is_empty() {
-                        ps_script.push_str(&format!(" -WorkingDirectory '{}'", trimmed_dir.replace('\'', "''")));
-                    }
-                } else if target_path.exists() {
-                    if let Some(parent) = target_path.parent() {
-                        ps_script.push_str(&format!(" -WorkingDirectory '{}'", parent.display().to_string().replace('\'', "''")));
-                    }
-                }
+                });
 
-                let mut cmd = std::process::Command::new("powershell.exe");
-                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-                cmd.args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script]);
-                cmd.spawn().map_err(|e| format!("唤起目标失败: {}", e))?;
-                Ok(format!("成功唤起: {}", trimmed_target))
+                let op_wide = str_to_wide_null("open");
+                let file_wide = str_to_wide_null(trimmed_target);
+                let params_wide = args.as_ref().map(|a| str_to_wide_null(a.trim()));
+                let dir_wide = effective_dir.map(str_to_wide_null);
+
+                let ret = unsafe {
+                    ShellExecuteW(
+                        0,
+                        op_wide.as_ptr(),
+                        file_wide.as_ptr(),
+                        params_wide.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+                        dir_wide.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+                        1, // SW_SHOWNORMAL
+                    )
+                };
+
+                if ret > 32 {
+                    Ok(format!("成功唤起: {}", trimmed_target))
+                } else {
+                    // 降级使用 powershell Start-Process
+                    let mut ps_script = format!("Start-Process -FilePath '{}'", trimmed_target.replace('\'', "''"));
+                    if let Some(arg_str) = args {
+                        let trimmed_args = arg_str.trim();
+                        if !trimmed_args.is_empty() {
+                            ps_script.push_str(&format!(" -ArgumentList '{}'", trimmed_args.replace('\'', "''")));
+                        }
+                    }
+                    if let Some(dir) = working_dir {
+                        let trimmed_dir = dir.trim();
+                        if !trimmed_dir.is_empty() {
+                            ps_script.push_str(&format!(" -WorkingDirectory '{}'", trimmed_dir.replace('\'', "''")));
+                        }
+                    } else if target_path.exists() {
+                        if let Some(parent) = target_path.parent() {
+                            ps_script.push_str(&format!(" -WorkingDirectory '{}'", parent.display().to_string().replace('\'', "''")));
+                        }
+                    }
+
+                    let mut cmd = std::process::Command::new("powershell.exe");
+                    cmd.creation_flags(0x08000000 | 0x00000200 | 0x00000008); // CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
+                    cmd.args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script]);
+                    cmd.spawn().map_err(|e| format!("唤起目标失败: {}", e))?;
+                    Ok(format!("成功唤起: {}", trimmed_target))
+                }
             }
         }
 

@@ -3,7 +3,7 @@ import fs from 'fs';
 
 console.log('[1/4] Killing running SelfWork.exe instances...');
 try {
-  execSync('taskkill /F /IM SelfWork.exe /T', { stdio: 'pipe' });
+  execSync('taskkill /F /IM SelfWork.exe', { stdio: 'pipe' });
   console.log('Killed existing SelfWork.exe');
 } catch (e) {
   console.log('No active SelfWork.exe found or already stopped');
