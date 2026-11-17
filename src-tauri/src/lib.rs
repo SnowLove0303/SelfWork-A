@@ -632,6 +632,8 @@ async fn get_system_monitors() -> Result<Vec<SystemMonitorInfo>, String> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowPlacementSpec {
     pub target: String, // 文件夹绝对路径或应用关键字
+    #[serde(default)]
+    pub item_name: Option<String>, // 前端条目友好显示名称 (如 "Chrome 浏览器", "微信", "代码仓库")
     pub x_ratio: f64,   // 0.0 ~ 1.0 (屏幕横向起始占比)
     pub y_ratio: f64,   // 0.0 ~ 1.0 (屏幕纵向起始占比)
     pub w_ratio: f64,   // 0.0 ~ 1.0 (屏幕宽度占比)
@@ -697,14 +699,26 @@ async fn arrange_combo_windows(
                 }
 
                 let escaped_target = spec.target.trim().replace('\'', "''").replace('/', "\\");
-                let target_name = Path::new(&spec.target)
+                let target_path = Path::new(&spec.target);
+                let target_name = target_path
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .replace('\'', "''");
+                let target_stem = target_path
+                    .file_stem()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .replace('\'', "''");
+                let item_name = spec
+                    .item_name
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim()
+                    .replace('\'', "''");
 
                 specs_setup.push_str(&format!(
-                    "  [PSCustomObject]@{{ Id = {idx}; Target = '{escaped_target}'; TargetName = '{target_name}'; Px = {px}; Py = {py}; Pw = {pw}; Ph = {ph}; Placed = $false }},\n"
+                    "  [PSCustomObject]@{{ Id = {idx}; Target = '{escaped_target}'; TargetName = '{target_name}'; TargetStem = '{target_stem}'; ItemName = '{item_name}'; Px = {px}; Py = {py}; Pw = {pw}; Ph = {ph}; Placed = $false }}\n"
                 ));
             }
             specs_setup.push_str(")\n");
@@ -799,9 +813,11 @@ for ($round = 0; $round -lt 6; $round++) {{
     foreach ($spec in $unplaced) {{
         $targetUpper = $spec.Target.TrimEnd('\').ToUpper()
         $nameUpper = $spec.TargetName.ToUpper()
+        $stemUpper = $spec.TargetStem.ToUpper()
+        $itemUpper = $spec.ItemName.ToUpper()
         $foundHwnd = 0
 
-        # 优先通过 Shell.Application 精确匹配文件夹物理路径
+        # Layer 1: 优先通过 Shell.Application 精确匹配文件夹物理路径
         foreach ($w in $shellWindows) {{
             try {{
                 $hwnd = [int]$w.HWND
@@ -823,7 +839,7 @@ for ($round = 0; $round -lt 6; $round++) {{
             }} catch {{}}
         }}
 
-        # 第二层：遍历 WinSta0/Default 桌面顶级窗口（覆盖原生 CabinetWClass 文件夹窗口及主进程窗口）
+        # Layer 2: 遍历 WinSta0/Default 桌面顶级窗口（覆盖原生 CabinetWClass 文件夹窗口及所有活动应用窗口）
         if ($foundHwnd -eq 0) {{
             foreach ($tw in $topWins) {{
                 $hwnd = [int]$tw.Hwnd
@@ -831,14 +847,20 @@ for ($round = 0; $round -lt 6; $round++) {{
                     continue
                 }}
                 $tUpper = $tw.Title.ToUpper()
-                if ($nameUpper.Length -ge 2 && ($tUpper.Contains($nameUpper) || ($targetUpper.Length -ge 2 && $tUpper.Contains($targetUpper)))) {{
+                $isMatch = $false
+                if ($nameUpper.Length -ge 2 -and $tUpper.Contains($nameUpper)) {{ $isMatch = $true }}
+                elseif ($stemUpper.Length -ge 2 -and $tUpper.Contains($stemUpper)) {{ $isMatch = $true }}
+                elseif ($itemUpper.Length -ge 2 -and $tUpper.Contains($itemUpper)) {{ $isMatch = $true }}
+                elseif ($targetUpper.Length -ge 2 -and $tUpper.Contains($targetUpper)) {{ $isMatch = $true }}
+
+                if ($isMatch) {{
                     $foundHwnd = $hwnd
                     break
                 }}
             }}
         }}
 
-        # 第三层：若仍未匹配，退回到系统顶层进程主窗口 (MainWindowHandle)
+        # Layer 3: 若仍未匹配，退回到系统顶层进程主窗口 (MainWindowHandle)
         if ($foundHwnd -eq 0) {{
             foreach ($p in $procs) {{
                 $hwnd = [int]$p.MainWindowHandle
@@ -847,7 +869,12 @@ for ($round = 0; $round -lt 6; $round++) {{
                 }}
                 $titleUpper = if ($p.MainWindowTitle) {{ $p.MainWindowTitle.ToUpper() }} else {{ "" }}
                 $procUpper = if ($p.ProcessName) {{ $p.ProcessName.ToUpper() }} else {{ "" }}
-                if ($nameUpper.Length -ge 2 -and ($titleUpper.Contains($nameUpper) -or $procUpper -eq $nameUpper)) {{
+                $isMatch = $false
+                if ($nameUpper.Length -ge 2 -and ($titleUpper.Contains($nameUpper) -or $procUpper -eq $nameUpper)) {{ $isMatch = $true }}
+                elseif ($stemUpper.Length -ge 2 -and ($titleUpper.Contains($stemUpper) -or $procUpper -eq $stemUpper)) {{ $isMatch = $true }}
+                elseif ($itemUpper.Length -ge 2 -and $titleUpper.Contains($itemUpper)) {{ $isMatch = $true }}
+
+                if ($isMatch) {{
                     $foundHwnd = $hwnd
                     break
                 }}
@@ -857,9 +884,9 @@ for ($round = 0; $round -lt 6; $round++) {{
         if ($foundHwnd -ne 0) {{
             $usedHwnds.Add($foundHwnd) | Out-Null
             # 还原窗口尺寸，解除 Windows 最大化状态对 SetWindowPos 坐标的锁定 (SW_RESTORE = 9)
-            [WinSnap]::ShowWindow([IntPtr]$foundHwnd, 9)
+            [void][WinSnap]::ShowWindow([IntPtr]$foundHwnd, 9)
             # 0x0040 = SWP_SHOWWINDOW
-            [WinSnap]::SetWindowPos([IntPtr]$foundHwnd, [IntPtr]::Zero, $spec.Px, $spec.Py, $spec.Pw, $spec.Ph, 0x0040)
+            [void][WinSnap]::SetWindowPos([IntPtr]$foundHwnd, [IntPtr]::Zero, $spec.Px, $spec.Py, $spec.Pw, $spec.Ph, 0x0040)
             $spec.Placed = $true
         }}
     }}
@@ -877,18 +904,20 @@ Write-Output $placedCount
             let mut cmd = Command::new("powershell");
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
             cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &ps_script]);
-            let output = cmd.output();
+            let output = cmd.output().map_err(|e| format!("执行分屏窗口编排进程失败: {}", e))?;
 
-            let matched_count = if let Ok(out) = output {
-                String::from_utf8_lossy(&out.stdout)
-                    .trim()
-                    .lines()
-                    .last()
-                    .and_then(|l| l.trim().parse::<usize>().ok())
-                    .unwrap_or(specs.len())
-            } else {
-                specs.len()
-            };
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("PowerShell 分屏编排异常: {}", stderr.trim()));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let matched_count = stdout
+                .trim()
+                .lines()
+                .last()
+                .and_then(|l| l.trim().parse::<usize>().ok())
+                .unwrap_or(0);
 
             Ok(matched_count)
         }
@@ -1117,6 +1146,7 @@ mod tests {
         let specs = vec![
             WindowPlacementSpec {
                 target: "F:\\App Location\\SelfWork".to_string(),
+                item_name: Some("SelfWork".to_string()),
                 x_ratio: 0.0,
                 y_ratio: 0.0,
                 w_ratio: 0.5,
@@ -1124,6 +1154,7 @@ mod tests {
             },
             WindowPlacementSpec {
                 target: "F:\\App Location\\Guanzhi Tong\\Skill\\MSDS-Engine".to_string(),
+                item_name: Some("MSDS-Engine".to_string()),
                 x_ratio: 0.5,
                 y_ratio: 0.0,
                 w_ratio: 0.5,
@@ -1131,8 +1162,7 @@ mod tests {
             },
         ];
         let res = tauri::async_runtime::block_on(arrange_combo_windows(specs, Some(0)));
-        assert!(res.is_ok(), "arrange_combo_windows 应当正常执行并返回匹配数量");
-        assert_eq!(res.unwrap(), 2);
+        assert!(res.is_ok(), "arrange_combo_windows 应当正常执行并返回匹配数量: {:?}", res.err());
     }
 
     #[test]

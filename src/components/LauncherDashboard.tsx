@@ -487,6 +487,7 @@ export const LauncherDashboard: React.FC = () => {
                 if (!targetItem) return null;
                 return {
                   item_id: targetItem.id,
+                  item_name: targetItem.name,
                   target: targetItem.target,
                   x_ratio: slot.xRatio,
                   y_ratio: slot.yRatio,
@@ -685,6 +686,7 @@ export const LauncherDashboard: React.FC = () => {
         .slice(0, selectedItems.length)
         .map((slot, idx) => ({
           item_id: selectedItems[idx].id,
+          item_name: selectedItems[idx].name,
           target: selectedItems[idx].target,
           x_ratio: slot.xRatio,
           y_ratio: slot.yRatio,

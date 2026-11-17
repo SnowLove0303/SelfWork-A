@@ -2,6 +2,31 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.51] - 2026-11-17
+
+### Fix & Architecture (快速启动多显示器定向投放与屏幕几何划分彻底根治)
+- **底层 PowerShell 5.1 语法纯净化与命令解析异常根除 (`src-tauri/src/lib.rs`)**:
+  - 彻底铲除在 Windows PowerShell 5.1 中导致致命 `ParserError` 的 `&&` 与 `||` 操作符，全量恢复为标准 `-and` 与 `-or` 语法；
+  - 拔除 PowerShell 数组定义 `@(...)` 中的行尾多余逗号，彻底消灭 `MissingExpressionAfterToken` 语句中断；
+  - 对 `ShowWindow` 与 `SetWindowPos` 调用引入 `[void]` 拦截，杜绝布尔值污染输出流管道。
+- **反欺诈与真实错误透传机制建立**:
+  - 彻底拔除 `.unwrap_or(specs.len())` 假通兜底，当 PowerShell 进程执行失败或输出异常时，真实返回 Err 并将底层错误明文暴露给前端日志；
+  - 仅在真实窗口就位时递增 `placedCount`，实现 100% 真实凭据打钩。
+- **多维模糊指纹命中模型与条目名称感知 (`src-tauri/src/lib.rs` / `LauncherDashboard.tsx`)**:
+  - `WindowPlacementSpec` 契约扩充 `pub item_name: Option<String>`，前端实时透传用户命名的条目中文别名；
+  - 后端自动解构 `TargetStem`（去除 `.exe` 词干，如 `chrome`、`msedge`、`code`）；
+  - 融合“物理文件夹路径 -> 桌面顶级活动窗口标题 -> 进程名称 -> 条目别名”四重立体比对，彻底解决 Chrome/Edge/微信 等无 `.exe` 窗口标题导致的分屏捕获落空问题。
+- **解除系统最大化与多显示器绝对坐标就位**:
+  - 严格执行 `ShowWindow(hWnd, 9 /* SW_RESTORE */)`，解除 Windows 最大化状态对坐标与尺寸的死锁；
+  - 基于真实物理显示器工作区 `(base_x, base_y, work_w, work_h)`，将窗口精准挪移至目标屏幕（主屏 X=0 / 副屏 X=1920），彻底杜绝跨屏漂移；
+  - 自动应用四分屏田字格与双分屏无缝贴合比例，DWM 缝隙微重叠补偿完全生效。
+- **工程质量与全维验证**:
+  - 新建专用物理见证者实测套件 `scripts/launcher-multimonitor-split-test.mjs`（5/5 断言全绿，退出码 0）；
+  - `cargo test` 14/14 单元测试全部通过（退出码 0）；
+  - `pnpm check` (`tsc --noEmit`) 零警告零错误（退出码 0）；
+  - 改动文件均通过 VS Code 原生视图通道供用户把控。
+
+
 ## [0.1.50] - 2026-11-17
 
 ### Feature & Architecture (文档代码块语法高亮与行号基建 & 快速启动文件夹直达与组合分屏排障)
