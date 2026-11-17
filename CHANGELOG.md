@@ -2,6 +2,65 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.53] - 2026-11-17
+
+### Feat (思维导图 P0+P1 — 折叠/展开、撤销/重做、键盘导航、彩虹分支、XMind 样式面板)
+
+- **P0-1 节点折叠/展开子树**：
+  - `Space` 键触发折叠/展开选中节点的子树；
+  - 折叠圆点指示器（右侧 `-right-2.5` 绝对定位），折叠时高亮为 `sky-400`，展开时为透明悬停；
+  - 折叠节点在 `layout.ts` 的 `measureSubtreeHeight` 中跳过子树递归，布局零误差；
+  - 工具栏新增「折叠全部」（`ChevronsDownUp`）/ 「展开全部」（`ChevronsUpDown`）按钮；`/` 键快速折叠全部。
+
+- **P0-2 完整键盘快捷键**：
+  - `Tab` → 添加子分支（原有，保留）
+  - `Enter` → 添加同级分支（原有，保留）
+  - `Delete/Backspace` → 删除选中节点（原有，保留）
+  - `Space` → 折叠/展开（**变更**：原为开始编辑）
+  - `F2` → 开始编辑节点（**变更**：原 Space/F2 均为编辑）
+  - `ArrowRight/Left/Up/Down` → 按空间邻近算法跳转至最近节点
+  - `Alt+ArrowUp/Down` → 节点在兄弟列表中上/下排序
+  - `Ctrl+Z` → 撤销 / `Ctrl+Y` / `Ctrl+Shift+Z` → 重做
+  - `Ctrl+D` → 复制选中节点（含完整子树，重新生成所有 id）
+  - `/` → 折叠全部
+
+- **P0-3 撤销/重做历史栈**：
+  - `undoStackRef`（MindMapNode 深克隆，最多 50 步）+ `redoStackRef`；
+  - 所有写操作（addChild / addSibling / delete / toggleCollapse / moveUp / moveDown / duplicate / collapseAll / expandAll）均在前调用 `pushUndo(root)`；
+  - 工具栏新增撤销（`Undo2`）/ 重做（`Redo2`）按钮，`canUndo` / `canRedo` prop 驱动灰化；
+  - 切换文档或新建文档时自动清空历史栈。
+
+- **P1 彩虹分支**：
+  - `RAINBOW_COLORS = ['#4F87FF','#FF6B6B','#FFD93D','#6BCB77','#C77DFF','#FF9A3C']`；
+  - 一级子树（depth=1）各自分配独立颜色，递归向下继承同色；
+  - `rainbowBranch=true` 时 `MindMapCanvas` 读取 `conn.color` 渲染彩色 SVG 路径；
+  - 彩虹分支 Toggle 位于右侧样式面板「分支」区。
+
+- **P1 XMind 风格样式面板**（新建 `MindMapStylePanel.tsx`）：
+  - 220px 宽，`bg-slate-900/95 backdrop-blur-xl` 毛玻璃深色右侧面板；
+  - 仅在选中节点时显示，三 Tab 结构（样式 / 演说 / 画布）；
+  - 形状切换：圆角矩形 / 矩形 / 胶囊；
+  - 填充颜色 / 边框颜色：8 色色板 + 自定义色轮；
+  - 文本：字号 slider（12-32）+ 加粗 / 斜体切换；
+  - 结构：「向右」/ 「双向」布局切换按钮；
+  - 分支：线条样式（曲线/折线/直线）+ 彩虹分支 Toggle + 单色颜色选择；
+  - 底部「重设样式」按钮清空节点自定义样式。
+
+- **P1 双向布局**：
+  - `layout.ts` 新增 `calculateBothLayout()`：偶数索引子树向左展开，奇数向右，根节点固定居中 x=480；
+  - 工具栏布局切换按钮（`ArrowRight` ↔ `ArrowLeftRight` 图标）；
+  - `MindMapCanvas` 根据 `layoutDirection` prop 决定调用哪套布局函数。
+
+- **节点自定义样式渲染**（`MindMapCanvas.tsx`）：
+  - `NodeCardItem` 读取 `node.style`，inline style 覆盖 background / borderColor / color / fontSize；
+  - 形状通过 `shapeClass` 切换 `rounded-lg` / `rounded-none` / `rounded-full`。
+
+- **架构变更**：
+  - `MindMapView.tsx` 新增 `layoutResultRef`（存储最新布局结果供键盘导航使用）；
+  - `MindMapCanvas` 新增 `onLayoutResultChange` 回调；
+  - `MindMapView` 渲染结构变更：画布区域改为 `flex flex-row`，右侧条件渲染样式面板；
+  - `MindMapToolbar` 从 `MindMapView` 提升至顶层渲染（原嵌套在画布层内）。
+
 ## [0.1.52] - 2026-11-17
 
 ### Feat (文档引擎：Callout 提示框 + 有序列表 + TOC 大纲)

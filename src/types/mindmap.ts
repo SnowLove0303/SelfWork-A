@@ -1,8 +1,20 @@
+export interface MindMapNodeStyle {
+  color?: string;
+  background?: string;
+  borderColor?: string;
+  fontSize?: number;
+  shape?: 'rounded' | 'rect' | 'pill';
+}
+
 export interface MindMapNode {
   id: string;
   title: string;
   children?: MindMapNode[];
   isRoot?: boolean;
+  collapsed?: boolean;
+  style?: MindMapNodeStyle;
+  markers?: string[];
+  link?: string;
 }
 
 export interface NodeLayout {
@@ -13,6 +25,7 @@ export interface NodeLayout {
   height: number;
   depth: number;
   parentId?: string;
+  isCollapsed?: boolean;
 }
 
 export interface MindMapPartition {
@@ -31,6 +44,9 @@ export interface MindMapDocument {
   updatedAt: number;
   isDeleted?: boolean;
   deletedAt?: number;
+  layout?: 'right' | 'both';
+  rainbowBranch?: boolean;
+  branchColor?: string;
 }
 
 export interface MindMapStorageData {

@@ -7,6 +7,12 @@ import {
   Download,
   Upload,
   GitFork,
+  Undo2,
+  Redo2,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ArrowRight,
+  ArrowLeftRight,
 } from 'lucide-react';
 
 interface MindMapToolbarProps {
@@ -17,6 +23,17 @@ interface MindMapToolbarProps {
   onDeleteSelected: () => void;
   onRecenter: () => void;
   onOpenIOModal: (mode: 'import' | 'export') => void;
+  // 撤销/重做
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  // 折叠操作
+  onCollapseAll?: () => void;
+  onExpandAll?: () => void;
+  // 布局方向
+  layoutDirection?: 'right' | 'both';
+  onLayoutChange?: (dir: 'right' | 'both') => void;
 }
 
 export const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
@@ -27,6 +44,14 @@ export const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
   onDeleteSelected,
   onRecenter,
   onOpenIOModal,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
+  onCollapseAll,
+  onExpandAll,
+  layoutDirection = 'right',
+  onLayoutChange,
 }) => {
   return (
     <div className="h-11 px-3.5 border-b border-border-default bg-canvas-default/40 backdrop-blur-md flex items-center justify-between shrink-0 select-none min-w-0">
@@ -77,6 +102,69 @@ export const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
         >
           <Trash2 className="w-3.5 h-3.5 shrink-0" />
           <span className="hidden md:inline">删除</span>
+        </button>
+
+        <div className="h-4 w-px bg-white/[0.10] mx-1 shrink-0" />
+
+        {/* 撤销 */}
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="撤销 (Ctrl+Z)"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-fg-muted hover:text-fg-primary hover:bg-white/[0.06] border border-white/[0.06] disabled:opacity-25 disabled:pointer-events-none transition-colors tactile-btn shrink-0"
+        >
+          <Undo2 className="w-3.5 h-3.5 shrink-0" />
+        </button>
+
+        {/* 重做 */}
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={!canRedo}
+          title="重做 (Ctrl+Y / Ctrl+Shift+Z)"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-fg-muted hover:text-fg-primary hover:bg-white/[0.06] border border-white/[0.06] disabled:opacity-25 disabled:pointer-events-none transition-colors tactile-btn shrink-0"
+        >
+          <Redo2 className="w-3.5 h-3.5 shrink-0" />
+        </button>
+
+        <div className="h-4 w-px bg-white/[0.10] mx-1 shrink-0" />
+
+        {/* 折叠全部 */}
+        <button
+          type="button"
+          onClick={onCollapseAll}
+          title="折叠全部 (/)"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-fg-muted hover:text-fg-primary hover:bg-white/[0.06] border border-white/[0.06] transition-colors tactile-btn shrink-0"
+        >
+          <ChevronsDownUp className="w-3.5 h-3.5 shrink-0" />
+        </button>
+
+        {/* 展开全部 */}
+        <button
+          type="button"
+          onClick={onExpandAll}
+          title="展开全部"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-fg-muted hover:text-fg-primary hover:bg-white/[0.06] border border-white/[0.06] transition-colors tactile-btn shrink-0"
+        >
+          <ChevronsUpDown className="w-3.5 h-3.5 shrink-0" />
+        </button>
+
+        <div className="h-4 w-px bg-white/[0.10] mx-1 shrink-0" />
+
+        {/* 布局方向切换 */}
+        <button
+          type="button"
+          onClick={() => onLayoutChange?.(layoutDirection === 'right' ? 'both' : 'right')}
+          title={layoutDirection === 'right' ? '切换为双向布局' : '切换为向右布局'}
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-fg-muted hover:text-fg-primary hover:bg-white/[0.06] border border-white/[0.06] transition-colors tactile-btn shrink-0 whitespace-nowrap"
+        >
+          {layoutDirection === 'right' ? (
+            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+          ) : (
+            <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" />
+          )}
+          <span className="hidden lg:inline">{layoutDirection === 'right' ? '向右' : '双向'}</span>
         </button>
       </div>
 
