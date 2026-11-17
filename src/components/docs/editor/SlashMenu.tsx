@@ -7,10 +7,12 @@ import {
   Type,
   CheckSquare,
   List,
+  ListOrdered,
   Quote,
   Code,
   Minus,
   Table,
+  MessageSquare,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -56,7 +58,7 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   {
     type: 'todo',
     label: '待办清单',
-    desc: '支持打勾核销的交互式复选清单',
+    desc: '支持打勾标销的交互式复选清单',
     icon: <CheckSquare size={14} className="text-purple-400" />,
   },
   {
@@ -66,21 +68,33 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     icon: <List size={14} className="text-cyan-400" />,
   },
   {
+    type: 'numbered',
+    label: '有序列表',
+    desc: '自动编号序列内容条目',
+    icon: <ListOrdered size={14} className="text-blue-400" />,
+  },
+  {
+    type: 'callout',
+    label: '提示框（Callout）',
+    desc: '带图标的色彩信息卡片块',
+    icon: <MessageSquare size={14} className="text-violet-400" />,
+  },
+  {
     type: 'quote',
-    label: '引用区块',
-    desc: '竖线高亮标注的引述段落',
+    label: '引用块',
+    desc: '竖线高亮标注的引述萸萝',
     icon: <Quote size={14} className="text-yellow-400" />,
   },
   {
     type: 'code',
     label: '代码块',
-    desc: '等宽字体代码与高亮卡片',
+    desc: '等宽字体代码与高亮显示',
     icon: <Code size={14} className="text-rose-400" />,
   },
   {
     type: 'divider',
     label: '水平分隔线',
-    desc: '视觉视觉内容分割线',
+    desc: '视觉分割内容的线条',
     icon: <Minus size={14} className="text-slate-500" />,
   },
   {
@@ -120,7 +134,7 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
       className="fixed z-50 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1.5 text-slate-200 animate-in fade-in zoom-in-95 duration-100 max-h-72 overflow-y-auto"
     >
       <div className="px-2 py-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-        基础区块类型
+        基础块类型
       </div>
       <div className="space-y-0.5">
         {SLASH_MENU_ITEMS.map((item, idx) => (

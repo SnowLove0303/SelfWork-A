@@ -17,7 +17,9 @@ import {
   Type,
   CheckSquare,
   List,
+  ListOrdered,
   Quote,
+  MessageSquare,
   ChevronRight,
 } from 'lucide-react';
 
@@ -276,6 +278,28 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             >
               <List size={13} className="text-cyan-400" />
               <span>项目符号 (Bullet)</span>
+            </button>
+
+            {/* 有序列表 */}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onTurnInto('numbered')}
+              onMouseEnter={() => setHeadingSubmenuOpen(false)}
+              className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+            >
+              <ListOrdered size={13} className="text-blue-400" />
+              <span>有序列表 (Numbered)</span>
+            </button>
+
+            {/* 提示框 */}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onTurnInto('callout')}
+              onMouseEnter={() => setHeadingSubmenuOpen(false)}
+              className="w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+            >
+              <MessageSquare size={13} className="text-violet-400" />
+              <span>提示框 (Callout)</span>
             </button>
 
             {/* 引用区块 */}

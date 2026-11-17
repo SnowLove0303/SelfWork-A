@@ -6,6 +6,8 @@ export type BlockType =
   | 'h3'
   | 'todo'
   | 'bullet'
+  | 'numbered'
+  | 'callout'
   | 'quote'
   | 'code'
   | 'divider'

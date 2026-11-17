@@ -50,6 +50,8 @@ interface BlockItemProps {
   onFocusPrev: () => void;
   onFocusNext: () => void;
   autoFocus?: boolean;
+  /** 有序列表块的序号（由 BlockEditor 计算后注入，仅 numbered 类型有效） */
+  seqNumber?: number;
 }
 
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
@@ -88,6 +90,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   onFocusPrev,
   onFocusNext,
   autoFocus,
+  seqNumber,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
@@ -113,6 +116,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [lineCount, setLineCount] = useState(() =>
     Math.max(1, (block.content || '').split('\n').length)
   );
+
+  // Callout 块图标选择器状态
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   // 1. 初始化与外部状态同步：解耦本地打字与撤销/重做
   useEffect(() => {
@@ -443,7 +449,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
       // 空待办或空列表：回车降级为普通段落
       if (
-        (block.blockType === 'bullet' || block.blockType === 'todo') &&
+        (block.blockType === 'bullet' || block.blockType === 'todo' || block.blockType === 'numbered') &&
         text === ''
       ) {
         if (editorRef.current) editorRef.current.innerHTML = '';
@@ -457,6 +463,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
       if (block.blockType === 'todo') {
         onInsertBelow('todo');
+        return;
+      }
+      if (block.blockType === 'numbered') {
+        onInsertBelow('numbered');
+        return;
+      }
+      // callout 内部回车：在当前 callout 下方插入段落
+      if (block.blockType === 'callout') {
+        onInsertBelow('p');
         return;
       }
 
@@ -683,10 +698,136 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         const lang = (block.properties?.language as string) || '';
         return lang ? `// 输入或粘贴 ${lang} 代码...` : '// 输入或粘贴代码...';
       }
+      case 'numbered':
+        return '有序列表项...';
+      case 'callout':
+        return '提示内容...';
       default:
         return "输入文本，或按 '/' 唤出菜单...";
     }
   };
+
+  // Callout 提示框特殊渲染（带图标与主题色背景）
+  if (block.blockType === 'callout') {
+    const calloutTheme = (block.properties?.theme as string) || 'info';
+    const calloutIcon = (block.properties?.icon as string) || '💡';
+    const themeClasses: Record<string, string> = {
+      info: 'bg-sky-500/10 border-sky-500/30 text-sky-200',
+      warn: 'bg-amber-500/10 border-amber-500/30 text-amber-200',
+      success: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200',
+      tip: 'bg-violet-500/10 border-violet-500/30 text-violet-200',
+    };
+    const themeClass = themeClasses[calloutTheme] || themeClasses['info'];
+    const CALLOUT_ICONS = ['💡', '📌', '⚠️', '✅', '📢', '🔥', '❗', '🎯', '📝', '🚀'];
+    // showIconPicker / setShowIconPicker 来自顶层 state（已声明在组件顶部）
+
+    return (
+      <div id={`block-${block.id}`} className="group relative flex items-start py-1 my-0.5">
+        {/* 悬浮侧柄 */}
+        <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">
+          <button
+            onClick={() => onInsertBelow('p')}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
+            title="在下方插入块"
+          >
+            <Plus size={12} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+            title="删除块"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+
+        {/* 主体卡片 */}
+        <div className={`flex-1 flex items-start gap-3 p-3 rounded-xl border ${themeClass}`}>
+          {/* 图标选择器 */}
+          <div className="relative shrink-0">
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setShowIconPicker(!showIconPicker)}
+              className="text-xl hover:bg-white/10 p-1 rounded-lg transition-colors leading-none select-none"
+              title="更换图标"
+            >
+              {calloutIcon}
+            </button>
+            {showIconPicker && (
+              <div className="absolute left-0 top-full mt-1 bg-slate-900/95 border border-white/15 rounded-xl shadow-2xl p-2 z-50 flex flex-wrap gap-1 w-44 backdrop-blur-md animate-in fade-in duration-100">
+                {CALLOUT_ICONS.map((ico) => (
+                  <button
+                    key={ico}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onUpdate(block.content, 'callout', { ...block.properties, icon: ico }, true);
+                      setShowIconPicker(false);
+                    }}
+                    className="text-lg p-1.5 hover:bg-white/10 rounded-lg transition-transform hover:scale-110"
+                  >
+                    {ico}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 可编辑内容区 */}
+          <div
+            ref={editorRef}
+            contentEditable={true}
+            suppressContentEditableWarning={true}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            onKeyUp={checkSelection}
+            onMouseUp={handleMouseUp}
+            onContextMenu={handleContextMenu}
+            data-placeholder={getPlaceholder()}
+            className="flex-1 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-base leading-relaxed break-words"
+          />
+        </div>
+
+        {/* 主题切换微胶囊（悬停显示） */}
+        <div className="absolute right-0 top-1 opacity-0 group-hover:opacity-100 transition-opacity select-none flex gap-0.5 mr-1">
+          {(['info', 'warn', 'success', 'tip'] as const).map((t) => (
+            <button
+              key={t}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onUpdate(block.content, 'callout', { ...block.properties, theme: t }, true)}
+              className={`w-3 h-3 rounded-full border border-white/20 transition-transform hover:scale-125 ${
+                t === 'info' ? 'bg-sky-400' : t === 'warn' ? 'bg-amber-400' : t === 'success' ? 'bg-emerald-400' : 'bg-violet-400'
+              } ${calloutTheme === t ? 'scale-125 ring-1 ring-white/50' : ''}`}
+              title={t}
+            />
+          ))}
+        </div>
+
+        {/* 划选浮动微光工具栏 */}
+        {floatingToolbarOpen && (
+          <FloatingFormatToolbar
+            position={floatingToolbarPos}
+            onApplyFormat={handleApplyFormat}
+            onClose={() => setFloatingToolbarOpen(false)}
+          />
+        )}
+
+        {/* 划选右键菜单 */}
+        {contextMenuOpen && (
+          <BlockContextMenu
+            position={contextMenuPos}
+            hasSelection={Boolean(savedSelectionText)}
+            selectedText={savedSelectionText}
+            currentBlockType={block.blockType}
+            onApplyFormat={handleApplyFormat}
+            onTurnInto={handleTurnInto}
+            onCopy={handleCopy}
+            onCut={handleCut}
+            onClose={() => setContextMenuOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
   // 分隔线特殊渲染
   if (block.blockType === 'divider') {
@@ -778,6 +919,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       {block.blockType === 'bullet' && (
         <div className="pt-2.5 pr-3 shrink-0 select-none">
           <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+        </div>
+      )}
+
+      {/* 有序列表序号 */}
+      {block.blockType === 'numbered' && (
+        <div className="pt-[3px] pr-2 shrink-0 select-none min-w-[1.5rem] text-right">
+          <span className="text-sm font-mono text-slate-400">{seqNumber ?? 1}.</span>
         </div>
       )}
 

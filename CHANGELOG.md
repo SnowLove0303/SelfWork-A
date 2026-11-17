@@ -2,6 +2,40 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.52] - 2026-11-17
+
+### Feat (文档引擎：Callout 提示框 + 有序列表 + TOC 大纲)
+
+- **新增 `callout` 块类型（提示框）**：
+  - 支持 4 种主题：`info`（天蓝）、`warn`（琥珀）、`success`（翠绿）、`tip`（紫罗兰），背景色 + 边框 + 文字三联动；
+  - 左侧图标支持点击选择（10 个预设 Emoji），悬停右侧展示主题切换 4 色圆点微胶囊；
+  - 斜杠菜单 `/callout` 触发；回车在 callout 下方新建段落，退格空内容降级为普通段落；
+  - 完整富文本编辑（加粗、斜体、代码行内、划线）+ 右键上下文菜单 + 浮动格式工具栏全部继承。
+
+- **新增 `numbered` 块类型（有序列表）**：
+  - BlockEditor 预计算连续序号注入每个 `numbered` 块（遇到非 `numbered` 块重置计数，严格按数组顺序从 1 开始）；
+  - 左侧等宽序号 `1.` 字样以 `font-mono text-slate-400` 渲染，视觉与无序列表圆点对齐；
+  - 斜杠菜单 `/numbered` 触发；回车继承 `numbered` 类型插入下一条，空行回车降级为 `p`；退格行首降级为段落；
+  - 富文本能力与浮动工具栏完整继承。
+
+- **TOC 目录大纲（已内置于 BlockEditor）**：确认已完整实现：
+  - 自动提取所有 `h1` / `h2` / `h3` 块构建大纲条目，右侧 `目录大纲` 面板实时渲染（带层级缩进）；
+  - 点击任意条目触发 `scrollIntoView({ behavior: 'smooth' })`，精准平滑定位至对应块的 `id=block-{id}` 锚点；
+  - 支持一键展开/收起，顶栏按钮带条目计数显示。
+
+- **BlockType 类型扩展 (`src/types/docs.ts`)**：
+  - 联合类型新增 `'numbered'` 和 `'callout'`；不影响既有类型，向后兼容 SQLite `block_type` TEXT 存储。
+
+- **SlashMenu 新增两项 (`SlashMenu.tsx`)**：
+  - `numbered`：`ListOrdered` 蓝色图标，标签「有序列表」；
+  - `callout`：`MessageSquare` 紫色图标，标签「提示框（Callout）」。
+
+### 工程质量
+- `tsc --noEmit` 零错误零警告 (exit 0)；
+- `cargo test` 14/14 通过 (exit 0)；
+- 生产构建 `tauri build --no-bundle` 成功；
+- 通过 `vscode-review` diff 工具确保所有变更均经 VS Code 检阅。
+
 ## [0.1.51] - 2026-11-17
 
 ### Fix & Architecture (快速启动多显示器定向投放与屏幕几何划分彻底根治)

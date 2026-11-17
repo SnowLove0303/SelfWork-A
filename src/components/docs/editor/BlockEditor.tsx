@@ -401,20 +401,36 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
             {/* 块流渲染 */}
             <div className="space-y-0.5 min-h-[400px]">
-              {blocks.map((block) => (
-                <BlockItem
-                  key={block.id}
-                  block={block}
-                  autoFocus={focusedBlockId === block.id}
-                  onUpdate={(content, blockType, properties, isStructural) =>
-                    handleUpdateBlock(block.id, content, blockType, properties, isStructural)
+              {blocks.map((block, idx) => {
+                // 计算有序列表块的连续序号（遇到非 numbered 块重置计数）
+                let seqNumber: number | undefined;
+                if (block.blockType === 'numbered') {
+                  let count = 0;
+                  for (let i = idx; i >= 0; i--) {
+                    if (blocks[i].blockType === 'numbered') {
+                      count++;
+                    } else {
+                      break;
+                    }
                   }
-                  onDelete={() => handleDeleteBlock(block.id)}
-                  onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
-                  onFocusPrev={() => handleFocusPrev(block.id)}
-                  onFocusNext={() => handleFocusNext(block.id)}
-                />
-              ))}
+                  seqNumber = count;
+                }
+                return (
+                  <BlockItem
+                    key={block.id}
+                    block={block}
+                    seqNumber={seqNumber}
+                    autoFocus={focusedBlockId === block.id}
+                    onUpdate={(content, blockType, properties, isStructural) =>
+                      handleUpdateBlock(block.id, content, blockType, properties, isStructural)
+                    }
+                    onDelete={() => handleDeleteBlock(block.id)}
+                    onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
+                    onFocusPrev={() => handleFocusPrev(block.id)}
+                    onFocusNext={() => handleFocusNext(block.id)}
+                  />
+                );
+              })}
             </div>
 
             {/* 底部点击空白插入块 */}
