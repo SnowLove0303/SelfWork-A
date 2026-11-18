@@ -12,6 +12,12 @@ import {
   WrapText,
   ChevronDown,
   ListOrdered,
+  Image as ImageIcon,
+  Upload,
+  RefreshCw,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react';
 import {
   highlightCode,
@@ -57,6 +63,13 @@ interface BlockItemProps {
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
 function markdownToHtml(raw: string): string {
   if (!raw) return '';
+  // 若包含 ==高亮== 语法糖，先替换为 <mark>
+  if (raw.includes('==')) {
+    raw = raw.replace(
+      /==([^=]+)==/g,
+      '<mark style="background:#FFD93D40; border-radius:3px; padding:0 2px;">$1</mark>'
+    );
+  }
   // 若已包含标准 HTML 标签，直接返回
   if (
     raw.includes('<strong>') ||
@@ -82,6 +95,10 @@ function markdownToHtml(raw: string): string {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/~~(.+?)~~/g, '<del class="line-through text-slate-500">$1</del>')
+    .replace(
+      /==([^=]+)==/g,
+      '<mark style="background:#FFD93D40; border-radius:3px; padding:0 2px;">$1</mark>'
+    )
     .replace(
       /`([^`]+)`/g,
       '<code class="px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs">$1</code>'
@@ -131,6 +148,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   // Callout 块图标选择器状态
   const [showIconPicker, setShowIconPicker] = useState(false);
+
+  // 图片块状态
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 1. 初始化与外部状态同步：解耦本地打字与撤销/重做
   useEffect(() => {
@@ -295,7 +316,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         onUpdate('', 'code', { language: lang, wrap: false }, true);
         return;
       }
-      const match = rawText.match(/^(#{1,3}|\[\]|\[ \]|---|-|\*|>)\s(.*)$/);
+
+      // 匹配行首折叠块语法糖 >> 
+      if (rawText.startsWith('>> ')) {
+        const rest = rawText.slice(3);
+        editorRef.current.innerHTML = rest;
+        onUpdate(rest, 'toggle', { isOpen: true }, true);
+        return;
+      }
+
+      const match = rawText.match(/^(#{1,3}|\[\]|\[ \]|---|-|\*|>|1\.)\s(.*)$/);
       if (match) {
         const trigger = match[1];
         const rest = match[2];
@@ -310,12 +340,28 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           initialProps = { checked: false };
         } else if (trigger === '-' || trigger === '*') nextType = 'bullet';
         else if (trigger === '>') nextType = 'quote';
+        else if (trigger === '1.') nextType = 'numbered';
 
         if (nextType !== 'p') {
           editorRef.current.innerHTML = rest;
           onUpdate(rest, nextType, initialProps, true);
           return;
         }
+      }
+    }
+
+    // 支持行内输入 ==高亮文本== 敲空格即时转换为 <mark> 标签
+    if (editorRef.current && /==([^=]+)==(\s)$/.test(rawText)) {
+      const caret = getCaretOffset(editorRef.current);
+      const convertedHtml = editorRef.current.innerHTML.replace(
+        /==([^=]+)==(\s|&nbsp;)$/g,
+        '<mark style="background:#FFD93D40; border-radius:3px; padding:0 2px;">$1</mark>&nbsp;'
+      );
+      if (convertedHtml !== editorRef.current.innerHTML) {
+        editorRef.current.innerHTML = convertedHtml;
+        restoreCaretOffset(editorRef.current, caret);
+        onUpdate(editorRef.current.innerHTML);
+        return;
       }
     }
 
@@ -705,6 +751,20 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     setFloatingToolbarOpen(false);
   };
 
+  // 块级文字对齐应用
+  const handleApplyAlign = (align: 'left' | 'center' | 'right') => {
+    block.format = {
+      ...block.format,
+      textAlign: align,
+    };
+    onUpdate(
+      editorRef.current?.innerHTML || block.content,
+      block.blockType,
+      block.properties,
+      true
+    );
+  };
+
   // 8. 块类型转换 (Turn Into)
   const handleTurnInto = (newType: BlockType) => {
     const currentHtml = editorRef.current?.innerHTML || block.content;
@@ -874,6 +934,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             onMouseUp={handleMouseUp}
             onContextMenu={handleContextMenu}
             data-placeholder={getPlaceholder()}
+            style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
             className="flex-1 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-base leading-relaxed break-words"
           />
         </div>
@@ -900,6 +961,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             onApplyFormat={handleApplyFormat}
             onApplyLink={handleApplyLink}
             onApplyHighlight={handleApplyHighlight}
+            onApplyAlign={handleApplyAlign}
             onClose={() => setFloatingToolbarOpen(false)}
           />
         )}
@@ -963,6 +1025,218 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             <div className="text-xs font-semibold text-white">多维表格数据库视图</div>
             <div className="text-[11px] text-slate-500">点击左侧切换为独立全功能表格编辑</div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 图片块渲染（支持本地上传 base64 与网络图片 URL 嵌入）
+  if (block.blockType === 'image') {
+    const src = block.properties?.src as string | undefined;
+    const caption = (block.properties?.caption as string) || '';
+    const align = (block.format?.textAlign as 'left' | 'center' | 'right') || 'left';
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        onUpdate(block.content, 'image', { ...block.properties, src: base64 }, true);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    const handleConfirmUrl = () => {
+      const url = imageUrlInput.trim();
+      if (!url) return;
+      onUpdate(block.content, 'image', { ...block.properties, src: url }, true);
+      setImageUrlInput('');
+    };
+
+    if (!src) {
+      return (
+        <div id={`block-${block.id}`} className="group relative flex items-start py-2 my-1">
+          {/* 悬浮操作侧柄 */}
+          <div className="absolute -left-8 top-2 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
+            <button
+              onClick={() => onInsertBelow('p')}
+              className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
+              title="在下方插入块"
+            >
+              <Plus size={12} />
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+              title="删除块"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+
+          {/* 空状态：优雅浅灰边框卡片 */}
+          <div className="flex-1 p-5 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col items-center justify-center gap-3.5 text-center">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
+              <ImageIcon size={20} />
+            </div>
+            <div>
+              <div className="text-xs font-medium text-slate-200">添加图片</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">支持上传本地图片或嵌入网络图片 URL</div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 w-full max-w-md pt-1">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              >
+                <Upload size={13} className="text-pink-400" />
+                <span>点击上传本地图片</span>
+              </button>
+
+              <span className="text-[11px] text-slate-600">或</span>
+
+              <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                <input
+                  type="text"
+                  value={imageUrlInput}
+                  onChange={(e) => setImageUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmUrl();
+                    }
+                  }}
+                  placeholder="输入网络图片 URL..."
+                  className="flex-1 px-3 py-1.5 bg-black/40 border border-white/15 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-pink-500/50 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleConfirmUrl}
+                  className="px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 hover:text-pink-200 text-xs font-medium transition-colors cursor-pointer shrink-0"
+                >
+                  插入
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        id={`block-${block.id}`}
+        className="group relative py-2 my-1.5"
+        style={{ textAlign: align }}
+      >
+        {/* 悬浮操作侧柄 */}
+        <div className="absolute -left-8 top-2 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
+          <button
+            onClick={() => onInsertBelow('p')}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
+            title="在下方插入块"
+          >
+            <Plus size={12} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+            title="删除块"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+
+        {/* 已载入图片主体 */}
+        <div className="relative inline-block max-w-full">
+          <img
+            src={src}
+            alt={caption || 'image'}
+            className="rounded-xl border border-white/10 max-h-[500px] object-contain mx-auto shadow-lg"
+          />
+
+          {/* 悬停显示「更换」与「删除」小胶囊（含快速对齐） */}
+          <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity select-none flex items-center gap-1 bg-slate-950/80 backdrop-blur-md border border-white/15 rounded-lg px-2 py-1 shadow-xl z-10">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 text-[11px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
+              title="更换本地图片"
+            >
+              <RefreshCw size={11} className="text-pink-400" />
+              <span>更换</span>
+            </button>
+            <div className="w-px h-3 bg-white/20" />
+            <button
+              type="button"
+              onClick={() => handleApplyAlign('left')}
+              className={`p-1 rounded hover:bg-white/10 transition-colors ${align === 'left' ? 'text-sky-400' : 'text-slate-400'}`}
+              title="左对齐"
+            >
+              <AlignLeft size={11} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyAlign('center')}
+              className={`p-1 rounded hover:bg-white/10 transition-colors ${align === 'center' ? 'text-sky-400' : 'text-slate-400'}`}
+              title="居中"
+            >
+              <AlignCenter size={11} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyAlign('right')}
+              className={`p-1 rounded hover:bg-white/10 transition-colors ${align === 'right' ? 'text-sky-400' : 'text-slate-400'}`}
+              title="右对齐"
+            >
+              <AlignRight size={11} />
+            </button>
+            <div className="w-px h-3 bg-white/20" />
+            <button
+              type="button"
+              onClick={onDelete}
+              className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
+              title="删除图片块"
+            >
+              <Trash2 size={11} />
+              <span>删除</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 下方提供可编辑的 Caption 输入框 */}
+        <div className="mt-1.5 max-w-full">
+          <input
+            type="text"
+            value={caption}
+            onChange={(e) => {
+              onUpdate(
+                block.content,
+                'image',
+                { ...block.properties, caption: e.target.value },
+                false
+              );
+            }}
+            placeholder="添加图片说明 (Caption)..."
+            className="w-full max-w-md bg-transparent border-none outline-none text-xs text-slate-400 placeholder-slate-600 focus:text-slate-200 transition-colors inline-block"
+            style={{ textAlign: align }}
+          />
         </div>
       </div>
     );
@@ -1042,6 +1316,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                 ? 'p-3.5 bg-slate-950/85 border border-white/10 rounded-xl my-1.5 shadow-inner relative group/code'
                 : ''
             }`}
+            style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
           >
             {/* 代码块右上角悬浮微光操作胶囊栏 */}
             {block.blockType === 'code' && (
@@ -1223,6 +1498,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                 onMouseUp={handleMouseUp}
                 onContextMenu={handleContextMenu}
                 data-placeholder={getPlaceholder()}
+                style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
                 className={`w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} break-words ${
                   isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
                 }`}
@@ -1239,6 +1515,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           onApplyFormat={handleApplyFormat}
           onApplyLink={handleApplyLink}
           onApplyHighlight={handleApplyHighlight}
+          onApplyAlign={handleApplyAlign}
           onClose={() => setFloatingToolbarOpen(false)}
         />
       )}

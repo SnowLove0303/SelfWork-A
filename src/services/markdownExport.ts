@@ -86,6 +86,9 @@ export function exportBlocksToMarkdown(
       case 'divider':
         lines.push('---', '');
         break;
+      case 'image':
+        lines.push(`![${block.properties?.caption || 'image'}](${block.properties?.src || ''})`, '');
+        break;
       default:
         if (text) lines.push(text, '');
     }

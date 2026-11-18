@@ -14,6 +14,7 @@ import {
   Table,
   MessageSquare,
   ChevronRight,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -109,6 +110,12 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     label: '多维表格',
     desc: '插入结构化多维数据库',
     icon: <Table size={14} className="text-indigo-400" />,
+  },
+  {
+    type: 'image',
+    label: '图片',
+    desc: '上传本地图片或嵌入网络图片',
+    icon: <ImageIcon size={14} className="text-pink-400" />,
   },
 ];
 

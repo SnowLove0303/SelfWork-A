@@ -2,6 +2,35 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.55] - 2026-11-18
+
+### Feat (文档引擎：P1-4 Notion 沉浸式大封面 Banner + P1-1 多媒体图片块 + P1-2 Markdown 补全 + P1-3 段落对齐)
+
+- **P1-4 Notion 沉浸式页面大封面 Banner (`page:cover`)**：
+  - 8 款预设暗黑科技与自然渐变壁纸 `PRESET_COVERS`（深空、极光、暮落、电紫、湛夜、林郁、绛夜、黑曜），支持自定义图片网络 URL；
+  - 页面滚动区顶端渲染 `h-40` 沉浸式封面大条带，自适应 object-cover / background gradient；
+  - 悬停浮动「更换封面」与「移除封面」半透明胶囊操作组；
+  - 文档图标 Emoji 采用 `-mt-7 ml-8` 毛玻璃微光边框浮空重叠在封面上，还原正统 Notion / 飞书旗舰质感；
+  - 无封面状态下悬停标题区优雅显现「🖼️ 添加封面」幽灵按钮；
+  - `DocsView.tsx` 联动 `saveDocPage` 实现页面封面元数据在 SQLite 底层无损持久化。
+
+- **P1-1 多媒体图片块 (`block:image`)**：
+  - `BlockType` 增补 `'image'`；斜杠菜单 `/image` 快速插入；
+  - 空状态提供优雅的浅灰边框卡片，支持本地图片上传（自动转换为 Base64 DataURL）与网络图片 URL 快速插入；
+  - 载入状态居中圆角 `rounded-xl`、微质感边框 `border-white/10`，最大高度 500px；
+  - 下方提供微文案风格的独立可编辑 Caption 图片说明；悬停显示「更换」、「对齐」与「删除」小胶囊；
+  - `markdownExport.ts` 联动输出 `![caption](src)` 标准 Markdown。
+
+- **P1-2 Markdown 快捷输入补全增强 (`ux:md-shortcuts-v2`)**：
+  - 行首 `1. ` 自动蜕变转换：支持连续输入 `1. ` 自动变为 `numbered` 有序列表项；
+  - 行首 `>> ` 快捷蜕变：自动转换为 `toggle` 折叠块，剩余文本作为 summary；
+  - `markdownToHtml` 与输入处理支持 `==text==` 自动转为 `<mark>` 高亮并在打字时实时生效。
+
+- **P1-3 段落微排版对齐 (`inline:align`)**：
+  - `DocBlock.format` 支持 `textAlign?: 'left' | 'center' | 'right'`；
+  - `FloatingFormatToolbar` 增加左/中/右对齐控制按钮组；
+  - 块级容器与编辑区应用 `style={{ textAlign }}` 并持久化至底层 SQLite。
+
 ## [0.1.54] - 2026-11-18
 
 ### Feat (文档引擎：P0 链接插入/高亮色板/Toggle折叠块 + P1-7 Markdown 导出)

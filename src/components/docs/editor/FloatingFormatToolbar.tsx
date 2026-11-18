@@ -8,6 +8,9 @@ import {
   Code as CodeIcon,
   Eraser,
   Link,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react';
 
 export interface FloatingFormatToolbarProps {
@@ -17,6 +20,7 @@ export interface FloatingFormatToolbarProps {
   ) => void;
   onApplyLink?: (url: string) => void;
   onApplyHighlight?: (color: string) => void;
+  onApplyAlign?: (align: 'left' | 'center' | 'right') => void;
   onClose: () => void;
 }
 
@@ -34,6 +38,7 @@ export const FloatingFormatToolbar: React.FC<FloatingFormatToolbarProps> = ({
   onApplyFormat,
   onApplyLink,
   onApplyHighlight,
+  onApplyAlign,
   onClose,
 }) => {
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -247,6 +252,36 @@ export const FloatingFormatToolbar: React.FC<FloatingFormatToolbarProps> = ({
           >
             <span className="text-[13px] font-bold leading-none">A</span>
             <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-3 h-0.5 rounded-full bg-yellow-400" />
+          </button>
+
+          <div className="w-px h-3.5 bg-white/10 mx-0.5" />
+
+          {/* 段落对齐按钮组 */}
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onApplyAlign?.('left')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+            title="左对齐"
+          >
+            <AlignLeft size={13} />
+          </button>
+
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onApplyAlign?.('center')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+            title="居中对齐"
+          >
+            <AlignCenter size={13} />
+          </button>
+
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onApplyAlign?.('right')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+            title="右对齐"
+          >
+            <AlignRight size={13} />
           </button>
 
           <div className="w-px h-3.5 bg-white/10 mx-0.5" />

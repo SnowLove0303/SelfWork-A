@@ -245,6 +245,19 @@ export const DocsView: React.FC = () => {
     }
   };
 
+  // 11. 更新文档封面 (沉浸式大封面 Banner)
+  const handleUpdatePageCover = async (newCover: string) => {
+    const nextPages = pages.map((p) => {
+      if (p.id !== activeId) return p;
+      return { ...p, cover: newCover, updatedAt: Date.now() };
+    });
+    setPages(nextPages);
+    const target = nextPages.find((p) => p.id === activeId);
+    if (target) {
+      await saveDocPage(target);
+    }
+  };
+
   // 11. 更新多维表格对象
   const handleUpdateCollection = (updatedCol: DbCollection) => {
     setCollections((prev) =>
@@ -912,6 +925,7 @@ export const DocsView: React.FC = () => {
               page={selectedPage}
               onUpdatePageTitle={handleUpdatePageTitle}
               onUpdatePageIcon={handleUpdatePageIcon}
+              onUpdatePageCover={handleUpdatePageCover}
             />
           ) : activeType === 'collection' && selectedCollection ? (
             <TableDatabaseView

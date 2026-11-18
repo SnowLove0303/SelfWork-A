@@ -12,7 +12,8 @@ export type BlockType =
   | 'code'
   | 'divider'
   | 'table'
-  | 'toggle';
+  | 'toggle'
+  | 'image';
 
 export interface DocBlock {
   id: string;
@@ -21,7 +22,10 @@ export interface DocBlock {
   blockType: BlockType;
   content: string;
   properties?: Record<string, unknown>;
-  format?: Record<string, unknown>;
+  format?: {
+    textAlign?: 'left' | 'center' | 'right';
+    [key: string]: unknown;
+  };
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
