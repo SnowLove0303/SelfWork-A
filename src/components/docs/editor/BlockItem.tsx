@@ -65,12 +65,19 @@ function markdownToHtml(raw: string): string {
     raw.includes('<code>') ||
     raw.includes('<b>') ||
     raw.includes('<i>') ||
-    raw.includes('<u>')
+    raw.includes('<u>') ||
+    raw.includes('<a ') ||
+    raw.includes('<mark ')
   ) {
     return raw;
   }
 
   let html = raw;
+  // 链接语法必须在 ** 规则之前处理，防止被 strong 误匹配
+  html = html.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-sky-400 underline underline-offset-2 hover:text-sky-300 transition-colors cursor-pointer">$1</a>'
+  );
   html = html
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -79,6 +86,11 @@ function markdownToHtml(raw: string): string {
       /`([^`]+)`/g,
       '<code class="px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs">$1</code>'
     );
+  // 裸 URL 自动链接（仅对不在 href="" 内的 http/https URL）
+  html = html.replace(
+    /((?<![="'])(https?:\/\/[^\s<>"]+))/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-sky-400 underline underline-offset-2 hover:text-sky-300 transition-colors cursor-pointer">$2</a>'
+  );
   return html;
 }
 
@@ -554,7 +566,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   // 7. 原生富文本排版应用：严格锁定选区，消除失焦与局部失效
   const handleApplyFormat = (
-    format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear'
+    format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear' | 'link' | 'highlight'
   ) => {
     editorRef.current?.focus();
 
@@ -578,7 +590,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       document.execCommand('removeFormat', false);
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0 && editorRef.current) {
-        const styledElements = editorRef.current.querySelectorAll('code, del, strike, span');
+        const styledElements = editorRef.current.querySelectorAll('code, del, strike, span, a, mark');
         styledElements.forEach((el) => {
           if (sel.containsNode(el, true)) {
             const textNode = document.createTextNode(el.textContent || '');
@@ -607,6 +619,85 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
     }
 
+    if (editorRef.current) {
+      onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
+    }
+    setContextMenuOpen(false);
+    setFloatingToolbarOpen(false);
+  };
+
+  // 链接插入
+  const handleApplyLink = (url: string) => {
+    editorRef.current?.focus();
+    if (savedRangeRef.current) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedRangeRef.current);
+      }
+    }
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      const parentA = range.commonAncestorContainer.parentElement?.closest('a');
+      if (parentA && editorRef.current?.contains(parentA)) {
+        // 更新已有链接 href
+        parentA.setAttribute('href', url);
+      } else {
+        const aEl = document.createElement('a');
+        aEl.href = url;
+        aEl.target = '_blank';
+        aEl.rel = 'noopener noreferrer';
+        aEl.className = 'text-sky-400 underline underline-offset-2 hover:text-sky-300 transition-colors cursor-pointer';
+        const frag = range.extractContents();
+        aEl.appendChild(frag);
+        range.insertNode(aEl);
+        sel.removeAllRanges();
+      }
+    }
+    if (editorRef.current) {
+      onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
+    }
+    setContextMenuOpen(false);
+    setFloatingToolbarOpen(false);
+  };
+
+  // 高亮插入（color 为空时清除）
+  const handleApplyHighlight = (color: string) => {
+    editorRef.current?.focus();
+    if (savedRangeRef.current) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedRangeRef.current);
+      }
+    }
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      if (!color) {
+        // 清除高亮：移除选区内的 mark 元素
+        document.execCommand('removeFormat', false);
+        if (editorRef.current) {
+          const marks = editorRef.current.querySelectorAll('mark');
+          marks.forEach((mark) => {
+            if (sel.containsNode(mark, true)) {
+              const textNode = document.createTextNode(mark.textContent || '');
+              mark.parentNode?.replaceChild(textNode, mark);
+            }
+          });
+        }
+      } else {
+        const range = sel.getRangeAt(0);
+        const markEl = document.createElement('mark');
+        markEl.style.background = color;
+        markEl.style.borderRadius = '3px';
+        markEl.style.padding = '0 2px';
+        const frag = range.extractContents();
+        markEl.appendChild(frag);
+        range.insertNode(markEl);
+        sel.removeAllRanges();
+      }
+    }
     if (editorRef.current) {
       onUpdate(editorRef.current.innerHTML, undefined, undefined, true);
     }
@@ -807,6 +898,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           <FloatingFormatToolbar
             position={floatingToolbarPos}
             onApplyFormat={handleApplyFormat}
+            onApplyLink={handleApplyLink}
+            onApplyHighlight={handleApplyHighlight}
             onClose={() => setFloatingToolbarOpen(false)}
           />
         )}
@@ -819,6 +912,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             selectedText={savedSelectionText}
             currentBlockType={block.blockType}
             onApplyFormat={handleApplyFormat}
+            onApplyLink={handleApplyLink}
+            onApplyHighlight={handleApplyHighlight}
             onTurnInto={handleTurnInto}
             onCopy={handleCopy}
             onCut={handleCut}
@@ -1142,6 +1237,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         <FloatingFormatToolbar
           position={floatingToolbarPos}
           onApplyFormat={handleApplyFormat}
+          onApplyLink={handleApplyLink}
+          onApplyHighlight={handleApplyHighlight}
           onClose={() => setFloatingToolbarOpen(false)}
         />
       )}
@@ -1165,6 +1262,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           selectedText={savedSelectionText}
           currentBlockType={block.blockType}
           onApplyFormat={handleApplyFormat}
+          onApplyLink={handleApplyLink}
+          onApplyHighlight={handleApplyHighlight}
           onTurnInto={handleTurnInto}
           onCopy={handleCopy}
           onCut={handleCut}

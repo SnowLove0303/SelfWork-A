@@ -2,6 +2,35 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.54] - 2026-11-18
+
+### Feat (文档引擎：P0 链接插入/高亮色板/Toggle折叠块 + P1-7 Markdown 导出)
+
+- **P0-1 链接插入与自动渲染 (`inline:link`)**：
+  - `FloatingFormatToolbar` 与 `BlockContextMenu` 增加「🔗」按钮，内联展开 200px 输入框，支持 URL 自动协议补充、Enter 确认与 Esc 取消；
+  - 选区自动转化为 `<a href="..." target="_blank" class="text-sky-400 underline underline-offset-2 hover:text-sky-300">...</a>`；
+  - `BlockItem.markdownToHtml` 前置支持 `[text](url)` Markdown 格式及裸 URL 自动超链接识别；
+  - `markdownExport` 逆向清理规则支持 `<a>` 标签无损还原为 `[text](url)`。
+
+- **P0-2 文字高亮与 6 色色板 (`inline:highlight`)**：
+  - 浮动工具栏与右键菜单增加「A」高亮按钮，展开 6 色半透明色板（黄 `#FFD93D40`、红 `#FF6B6B40`、绿 `#6BCB7740`、蓝 `#4F87FF40`、紫 `#C77DFF40`、橙 `#FF9A3C40`）与清除高亮按钮；
+  - 选区格式化为 `<mark style="background:...; border-radius:3px; padding:0 2px;">`；
+  - `markdownExport` 逆向清理规则支持 `<mark>` 标签还原为 Obsidian 标准 `==text==` 高亮语法。
+
+- **P0-3 Toggle 折叠块 (`block:toggle`)**：
+  - `BlockType` union 新增 `'toggle'`；
+  - `SlashMenu` 注册「折叠块（Toggle）」条目与 `ChevronRight` 图标；
+  - 新建 `BlockToggle.tsx` 独立组件：
+    - 支持 ▶/▼ 展开折叠切换，旋转动效；
+    - 标题 Summary 区与内部子内容区物理隔离，支持独立 contentEditable；
+    - 回车键一键切换展开/折叠，空行 Backspace 降级为段落；
+    - 左侧悬浮侧柄完整继承（增块、删块）。
+
+- **P1-7 Markdown 导出服务 (`export:markdown`)**：
+  - 新建 `src/services/markdownExport.ts`，支持将整篇文档清洗为标准 GFM Markdown；
+  - 覆盖 H1-H3、段落、引用、待办复选框、无序/有序列表、代码块（带语言）、Callout、Toggle 折叠块及水平分隔线；
+  - `BlockEditor` 顶部栏操作区新增「导出为 Markdown」按钮，一键序列化并复制至系统剪贴板。
+
 ## [0.1.53] - 2026-11-17
 
 ### Feat (思维导图 P0+P1 — 折叠/展开、撤销/重做、键盘导航、彩虹分支、XMind 样式面板)

@@ -21,6 +21,7 @@ import {
   Quote,
   MessageSquare,
   ChevronRight,
+  Link,
 } from 'lucide-react';
 
 export interface BlockContextMenuProps {
@@ -28,9 +29,10 @@ export interface BlockContextMenuProps {
   hasSelection: boolean;
   selectedText: string;
   currentBlockType: BlockType;
-  onApplyFormat: (format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear') => void;
+  onApplyFormat: (format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear' | 'link' | 'highlight') => void;
   onApplyColor?: (color: string) => void;
   onApplyHighlight?: (highlight: string) => void;
+  onApplyLink?: (url: string) => void;
   onTurnInto: (type: BlockType) => void;
   onCopy: () => void;
   onCut: () => void;
@@ -41,6 +43,8 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   position,
   hasSelection,
   onApplyFormat,
+  onApplyLink,
+  onApplyHighlight,
   onTurnInto,
   onCopy,
   onCut,
@@ -54,6 +58,22 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   const [headingSubmenuOpen, setHeadingSubmenuOpen] = useState(false);
   const [submenuPos, setSubmenuPos] = useState({ top: 0, left: 0 });
   const closeSubmenuTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 高亮色板内联展开状态
+  const [highlightPaletteOpen, setHighlightPaletteOpen] = useState(false);
+  // 链接输入框内联展开状态
+  const [linkInputOpen, setLinkInputOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const linkInputRef = useRef<HTMLInputElement>(null);
+
+  const HIGHLIGHT_COLORS = [
+    { color: '#FFD93D40', label: '黄' },
+    { color: '#FF6B6B40', label: '红' },
+    { color: '#6BCB7740', label: '绿' },
+    { color: '#4F87FF40', label: '蓝' },
+    { color: '#C77DFF40', label: '紫' },
+    { color: '#FF9A3C40', label: '橙' },
+  ];
 
   // 1. 视窗碰撞检测自适应防溢出算法 (主菜单)
   useEffect(() => {
@@ -151,6 +171,24 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
     onClose();
   };
 
+  // 自动聚焦链接输入框
+  useEffect(() => {
+    if (linkInputOpen) {
+      setTimeout(() => linkInputRef.current?.focus(), 20);
+    }
+  }, [linkInputOpen]);
+
+  const handleLinkConfirm = () => {
+    const url = linkUrl.trim();
+    if (url && onApplyLink) {
+      const finalUrl = url.startsWith('http') ? url : `https://${url}`;
+      onApplyLink(finalUrl);
+    }
+    setLinkInputOpen(false);
+    setLinkUrl('');
+    onClose();
+  };
+
   // 使用 React Portal 直接注入 document.body，彻底逃脱任何父容器的 backdrop-filter 与 overflow 裁剪
   return createPortal(
     <>
@@ -211,6 +249,37 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             >
               <CodeIcon size={13} />
             </button>
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setHighlightPaletteOpen(false);
+                setLinkInputOpen((prev) => !prev);
+              }}
+              className={`flex-1 py-1 px-1 flex items-center justify-center rounded-lg transition-colors ${
+                linkInputOpen
+                  ? 'bg-sky-500/30 text-sky-200'
+                  : 'hover:bg-sky-500/20 text-slate-300 hover:text-sky-300'
+              }`}
+              title="插入链接"
+            >
+              <Link size={13} />
+            </button>
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setLinkInputOpen(false);
+                setHighlightPaletteOpen((prev) => !prev);
+              }}
+              className={`flex-1 py-1 px-1 flex items-center justify-center rounded-lg transition-colors relative ${
+                highlightPaletteOpen
+                  ? 'bg-yellow-500/30 text-yellow-200'
+                  : 'hover:bg-yellow-500/20 text-yellow-300 hover:text-yellow-200'
+              }`}
+              title="文字高亮"
+            >
+              <span className="text-[12px] font-bold leading-none">A</span>
+              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2.5 h-0.5 rounded-full bg-yellow-400" />
+            </button>
             <div className="w-px h-3.5 bg-white/10 mx-0.5" />
             <button
               onMouseDown={(e) => e.preventDefault()}
@@ -221,6 +290,67 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
               <Eraser size={13} />
             </button>
           </div>
+
+          {linkInputOpen && (
+            <div className="mt-1 flex items-center gap-1 bg-white/[0.05] p-1 rounded-lg border border-white/10 animate-in fade-in duration-100">
+              <input
+                ref={linkInputRef}
+                type="text"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleLinkConfirm();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setLinkInputOpen(false);
+                    setLinkUrl('');
+                  }
+                }}
+                placeholder="https://..."
+                className="flex-1 bg-transparent border-0 px-1 py-0.5 text-xs text-white placeholder-slate-500 outline-none"
+              />
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={handleLinkConfirm}
+                className="px-2 py-0.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-200 text-xs transition-colors shrink-0"
+              >
+                确认
+              </button>
+            </div>
+          )}
+
+          {highlightPaletteOpen && (
+            <div className="mt-1 flex items-center justify-between gap-1 bg-white/[0.05] p-1.5 rounded-lg border border-white/10 animate-in fade-in duration-100">
+              {HIGHLIGHT_COLORS.map(({ color, label }) => (
+                <button
+                  key={color}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onApplyHighlight?.(color);
+                    setHighlightPaletteOpen(false);
+                    onClose();
+                  }}
+                  title={label}
+                  className="w-5 h-5 rounded-md border border-white/20 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onApplyHighlight?.('');
+                  setHighlightPaletteOpen(false);
+                  onClose();
+                }}
+                title="清除高亮"
+                className="w-5 h-5 rounded-md border border-white/20 hover:scale-110 transition-transform bg-transparent flex items-center justify-center text-slate-400 text-[10px]"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 2. 块级转换 (Turn into...) 包含标题二级子弹窗聚合 */}

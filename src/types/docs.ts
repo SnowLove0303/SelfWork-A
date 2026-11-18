@@ -11,7 +11,8 @@ export type BlockType =
   | 'quote'
   | 'code'
   | 'divider'
-  | 'table';
+  | 'table'
+  | 'toggle';
 
 export interface DocBlock {
   id: string;

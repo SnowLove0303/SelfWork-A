@@ -13,6 +13,7 @@ import {
   Minus,
   Table,
   MessageSquare,
+  ChevronRight,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -72,6 +73,12 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     label: '有序列表',
     desc: '自动编号序列内容条目',
     icon: <ListOrdered size={14} className="text-blue-400" />,
+  },
+  {
+    type: 'toggle',
+    label: '折叠块（Toggle）',
+    desc: '可折叠收起的内容区块',
+    icon: <ChevronRight size={14} className="text-teal-400" />,
   },
   {
     type: 'callout',

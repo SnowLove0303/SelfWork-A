@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DocPage, DocBlock, BlockType } from '../../../types/docs.ts';
 import { BlockItem } from './BlockItem.tsx';
+import { BlockToggle } from './BlockToggle.tsx';
 import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
+import { exportBlocksToMarkdown } from '../../../services/markdownExport.ts';
 import {
   FileText,
   ListTree,
@@ -9,6 +11,7 @@ import {
   PanelRightOpen,
   Undo2,
   Redo2,
+  Download,
 } from 'lucide-react';
 
 interface BlockEditorProps {
@@ -77,6 +80,17 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await saveDocBlocks(page.id, next);
   }, [page.id]);
+
+  // 导出为 Markdown（降级至剪贴板，不依赖 Tauri dialog/fs 插件）
+  const handleExportMarkdown = useCallback(async () => {
+    const md = exportBlocksToMarkdown(page.title, page.icon, blocksRef.current);
+    try {
+      await navigator.clipboard.writeText(md);
+      alert(`Markdown 已复制到剪贴板（${blocksRef.current.length} 个块）`);
+    } catch {
+      console.error('[Export] 复制到剪贴板失败', md);
+    }
+  }, [page.title, page.icon]);
 
   // 全局撤销/重做快捷键监听
   useEffect(() => {
@@ -337,6 +351,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             >
               <Redo2 size={13} />
             </button>
+            <button
+              onClick={handleExportMarkdown}
+              className="p-1 hover:bg-white/10 text-slate-400 hover:text-slate-200 rounded transition-colors"
+              title="导出为 Markdown (.md)"
+            >
+              <Download size={13} />
+            </button>
           </div>
 
           {!showOutline && (
@@ -415,6 +436,23 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   }
                   seqNumber = count;
                 }
+                if (block.blockType === 'toggle') {
+                  return (
+                    <BlockToggle
+                      key={block.id}
+                      block={block}
+                      autoFocus={focusedBlockId === block.id}
+                      onUpdate={(content, blockType, properties, isStructural) =>
+                        handleUpdateBlock(block.id, content, blockType, properties, isStructural)
+                      }
+                      onDelete={() => handleDeleteBlock(block.id)}
+                      onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
+                      onFocusPrev={() => handleFocusPrev(block.id)}
+                      onFocusNext={() => handleFocusNext(block.id)}
+                    />
+                  );
+                }
+
                 return (
                   <BlockItem
                     key={block.id}
