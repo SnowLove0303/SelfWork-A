@@ -2,6 +2,32 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.56] - 2026-11-18
+
+### Feat (文档引擎：对标 Notion/GitHub 现代代码块专业细腻度工业级重构)
+
+- **现代独立 Header Bar 与呼吸空间重塑 (`code:header-bar`)**：
+  - 彻底移除旧版“悬浮遮挡第 1 行代码”的绝对定位按钮组，升级为 36px 独立结构化顶部控制条（`h-9 px-3 bg-[#161b22]/90 border-b border-white/[0.06]`）；
+  - 代码卡片容器升级为 `my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl`，提供足够的上下一级呼吸间距与圆角质感；
+  - 容器新增 `focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20` 柔和聚焦光晕；
+  - 左侧常驻语言选择 Pill（带向下小箭头，点击呼出半透明模糊浮层支持快速切换 14+ 种主流语言并自动重绘高亮）；
+  - 右侧配备「换行 / 不换行」、「行号开关」与带已复制对勾反馈的「一键复制代码」微胶囊。
+
+- **1:1 绝对定宽行高与垂直基准线零漂移对齐 (`code:line-height-parity`)**：
+  - 根治导致行号与代码多行错位的核心病因（旧版行号 `text-xs` 与编辑区 `text-sm leading-relaxed` 字体基准差异）；
+  - 强制 1:1 锁死行号列与代码编辑区为 `font-mono text-[13px] leading-[22px]`，每行行高严格 `22px`；
+  - 统一外层容器 `py-3` 内边距，行号列与代码第 1 行及后续第 N 行实现数学级水平平行，彻底杜绝多行垂直漂移。
+
+- **GitHub Dark / One Dark 高质感色彩系统 (`code:palette-redesign`)**：
+  - 彻底剔除刺眼的未高亮报错粉红默认色（`text-rose-300`），将基准普通代码文本定为舒适中性浅白 `text-slate-200`；
+  - 全面调优 `TOKEN_COLORS` 语法色盘：紫罗兰关键字（`text-purple-400`）、柔和薄荷绿字符串（`text-emerald-300`）、石墨灰斜体注释（`text-slate-500 italic`）、琥珀色数字常量（`text-amber-300`）、天蓝内置函数（`text-sky-300`）、青绿类型（`text-teal-300`）等；
+  - 行内代码块同步重塑为柔和护眼的 `text-amber-200/90` 配合微透明黑底 `bg-white/[0.08]`。
+
+- **智能缩进与按键工学升级 (`code:smart-indent`)**：
+  - **Enter 智能前导缩进继承**：回车换行时自动提取上一行的前导空格；若上一行末尾为 `{`、`[`、`(` 或 `:`，智能追加一级缩进，写代码不再反复按空格；
+  - **语言自适应 Tab 缩进**：针对 Python 智能插入 4 空格，其他语言插入 2 空格；
+  - **Shift + Tab 反向缩进（Outdent）**：支持快捷回缩当前行最多一个缩进单位的前导空格并平滑保护光标。
+
 ## [0.1.55] - 2026-11-18
 
 ### Feat (文档引擎：P1-4 Notion 沉浸式大封面 Banner + P1-1 多媒体图片块 + P1-2 Markdown 补全 + P1-3 段落对齐)

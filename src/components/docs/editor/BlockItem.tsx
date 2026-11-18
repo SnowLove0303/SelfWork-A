@@ -101,7 +101,7 @@ function markdownToHtml(raw: string): string {
     )
     .replace(
       /`([^`]+)`/g,
-      '<code class="px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs">$1</code>'
+      '<code class="px-1.5 py-0.5 mx-0.5 rounded bg-white/[0.08] text-amber-200/90 font-mono text-[12px] border border-white/[0.06]">$1</code>'
     );
   // 裸 URL 自动链接（仅对不在 href="" 内的 http/https URL）
   html = html.replace(
@@ -447,23 +447,45 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       }
     }
 
-    // 代码块专属击键工学：Tab 缩进插入空格、Enter 单块多行、空块退格平滑回退
+    // 代码块专属击键工学：智能缩进、Tab/Shift+Tab、Enter 保持前导缩进
     if (block.blockType === 'code') {
+      const currentLang = (block.properties?.language as string) || '';
+      const indentUnit = currentLang === 'python' ? '    ' : '  ';
+
       if (e.key === 'Tab') {
         e.preventDefault();
         const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const spaceNode = document.createTextNode('  ');
-          range.insertNode(spaceNode);
-          range.setStartAfter(spaceNode);
-          range.setEndAfter(spaceNode);
-          sel.removeAllRanges();
-          sel.addRange(range);
-          if (editorRef.current) {
-            handleCodeInput();
+        if (sel && sel.rangeCount > 0 && editorRef.current) {
+          if (!e.shiftKey) {
+            // 普通 Tab 缩进：插入对应语言规范空格
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            const spaceNode = document.createTextNode(indentUnit);
+            range.insertNode(spaceNode);
+            range.setStartAfter(spaceNode);
+            range.setEndAfter(spaceNode);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } else {
+            // Shift + Tab：减少缩进（Outdent）
+            const caret = getCaretOffset(editorRef.current);
+            const text = editorRef.current.innerText || '';
+            const lineStart = text.lastIndexOf('\n', Math.max(0, caret.start - 1)) + 1;
+            const lineLeading = text.slice(lineStart, lineStart + indentUnit.length);
+            const spacesToRemove = lineLeading.match(/^ +/)?.[0].length || 0;
+            if (spacesToRemove > 0) {
+              const count = Math.min(spacesToRemove, indentUnit.length);
+              const nextText = text.slice(0, lineStart) + text.slice(lineStart + count);
+              editorRef.current.innerHTML = highlightCode(nextText, currentLang);
+              restoreCaretOffset(editorRef.current, {
+                start: Math.max(lineStart, caret.start - count),
+                end: Math.max(lineStart, caret.end - count),
+              });
+              onUpdate(nextText, 'code', block.properties, false);
+              return;
+            }
           }
+          handleCodeInput();
         }
         return;
       }
@@ -471,18 +493,31 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
+        if (sel && sel.rangeCount > 0 && editorRef.current) {
+          const caret = getCaretOffset(editorRef.current);
+          const text = editorRef.current.innerText || '';
+          // 提取当前行内容与前导空格
+          const lineStart = text.lastIndexOf('\n', Math.max(0, caret.start - 1)) + 1;
+          const currentLine = text.slice(lineStart, caret.start);
+          const matchIndent = currentLine.match(/^[ \t]+/);
+          let indent = matchIndent ? matchIndent[0] : '';
+
+          // 智能加深缩进判定：上一行以 {、[、( 或 : 结尾时，追加一级缩进
+          const trimmed = currentLine.trimEnd();
+          if (trimmed.endsWith('{') || trimmed.endsWith('[') || trimmed.endsWith('(') || trimmed.endsWith(':')) {
+            indent += indentUnit;
+          }
+
+          const insertStr = '\n' + indent;
           const range = sel.getRangeAt(0);
           range.deleteContents();
-          const brNode = document.createTextNode('\n');
+          const brNode = document.createTextNode(insertStr);
           range.insertNode(brNode);
           range.setStartAfter(brNode);
           range.setEndAfter(brNode);
           sel.removeAllRanges();
           sel.addRange(range);
-          if (editorRef.current) {
-            handleCodeInput();
-          }
+          handleCodeInput();
         } else {
           document.execCommand('insertLineBreak');
         }
@@ -656,7 +691,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         } else {
           const codeEl = document.createElement('code');
           codeEl.className =
-            'px-1.5 py-0.5 rounded bg-white/10 text-rose-300 font-mono text-xs';
+            'px-1.5 py-0.5 mx-0.5 rounded bg-white/[0.08] text-amber-200/90 font-mono text-[12px] border border-white/[0.06]';
           const frag = range.extractContents();
           codeEl.appendChild(frag);
           range.insertNode(codeEl);
@@ -831,7 +866,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       case 'quote':
         return 'italic text-slate-300 text-base leading-relaxed';
       case 'code':
-        return 'font-mono text-sm text-rose-300 leading-relaxed';
+        return 'font-mono text-[13px] text-slate-200 leading-[22px] tracking-normal';
       default:
         return 'text-base text-slate-200 leading-relaxed';
     }
@@ -1313,31 +1348,33 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           <div
             className={`flex-1 min-w-0 ${
               block.blockType === 'code'
-                ? 'p-3.5 bg-slate-950/85 border border-white/10 rounded-xl my-1.5 shadow-inner relative group/code'
+                ? 'my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden group/code transition-all hover:border-white/[0.14] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20'
                 : ''
             }`}
             style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
           >
-            {/* 代码块右上角悬浮微光操作胶囊栏 */}
+            {/* 现代化独立代码块 Header 控制栏 */}
             {block.blockType === 'code' && (
-              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-20 select-none opacity-0 group-hover/code:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
-                {/* 语言选择切换器 */}
+              <div className="h-9 px-3 bg-[#161b22]/90 border-b border-white/[0.06] flex items-center justify-between select-none">
+                {/* 左侧语言选择 Pill */}
                 <div className="relative">
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setShowLangMenu(!showLangMenu)}
-                    className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-mono text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[11px] font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
                     title="切换编程语言"
                   >
-                    <span>{SUPPORTED_CODE_LANGUAGES.find((l) => l.id === currentLang)?.name || currentLang}</span>
+                    <span className="font-medium">
+                      {SUPPORTED_CODE_LANGUAGES.find((l) => l.id === currentLang)?.name || currentLang}
+                    </span>
                     <ChevronDown size={11} className="opacity-60" />
                   </button>
 
                   {showLangMenu && (
                     <div
                       onMouseDown={(e) => e.preventDefault()}
-                      className="absolute right-0 top-full mt-1 w-36 max-h-56 overflow-y-auto bg-slate-900/95 border border-white/15 rounded-lg shadow-2xl py-1 z-50 text-xs backdrop-blur-md"
+                      className="absolute left-0 top-full mt-1.5 w-40 max-h-60 overflow-y-auto bg-[#161b22] border border-white/10 rounded-xl shadow-2xl py-1.5 z-50 text-xs backdrop-blur-md"
                     >
                       {SUPPORTED_CODE_LANGUAGES.map((lang) => (
                         <button
@@ -1362,7 +1399,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                             );
                             setShowLangMenu(false);
                           }}
-                          className={`w-full text-left px-3 py-1 hover:bg-sky-500/15 flex items-center justify-between transition-colors ${
+                          className={`w-full text-left px-3 py-1.5 hover:bg-sky-500/15 flex items-center justify-between transition-colors ${
                             currentLang === lang.id ? 'text-sky-400 font-semibold bg-sky-500/10' : 'text-slate-300'
                           }`}
                         >
@@ -1374,86 +1411,94 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                   )}
                 </div>
 
-                {/* 行号显示切换 */}
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    onUpdate(
-                      editorRef.current?.innerText || block.content,
-                      'code',
-                      { ...block.properties, lineNumbers: !isLineNumbersEnabled },
-                      true
-                    );
-                  }}
-                  className={`p-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
-                    isLineNumbersEnabled
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/10'
-                  }`}
-                  title={isLineNumbersEnabled ? '隐藏行号' : '显示行号'}
-                >
-                  <ListOrdered size={12} />
-                </button>
+                {/* 右侧操作胶囊栏 */}
+                <div className="flex items-center gap-1 text-[11px]">
+                  {/* 代码换行切换 */}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onUpdate(
+                        editorRef.current?.innerText || block.content,
+                        'code',
+                        { ...block.properties, wrap: !isWrap },
+                        true
+                      );
+                    }}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                      isWrap
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                        : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border-white/[0.08]'
+                    }`}
+                    title={isWrap ? '代码自动换行中 (点击切换为横向滚动)' : '保持单行横向滚动 (点击切换为自动换行)'}
+                  >
+                    <WrapText size={12} />
+                    <span className="hidden sm:inline">{isWrap ? '换行' : '不换行'}</span>
+                  </button>
 
-                {/* 代码换行切换 */}
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    onUpdate(
-                      editorRef.current?.innerText || block.content,
-                      'code',
-                      { ...block.properties, wrap: !isWrap },
-                      true
-                    );
-                  }}
-                  className={`p-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
-                    isWrap
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/10'
-                  }`}
-                  title={isWrap ? '代码自动换行中 (点击切换为横向滚动)' : '保持单行横向滚动 (点击切换为自动换行)'}
-                >
-                  <WrapText size={12} />
-                </button>
+                  {/* 行号显示切换 */}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onUpdate(
+                        editorRef.current?.innerText || block.content,
+                        'code',
+                        { ...block.properties, lineNumbers: !isLineNumbersEnabled },
+                        true
+                      );
+                    }}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                      isLineNumbersEnabled
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                        : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border-white/[0.08]'
+                    }`}
+                    title={isLineNumbersEnabled ? '隐藏行号' : '显示行号'}
+                  >
+                    <ListOrdered size={12} />
+                    <span className="hidden sm:inline">行号</span>
+                  </button>
 
-                {/* 一键复制代码 */}
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    const text = editorRef.current?.innerText || block.content;
-                    navigator.clipboard.writeText(text);
-                    setCopiedCode(true);
-                    setTimeout(() => setCopiedCode(false), 1800);
-                  }}
-                  className="p-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-                  title="复制代码到剪贴板"
-                >
-                  {copiedCode ? (
-                    <>
-                      <Check size={12} className="text-emerald-400" />
-                      <span className="text-[10px] text-emerald-400 font-medium">已复制</span>
-                    </>
-                  ) : (
-                    <Copy size={12} />
-                  )}
-                </button>
+                  {/* 一键复制代码 */}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const text = editorRef.current?.innerText || block.content;
+                      navigator.clipboard.writeText(text);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 1800);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="复制代码到剪贴板"
+                  >
+                    {copiedCode ? (
+                      <>
+                        <Check size={12} className="text-emerald-400" />
+                        <span className="text-[11px] text-emerald-400 font-medium">已复制</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} />
+                        <span className="text-[11px]">复制</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
             {block.blockType === 'code' ? (
-              <div className="flex font-mono text-sm leading-relaxed overflow-hidden">
-                {/* 行号呈现列 */}
+              <div className="flex font-mono text-[13px] leading-[22px] tracking-normal bg-[#0d1117] py-3 overflow-hidden">
+                {/* 行号呈现列：强制 1:1 锁死 line-height 与 padding */}
                 {isLineNumbersEnabled && (
                   <div
-                    className="select-none py-0.5 pr-3 pl-1 text-right text-slate-600 font-mono text-xs leading-relaxed border-r border-white/10 shrink-0 select-none"
-                    style={{ minWidth: '2.5rem' }}
+                    className="select-none px-3.5 text-right text-slate-600 font-mono text-[13px] leading-[22px] border-r border-white/[0.06] shrink-0 tabular-nums"
+                    style={{ minWidth: '3rem' }}
                     aria-hidden="true"
                   >
                     {Array.from({ length: lineCount }, (_, i) => (
-                      <div key={i + 1} className="leading-relaxed select-none">
+                      <div key={i + 1} className="leading-[22px] select-none">
                         {i + 1}
                       </div>
                     ))}
@@ -1478,9 +1523,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                   }}
                   onContextMenu={handleContextMenu}
                   data-placeholder={getPlaceholder()}
-                  className={`flex-1 py-0.5 ${
-                    isLineNumbersEnabled ? 'pl-3' : 'pl-1'
-                  } outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
+                  className={`flex-1 px-4 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
                     isWrap
                       ? 'whitespace-pre-wrap break-words'
                       : 'whitespace-pre overflow-x-auto no-scrollbar'

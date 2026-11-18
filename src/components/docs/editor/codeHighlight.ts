@@ -1,6 +1,6 @@
 /**
  * SelfWork 文档中心代码块专业暗色语法着色与光标保护引擎
- * 参考 Notion 工业级代码块标准与 Tailwind CSS 色彩系统
+ * 参考 GitHub Dark 与 VS Code 工业级代码块高质感配色标准
  */
 
 export interface CaretPosition {
@@ -9,19 +9,19 @@ export interface CaretPosition {
 }
 
 export const TOKEN_COLORS: Record<string, string> = {
-  keyword: 'text-sky-400 font-medium',         // 关键字（蓝青）
-  string: 'text-emerald-400',                   // 字符串（薄荷绿）
-  comment: 'text-slate-500 italic',             // 注释（灰绿/石墨色）
-  number: 'text-amber-400',                     // 数字/常量（橙/琥珀）
-  builtin: 'text-cyan-300',                     // 内置函数/核心API（天蓝）
-  constant: 'text-amber-300 font-medium',       // 常量/布尔值（橙）
-  function: 'text-cyan-300',                     // 自定义函数/方法名（天蓝）
+  keyword: 'text-purple-400 font-medium',       // 关键字（紫罗兰，如 const/def/if/return）
+  string: 'text-emerald-300',                   // 字符串（自然柔和薄荷绿）
+  comment: 'text-slate-500 italic',             // 注释（石墨灰斜体）
+  number: 'text-amber-300 font-mono',           // 数字/常量（琥珀色）
+  builtin: 'text-sky-300',                      // 内置函数/核心API（天蓝）
+  constant: 'text-amber-300 font-medium',       // 常量/布尔值（True/false/None）
+  function: 'text-blue-300',                    // 自定义函数/方法名（蔚蓝）
   type: 'text-teal-300 font-medium',            // 类型/类名（青绿）
   operator: 'text-slate-400',                   // 运算符/标点
-  variable: 'text-violet-300',                  // 变量标识符
+  variable: 'text-slate-200',                   // 变量标识符（舒适中性浅白）
   key: 'text-sky-300 font-medium',              // 键名（JSON属性）
   tag: 'text-rose-400 font-medium',             // HTML/XML 标签名
-  attr: 'text-amber-300',                       // 属性名
+  attr: 'text-amber-200',                       // 属性名
 };
 
 export interface TokenRule {
