@@ -15,6 +15,12 @@ export type BlockType =
   | 'toggle'
   | 'image';
 
+export interface TableBlockProperties {
+  hasHeaderRow?: boolean;
+  hasHeaderCol?: boolean;
+  rows: string[][];
+}
+
 export interface DocBlock {
   id: string;
   pageId: string;

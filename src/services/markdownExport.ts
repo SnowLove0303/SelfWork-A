@@ -89,6 +89,20 @@ export function exportBlocksToMarkdown(
       case 'image':
         lines.push(`![${block.properties?.caption || 'image'}](${block.properties?.src || ''})`, '');
         break;
+      case 'table': {
+        const rows = (block.properties?.rows as string[][]) || [];
+        if (rows.length > 0) {
+          rows.forEach((r, idx) => {
+            const cleanRow = r.map((c) => htmlToMarkdown(c).replace(/\|/g, '\\|'));
+            lines.push(`| ${cleanRow.join(' | ')} |`);
+            if (idx === 0) {
+              lines.push(`| ${Array(r.length).fill('---').join(' | ')} |`);
+            }
+          });
+          lines.push('');
+        }
+        break;
+      }
       default:
         if (text) lines.push(text, '');
     }

@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Check,
-  Table,
   Copy,
   WrapText,
   ChevronDown,
@@ -24,6 +23,7 @@ import {
   getCaretOffset,
   restoreCaretOffset,
 } from './codeHighlight.ts';
+import { TableBlock } from './TableBlock.tsx';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -1039,27 +1039,21 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     );
   }
 
-  // 表格嵌入卡片特殊渲染
+  // 数据表格块特殊渲染 (Simple Table Block)
   if (block.blockType === 'table') {
     return (
-      <div id={`block-${block.id}`} className="group relative flex items-start py-2 my-1">
-        <div className="absolute -left-8 top-2 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
+      <div id={`block-${block.id}`} className="group relative flex items-start py-1">
+        <div className="absolute -left-8 top-3 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
           <button
             onClick={onDelete}
             className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除此块"
+            title="删除表格"
           >
             <Trash2 size={12} />
           </button>
         </div>
-        <div className="flex-1 p-3 bg-white/[0.02] border border-white/10 rounded-xl flex items-center gap-3">
-          <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
-            <Table size={18} />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-white">多维表格数据库视图</div>
-            <div className="text-[11px] text-slate-500">点击左侧切换为独立全功能表格编辑</div>
-          </div>
+        <div className="flex-1 min-w-0">
+          <TableBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
         </div>
       </div>
     );

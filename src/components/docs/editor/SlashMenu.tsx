@@ -107,8 +107,8 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   },
   {
     type: 'table',
-    label: '多维表格',
-    desc: '插入结构化多维数据库',
+    label: '数据表格 (Table)',
+    desc: '用于技术对比、参数对照与二维数据排版',
     icon: <Table size={14} className="text-indigo-400" />,
   },
   {

@@ -2,6 +2,36 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.57] - 2026-11-18
+
+### Feat (文档引擎：对标 Notion/BlockSuite 简单数据表格 TableBlock 与多维可视化深度重构)
+
+- **原生内嵌简单数据表格 (`block:table` / `TableBlock.tsx`)**：
+  - 新增 `TableBlock.tsx` 交互式二维表格组件，彻底取代原先静态占位卡片；
+  - 采用现代暗黑卡片风格（`my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden`）；
+  - 36px 独立结构化 Header 控制栏：左侧显示数据表格徽标与实时 `C 列 × R 行` 尺寸指示，右侧聚合「首行表头切换」、「一键复制 Markdown 表格（带绿勾成功反馈）」、「增加列」、「增加行」与「删除整表」；
+  - 表头行采用 `bg-[#161b22]` 微灰渐变底色与加粗排版，数据行悬浮激活动态微光晕（`hover:bg-white/[0.02]`）；
+  - 单元格支持即时编辑与富文本渲染（等宽行内代码 `code`、加粗 `strong`、高亮 `mark`、链接 `a`）；
+  - 单元格支持键盘工学导航：`Tab` 平滑移动至下一个单元格，行尾按 `Tab` 自动扩展新增一行并使新行首格聚焦。
+
+- **多维内容体系与斜杠菜单对齐 (`slash:multi-dimensional`)**：
+  - 斜杠指令菜单 `/table` 升级为「数据表格 (Table)」，提供清晰的对比排版微文案；
+  - `markdownExport.ts` 增补对 `table` 的 1:1 双向序列化输出，保证导出为标准 Markdown 表格。
+
+- **既有笔记 10 大技术对比表格 100% 无损对账与原位修复 (`hydration:notion-tables`)**：
+  - 升级 Markdown 表格语法状态机解析器，精准识别多行 `| col |` 与 `| --- |` 分割线；
+  - 对《02.3-02.5》深度笔记中的全部 10 个散架表格执行 1:1 原位重构编译并写入 SQLite 物理数据库：
+    1. 集合创建语法对照表（`{}` 字典 vs `set()` 空集合）
+    2. 集合删除方法对比表（`remove` vs `discard` vs `pop` vs `clear`）
+    3. 集合数学运算符号与执行结果速查表
+    4. `set` 与 `frozenset` 选型场景对比表
+    5. `list` 与 `dict` 底层特征全方位对照表
+    6. 字典键值获取方式选型表（`data["key"]` vs `data.get()`）
+    7. 数据结构组织形态适用场景表
+    8. 内置类型可哈希性与普通字典键合法性速查表
+    9. `get()` 与 `setdefault()` 行为差异表
+    10. `NotImplemented` 与 `NotImplementedError` 区分表
+
 ## [0.1.56] - 2026-11-18
 
 ### Feat (文档引擎：对标 Notion/GitHub 现代代码块专业细腻度工业级重构)
