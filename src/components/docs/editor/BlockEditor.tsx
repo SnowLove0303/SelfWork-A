@@ -24,6 +24,8 @@ interface BlockEditorProps {
   onUpdatePageTitle: (title: string) => void;
   onUpdatePageIcon?: (icon: string) => void;
   onUpdatePageCover?: (cover: string) => void;
+  pages?: DocPage[];
+  onNavigatePage?: (pageId: string) => void;
 }
 
 const EMOJI_OPTIONS = ['📝', '🚀', '🎯', '💡', '📌', '⚡', '📊', '🔥', '💻', '✨'];
@@ -50,6 +52,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onUpdatePageTitle,
   onUpdatePageIcon,
   onUpdatePageCover,
+  pages,
+  onNavigatePage,
 }) => {
   const [blocks, setBlocks] = useState<DocBlock[]>([]);
   const [, setLoading] = useState(true);
@@ -561,6 +565,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
                     onFocusPrev={() => handleFocusPrev(block.id)}
                     onFocusNext={() => handleFocusNext(block.id)}
+                    pages={pages}
+                    onNavigatePage={onNavigatePage}
                   />
                 );
               })}

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { DocBlock, BlockType } from '../../../types/docs.ts';
+import { DocBlock, BlockType, DocPage } from '../../../types/docs.ts';
 import { SlashMenu, SLASH_MENU_ITEMS } from './SlashMenu.tsx';
+import { PageMentionMenu } from './PageMentionMenu.tsx';
 import { BlockContextMenu } from './BlockContextMenu.tsx';
 import { FloatingFormatToolbar } from './FloatingFormatToolbar.tsx';
 import {
@@ -17,6 +18,8 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  Code as CodeIcon,
+  Workflow,
 } from 'lucide-react';
 import {
   highlightCode,
@@ -24,6 +27,9 @@ import {
   restoreCaretOffset,
 } from './codeHighlight.ts';
 import { TableBlock } from './TableBlock.tsx';
+import { MindMapEmbedBlock } from './MindMapEmbedBlock.tsx';
+import { MermaidPreview } from './MermaidPreview.tsx';
+import { MathBlock } from './MathBlock.tsx';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -40,6 +46,7 @@ export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'go', name: 'Go' },
   { id: 'java', name: 'Java' },
   { id: 'markdown', name: 'Markdown' },
+  { id: 'mermaid', name: 'Mermaid' },
   { id: 'plaintext', name: 'Plain Text' },
 ] as const;
 
@@ -58,6 +65,10 @@ interface BlockItemProps {
   autoFocus?: boolean;
   /** 有序列表块的序号（由 BlockEditor 计算后注入，仅 numbered 类型有效） */
   seqNumber?: number;
+  /** 工作区全部文档（用于 [[ 键入触发双向页面引用菜单） */
+  pages?: DocPage[];
+  /** 点击双向页面引用胶囊时的跳转回调 */
+  onNavigatePage?: (pageId: string) => void;
 }
 
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
@@ -120,6 +131,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   onFocusNext,
   autoFocus,
   seqNumber,
+  pages,
+  onNavigatePage,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
@@ -128,6 +141,12 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+
+  // 页面双向链接引用状态 ([[ 触发)
+  const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionMenuPos, setMentionMenuPos] = useState({ top: 0, left: 0 });
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
 
   // 右键划选排版菜单状态
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
@@ -381,6 +400,26 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       setSlashMenuOpen(false);
     }
 
+    // 检测双向页面引用指令唤起 ([[ 触发)
+    const doubleBracketIdx = rawText.lastIndexOf('[[');
+    if (doubleBracketIdx !== -1 && pages && pages.length > 0) {
+      const queryPart = rawText.slice(doubleBracketIdx + 2);
+      if (!queryPart.includes(']]') && !queryPart.includes('\n')) {
+        const rect = editorRef.current.getBoundingClientRect();
+        setMentionMenuPos({
+          top: rect.bottom + 4,
+          left: Math.max(16, rect.left),
+        });
+        setMentionQuery(queryPart);
+        setMentionMenuOpen(true);
+        setMentionSelectedIndex(0);
+      } else if (mentionMenuOpen) {
+        setMentionMenuOpen(false);
+      }
+    } else if (mentionMenuOpen) {
+      setMentionMenuOpen(false);
+    }
+
     onUpdate(rawHtml);
   };
 
@@ -436,13 +475,47 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         e.preventDefault();
         const selected = SLASH_MENU_ITEMS[slashSelectedIndex];
         if (selected) {
-          handleSelectBlockType(selected.type);
+          handleSelectBlockType(selected.type, selected.properties);
         }
         return;
       }
       if (e.key === 'Escape') {
         e.preventDefault();
         setSlashMenuOpen(false);
+        return;
+      }
+    }
+
+    // 双向页面链接菜单键盘导航
+    if (mentionMenuOpen) {
+      const filtered = (pages || [])
+        .filter((p) => p.id !== block.pageId)
+        .filter((p) =>
+          !mentionQuery ? true : p.title.toLowerCase().includes(mentionQuery.toLowerCase())
+        );
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionSelectedIndex((prev) => (filtered.length ? (prev + 1) % filtered.length : 0));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionSelectedIndex((prev) =>
+          filtered.length ? (prev - 1 + filtered.length) % filtered.length : 0
+        );
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (filtered[mentionSelectedIndex]) {
+          handleSelectPageMention(filtered[mentionSelectedIndex]);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionMenuOpen(false);
         return;
       }
     }
@@ -831,16 +904,52 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   };
 
   // 10. 选择斜杠菜单中的类型
-  const handleSelectBlockType = (newType: BlockType) => {
+  const handleSelectBlockType = (newType: BlockType, properties?: Record<string, any>) => {
     setSlashMenuOpen(false);
     if (editorRef.current) {
       const cleaned = editorRef.current.innerHTML.replace(/\/$/, '');
       editorRef.current.innerHTML = cleaned;
-      onUpdate(cleaned, newType, undefined, true);
+      onUpdate(cleaned, newType, properties, true);
     }
     setTimeout(() => {
       editorRef.current?.focus();
     }, 50);
+  };
+
+  // 选定目标文档，插入双向页面胶囊超链接
+  const handleSelectPageMention = (targetPage: DocPage) => {
+    setMentionMenuOpen(false);
+    if (!editorRef.current) return;
+    const currentHtml = editorRef.current.innerHTML;
+    const linkPill = `<a data-page-link="true" href="#/page/${targetPage.id}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-sky-200 border border-sky-500/30 font-medium text-xs mx-0.5 select-none no-underline cursor-pointer transition-colors" contenteditable="false">${targetPage.icon || '📄'} ${targetPage.title || '无标题文档'}</a>&nbsp;`;
+
+    // 匹配最后的 [[... 表达式并替换
+    const regex = /\[\[([^\]<]*)$/;
+    let updatedHtml: string;
+    if (regex.test(currentHtml)) {
+      updatedHtml = currentHtml.replace(regex, linkPill);
+    } else {
+      updatedHtml = currentHtml + linkPill;
+    }
+    editorRef.current.innerHTML = updatedHtml;
+    onUpdate(updatedHtml);
+    setTimeout(() => {
+      editorRef.current?.focus();
+    }, 50);
+  };
+
+  // 拦截对页面引用胶囊的点击事件，触发平滑跨文档穿透跳转
+  const handleBlockClick = (e: React.MouseEvent) => {
+    const linkEl = (e.target as HTMLElement).closest('[data-page-link="true"]');
+    if (linkEl) {
+      e.preventDefault();
+      e.stopPropagation();
+      const href = linkEl.getAttribute('href');
+      const pageId = href?.replace('#/page/', '');
+      if (pageId && onNavigatePage) {
+        onNavigatePage(pageId);
+      }
+    }
   };
 
   // 11. 待办复选框打勾切换
@@ -1078,6 +1187,60 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     );
   }
 
+  // 思维导图嵌入卡片 (MindMap Block)
+  if (block.blockType === 'mindmap') {
+    return (
+      <div id={`block-${block.id}`} className="group relative flex items-start py-1">
+        <div className="absolute -left-8 top-3 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
+          <button
+            onClick={() => onInsertBelow('p')}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
+            title="在下方插入块"
+          >
+            <Plus size={12} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+            title="删除思维导图"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+        <div className="flex-1 min-w-0">
+          <MindMapEmbedBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
+        </div>
+      </div>
+    );
+  }
+
+  // 数学公式卡片 (Math Block)
+  if (block.blockType === 'math') {
+    return (
+      <div id={`block-${block.id}`} className="group relative flex items-start py-1">
+        <div className="absolute -left-8 top-3 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
+          <button
+            onClick={() => onInsertBelow('p')}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
+            title="在下方插入块"
+          >
+            <Plus size={12} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
+            title="删除数学公式"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+        <div className="flex-1 min-w-0">
+          <MathBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
+        </div>
+      </div>
+    );
+  }
+
   // 图片块渲染（支持本地上传 base64 与网络图片 URL 嵌入）
   if (block.blockType === 'image') {
     const src = block.properties?.src as string | undefined;
@@ -1296,6 +1459,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     <div
       id={`block-${block.id}`}
       onContextMenu={handleContextMenu}
+      onClick={handleBlockClick}
       className={`group relative flex items-start ${getBlockMarginClass()}`}
     >
       {/* 悬浮操作侧柄 */}
@@ -1356,6 +1520,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         const currentLang = (block.properties?.language as string) || 'plaintext';
         const isWrap = Boolean(block.properties?.wrap);
         const isLineNumbersEnabled = block.properties?.lineNumbers !== false;
+        const viewMode = (block.properties?.viewMode as 'code' | 'preview') || (currentLang === 'mermaid' ? 'preview' : 'code');
 
         return (
           <div
@@ -1426,6 +1591,54 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
                 {/* 右侧操作胶囊栏 */}
                 <div className="flex items-center gap-1 text-[11px]">
+                  {/* Mermaid 双模切换胶囊 */}
+                  {currentLang === 'mermaid' && (
+                    <div className="flex items-center p-0.5 bg-black/40 border border-white/10 rounded-md mr-1">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          onUpdate(
+                            editorRef.current?.innerText || block.content,
+                            'code',
+                            { ...block.properties, viewMode: 'code' },
+                            true
+                          );
+                        }}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors cursor-pointer ${
+                          viewMode === 'code'
+                            ? 'bg-sky-500/20 text-sky-300 font-medium'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="查看/编辑 Mermaid 源码"
+                      >
+                        <CodeIcon size={11} />
+                        <span>源码</span>
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          onUpdate(
+                            editorRef.current?.innerText || block.content,
+                            'code',
+                            { ...block.properties, viewMode: 'preview' },
+                            true
+                          );
+                        }}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors cursor-pointer ${
+                          viewMode === 'preview'
+                            ? 'bg-sky-500/20 text-sky-300 font-medium'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="查看 Mermaid 架构流程图"
+                      >
+                        <Workflow size={11} />
+                        <span>架构图</span>
+                      </button>
+                    </div>
+                  )}
+
                   {/* 代码换行切换 */}
                   <button
                     type="button"
@@ -1502,47 +1715,61 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             )}
 
             {block.blockType === 'code' ? (
-              <div className="flex font-mono text-[13px] leading-[22px] tracking-normal bg-[#0d1117] py-3 overflow-hidden">
-                {/* 行号呈现列：强制 1:1 锁死 line-height 与 padding */}
-                {isLineNumbersEnabled && (
-                  <div
-                    className="select-none px-3.5 text-right text-slate-600 font-mono text-[13px] leading-[22px] border-r border-white/[0.06] shrink-0 tabular-nums"
-                    style={{ minWidth: '3rem' }}
-                    aria-hidden="true"
-                  >
-                    {Array.from({ length: lineCount }, (_, i) => (
-                      <div key={i + 1} className="leading-[22px] select-none">
-                        {i + 1}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* 代码编辑区 */}
-                <div
-                  ref={editorRef}
-                  contentEditable={true}
-                  suppressContentEditableWarning={true}
-                  onInput={handleInput}
-                  onKeyDown={handleKeyDown}
-                  onKeyUp={checkSelection}
-                  onMouseUp={handleMouseUp}
-                  onPaste={handlePaste}
-                  onCompositionStart={() => {
-                    isComposingRef.current = true;
+              currentLang === 'mermaid' && viewMode === 'preview' ? (
+                <MermaidPreview
+                  code={block.content}
+                  onSwitchToCode={() => {
+                    onUpdate(
+                      block.content,
+                      'code',
+                      { ...block.properties, viewMode: 'code' },
+                      true
+                    );
                   }}
-                  onCompositionEnd={() => {
-                    isComposingRef.current = false;
-                    handleInput();
-                  }}
-                  onContextMenu={handleContextMenu}
-                  data-placeholder={getPlaceholder()}
-                  className={`flex-1 px-4 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
-                    isWrap
-                      ? 'whitespace-pre-wrap break-words'
-                      : 'whitespace-pre overflow-x-auto no-scrollbar'
-                  }`}
                 />
-              </div>
+              ) : (
+                <div className="flex font-mono text-[13px] leading-[22px] tracking-normal bg-[#0d1117] py-3 overflow-hidden">
+                  {/* 行号呈现列：强制 1:1 锁死 line-height 与 padding */}
+                  {isLineNumbersEnabled && (
+                    <div
+                      className="select-none px-3.5 text-right text-slate-600 font-mono text-[13px] leading-[22px] border-r border-white/[0.06] shrink-0 tabular-nums"
+                      style={{ minWidth: '3rem' }}
+                      aria-hidden="true"
+                    >
+                      {Array.from({ length: lineCount }, (_, i) => (
+                        <div key={i + 1} className="leading-[22px] select-none">
+                          {i + 1}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* 代码编辑区 */}
+                  <div
+                    ref={editorRef}
+                    contentEditable={true}
+                    suppressContentEditableWarning={true}
+                    onInput={handleInput}
+                    onKeyDown={handleKeyDown}
+                    onKeyUp={checkSelection}
+                    onMouseUp={handleMouseUp}
+                    onPaste={handlePaste}
+                    onCompositionStart={() => {
+                      isComposingRef.current = true;
+                    }}
+                    onCompositionEnd={() => {
+                      isComposingRef.current = false;
+                      handleInput();
+                    }}
+                    onContextMenu={handleContextMenu}
+                    data-placeholder={getPlaceholder()}
+                    className={`flex-1 px-4 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} ${
+                      isWrap
+                        ? 'whitespace-pre-wrap break-words'
+                        : 'whitespace-pre overflow-x-auto no-scrollbar'
+                    }`}
+                  />
+                </div>
+              )
             ) : (
               <div
                 ref={editorRef}
@@ -1584,6 +1811,19 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           setSelectedIndex={setSlashSelectedIndex}
           onSelect={handleSelectBlockType}
           onClose={() => setSlashMenuOpen(false)}
+        />
+      )}
+
+      {/* 双向页面链接菜单 */}
+      {mentionMenuOpen && pages && (
+        <PageMentionMenu
+          pages={pages.filter((p) => p.id !== block.pageId)}
+          query={mentionQuery}
+          position={mentionMenuPos}
+          selectedIndex={mentionSelectedIndex}
+          setSelectedIndex={setMentionSelectedIndex}
+          onSelectPage={handleSelectPageMention}
+          onClose={() => setMentionMenuOpen(false)}
         />
       )}
 

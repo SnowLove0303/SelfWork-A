@@ -926,6 +926,11 @@ export const DocsView: React.FC = () => {
               onUpdatePageTitle={handleUpdatePageTitle}
               onUpdatePageIcon={handleUpdatePageIcon}
               onUpdatePageCover={handleUpdatePageCover}
+              pages={pages}
+              onNavigatePage={(pId) => {
+                setActiveId(pId);
+                setActiveType('page');
+              }}
             />
           ) : activeType === 'collection' && selectedCollection ? (
             <TableDatabaseView

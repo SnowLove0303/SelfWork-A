@@ -15,6 +15,9 @@ import {
   MessageSquare,
   ChevronRight,
   Image as ImageIcon,
+  Network,
+  Workflow,
+  Sigma,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -22,11 +25,12 @@ export interface SlashMenuItem {
   label: string;
   desc: string;
   icon: React.ReactNode;
+  properties?: Record<string, any>;
 }
 
 interface SlashMenuProps {
   position: { top: number; left: number };
-  onSelect: (type: BlockType) => void;
+  onSelect: (type: BlockType, properties?: Record<string, any>) => void;
   onClose: () => void;
   selectedIndex: number;
   setSelectedIndex: (idx: number) => void;
@@ -112,6 +116,25 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     icon: <Table size={14} className="text-indigo-400" />,
   },
   {
+    type: 'mindmap',
+    label: '思维导图 (MindMap)',
+    desc: '嵌入式结构化思维导图画布，支持展开与编辑',
+    icon: <Network size={14} className="text-amber-400" />,
+  },
+  {
+    type: 'code',
+    label: '架构流程图 (Mermaid)',
+    desc: '用文本语法绘制流程图、时序图与架构拓扑',
+    icon: <Workflow size={14} className="text-emerald-400" />,
+    properties: { language: 'mermaid' },
+  },
+  {
+    type: 'math',
+    label: '数学公式 (Math)',
+    desc: '基于 KaTeX 的 LaTeX 专业数学公式排版',
+    icon: <Sigma size={14} className="text-violet-400" />,
+  },
+  {
     type: 'image',
     label: '图片',
     desc: '上传本地图片或嵌入网络图片',
@@ -153,8 +176,8 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
       <div className="space-y-0.5">
         {SLASH_MENU_ITEMS.map((item, idx) => (
           <button
-            key={item.type}
-            onClick={() => onSelect(item.type)}
+            key={`${item.type}-${item.label}`}
+            onClick={() => onSelect(item.type, item.properties)}
             onMouseEnter={() => setSelectedIndex(idx)}
             className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors ${
               selectedIndex === idx

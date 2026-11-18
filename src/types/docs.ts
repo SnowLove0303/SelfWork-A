@@ -1,3 +1,5 @@
+import type { MindMapNode } from './mindmap.ts';
+
 // 块级原子节点类型 (Notion Block Models)
 export type BlockType =
   | 'p'
@@ -13,12 +15,25 @@ export type BlockType =
   | 'divider'
   | 'table'
   | 'toggle'
-  | 'image';
+  | 'image'
+  | 'mindmap'
+  | 'math';
 
 export interface TableBlockProperties {
   hasHeaderRow?: boolean;
   hasHeaderCol?: boolean;
   rows: string[][];
+}
+
+export interface MindMapBlockProperties {
+  title?: string;
+  root?: MindMapNode;
+  layoutDirection?: 'right' | 'both';
+  rainbowBranch?: boolean;
+}
+
+export interface MathBlockProperties {
+  latex?: string;
 }
 
 export interface DocBlock {

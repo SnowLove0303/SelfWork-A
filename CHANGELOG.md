@@ -2,6 +2,31 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.59] - 2026-11-18
+
+### Feat (文档引擎：阶段 2 - 多维图表嵌入、内嵌思维导图、Mermaid 架构流程图与双向知识关联)
+
+- **嵌入式结构化思维导图卡片 (`block:mindmap` / `MindMapEmbedBlock.tsx`)**：
+  - 新增 `MindMapEmbedBlock.tsx` 嵌入式思维导图组件，支持斜杠指令 `/mindmap` 极速插入；
+  - 36px 独立结构化 Header 控制栏：导图标题双击即时重命名、实时节点数统计徽标（`N 节点`）、添加子分支（`Plus` 按钮 / `Tab` 快捷键）、删除选中分支（`Trash2` / `Delete` 快捷键）、左右双向/单向发散切换（`GitFork`）、彩虹分支高亮切换（`Palette`）、缩放视口（`ZoomIn`/`ZoomOut`/`Ctrl+滚轮`）、视角重置（`RotateCcw`）以及沉浸式全屏编辑（`Maximize2`/`Minimize2`）；
+  - 零外部冗余开销无缝复用 `SelfWork` 原生 `MindMapCanvas` 贝塞尔曲线与彩虹分支排版引擎；
+  - 数据树模型与状态持久化保存在 `doc_blocks.properties.root` 中，支持多级展开/折叠与节点重命名。
+
+- **Mermaid 架构流程图双模可视化 (`block:code` with `language === 'mermaid'` / `MermaidPreview.tsx`)**：
+  - 在代码块切换或新建为 Mermaid 语言时，Header 右侧提供「⚙️ 源码」与「📊 架构图」双模切换胶囊；
+  - 架构图视图自动编译暗黑主题矢量 SVG 并居中呈现，支持 SVG 放大缩小与一键复制矢量 SVG 源码；
+  - 内置语法错误温和边界提示，发生语法错误时提供友好的解析提示与一键切回源码修改按钮，绝不白屏或崩溃。
+
+- **KaTeX LaTeX 数学公式块 (`block:math` / `MathBlock.tsx`)**：
+  - 新增独立公式块（支持 `/math` 斜杠指令），双击进入 LaTeX 源码多行编辑；
+  - 实时边输入边预览 KaTeX 高保真数学公式；
+  - 支持 `Shift + Enter` 极速完成排版，公式居中呈现并支持一键复制 LaTeX 源码。
+
+- **双向工作区文档引用与即时穿透跳转 (`mention:pages` / `PageMentionMenu.tsx`)**：
+  - 在正文编辑中键入 `[[` 即时弹出当前工作区文档的模糊检索菜单（`PageMentionMenu.tsx`）；
+  - 支持键盘方向键与回车选取目标文档，自动生成带微光的 `[data-page-link]` 页面胶囊超链接；
+  - 无论在只读或编辑模式下，点击页面胶囊即刻平滑切换至目标文档。
+
 ## [0.1.58] - 2026-11-18
 
 ### Feat (文档引擎：阶段 1 - 排版垂直节奏重塑、标题呼吸空间与正文结尾打字机沉浸式留白)
