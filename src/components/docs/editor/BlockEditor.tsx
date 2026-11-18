@@ -17,7 +17,10 @@ import {
   X,
   Check,
   Palette,
+  Search,
 } from 'lucide-react';
+import { FindReplaceBar } from './FindReplaceBar.tsx';
+import { DocStatsBadge } from './DocStatsBadge.tsx';
 
 interface BlockEditorProps {
   page: DocPage;
@@ -63,6 +66,34 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [customCoverUrl, setCustomCoverUrl] = useState('');
   const [showOutline, setShowOutline] = useState(true);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // 全局查找与替换状态 (Ctrl + F)
+  const [isFindOpen, setIsFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
+  // 块拖拽重排交互状态 (Drag & Drop Reordering)
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ blockId: string; position: 'top' | 'bottom' } | null>(null);
+
+  // 目录大纲智能层级过滤与 ScrollSpy 导航
+  const [outlineFilter, setOutlineFilter] = useState<'all' | 'h1' | 'h1-h2'>('all');
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 监听 Ctrl + F / Cmd + F 唤起查找与替换
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setIsFindOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 当封面选择器打开时，同步已有自定义图片链接
   useEffect(() => {
@@ -222,12 +253,44 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       .filter((item) => item.text !== '');
   }, [blocks]);
 
-  // 3. 点击大纲平滑滚动至对应锚点
+  // 3. 智能过滤后的大纲列表 (支持全部 / 仅 H1 / H1 + H2)
+  const filteredHeadings = useMemo(() => {
+    if (outlineFilter === 'h1') {
+      return outlineHeadings.filter((h) => h.type === 'h1');
+    }
+    if (outlineFilter === 'h1-h2') {
+      return outlineHeadings.filter((h) => h.type === 'h1' || h.type === 'h2');
+    }
+    return outlineHeadings;
+  }, [outlineHeadings, outlineFilter]);
+
+  // 4. ScrollSpy: 监听正文滚动，计算视口内当前正在阅读的章节标题
+  const handleScrollContent = useCallback(() => {
+    if (!scrollContainerRef.current || outlineHeadings.length === 0) return;
+    const containerTop = scrollContainerRef.current.getBoundingClientRect().top;
+
+    let currentActiveId = outlineHeadings[0]?.id || null;
+    for (const h of outlineHeadings) {
+      const el = document.getElementById(`block-${h.id}`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top - containerTop <= 120) {
+          currentActiveId = h.id;
+        } else {
+          break;
+        }
+      }
+    }
+    setActiveHeadingId(currentActiveId);
+  }, [outlineHeadings]);
+
+  // 5. 点击大纲平滑滚动至对应锚点
   const handleScrollToHeading = (blockId: string) => {
     const el = document.getElementById(`block-${blockId}`);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setFocusedBlockId(blockId);
+      setActiveHeadingId(blockId);
     }
   };
 
@@ -358,6 +421,140 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     }
   };
 
+  // 8. 块原生拖拽重排处理 (HTML5 Drag & Drop)
+  const handleDragStartBlock = useCallback((blockId: string) => {
+    setDraggingBlockId(blockId);
+  }, []);
+
+  const handleDragEndBlock = useCallback(() => {
+    setDraggingBlockId(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleDragOverBlock = useCallback((blockId: string, position: 'top' | 'bottom') => {
+    setDropTarget({ blockId, position });
+  }, []);
+
+  const handleDropBlock = useCallback(
+    (sourceBlockId: string, targetBlockId: string, position: 'top' | 'bottom') => {
+      setDraggingBlockId(null);
+      setDropTarget(null);
+
+      if (sourceBlockId === targetBlockId) return;
+
+      const current = [...blocksRef.current];
+      const sourceIndex = current.findIndex((b) => b.id === sourceBlockId);
+      if (sourceIndex === -1) return;
+
+      const [movedBlock] = current.splice(sourceIndex, 1);
+      const targetIndex = current.findIndex((b) => b.id === targetBlockId);
+      if (targetIndex === -1) return;
+
+      const insertIndex = position === 'top' ? targetIndex : targetIndex + 1;
+      current.splice(insertIndex, 0, movedBlock);
+
+      // 连续重排并重新赋予递增 sortOrder
+      const reordered = current.map((b, idx) => ({
+        ...b,
+        sortOrder: idx + 1,
+        updatedAt: Date.now(),
+      }));
+
+      pushUndo(blocksRef.current);
+      setBlocks(reordered);
+      blocksRef.current = reordered;
+      saveDocBlocks(page.id, reordered);
+    },
+    [page.id, pushUndo]
+  );
+
+  // 全文匹配项计算 (实时检索当前页面的所有文本块)
+  const findMatches = useMemo(() => {
+    if (!findQuery.trim()) return [];
+    const list: Array<{ blockId: string; blockIndex: number }> = [];
+    const flags = caseSensitive ? 'g' : 'gi';
+    const escaped = findQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, flags);
+
+    blocks.forEach((b, bIdx) => {
+      const text = b.content.replace(/<[^>]+>/g, '');
+      if (regex.test(text)) {
+        list.push({ blockId: b.id, blockIndex: bIdx });
+      }
+    });
+    return list;
+  }, [blocks, findQuery, caseSensitive]);
+
+  // 滚动聚焦当前匹配项
+  const scrollToMatch = useCallback(
+    (index: number) => {
+      const match = findMatches[index];
+      if (match) {
+        const el = document.getElementById(`block-${match.blockId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    },
+    [findMatches]
+  );
+
+  const handleFindNext = useCallback(() => {
+    if (findMatches.length === 0) return;
+    const nextIdx = (currentMatchIndex + 1) % findMatches.length;
+    setCurrentMatchIndex(nextIdx);
+    scrollToMatch(nextIdx);
+  }, [findMatches.length, currentMatchIndex, scrollToMatch]);
+
+  const handleFindPrev = useCallback(() => {
+    if (findMatches.length === 0) return;
+    const prevIdx = (currentMatchIndex - 1 + findMatches.length) % findMatches.length;
+    setCurrentMatchIndex(prevIdx);
+    scrollToMatch(prevIdx);
+  }, [findMatches.length, currentMatchIndex, scrollToMatch]);
+
+  // 单次替换当前匹配项
+  const handleReplaceCurrent = useCallback(() => {
+    const match = findMatches[currentMatchIndex];
+    if (!match) return;
+    const targetBlock = blocks.find((b) => b.id === match.blockId);
+    if (!targetBlock) return;
+
+    const flags = caseSensitive ? '' : 'i';
+    const escaped = findQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, flags);
+    const updated = targetBlock.content.replace(regex, replaceQuery);
+    handleUpdateBlock(targetBlock.id, updated, targetBlock.blockType, targetBlock.properties, true);
+  }, [findMatches, currentMatchIndex, blocks, caseSensitive, findQuery, replaceQuery, handleUpdateBlock]);
+
+  // 全部替换
+  const handleReplaceAll = useCallback(() => {
+    if (!findQuery.trim()) return;
+    pushUndo(blocksRef.current);
+    const flags = caseSensitive ? 'g' : 'gi';
+    const escaped = findQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, flags);
+
+    let hasChanged = false;
+    const nextBlocks = blocks.map((b) => {
+      if (regex.test(b.content)) {
+        hasChanged = true;
+        return {
+          ...b,
+          content: b.content.replace(regex, replaceQuery),
+          updatedAt: Date.now(),
+        };
+      }
+      return b;
+    });
+
+    if (hasChanged) {
+      setBlocks(nextBlocks);
+      blocksRef.current = nextBlocks;
+      saveDocBlocks(page.id, nextBlocks);
+    }
+  }, [findQuery, caseSensitive, replaceQuery, blocks, pushUndo, page.id]);
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0a0d14] text-slate-100 overflow-hidden select-text">
       {/* 顶部状态与面包屑栏 (49px 高度对齐基准线，清理冗余右上角按钮) */}
@@ -393,6 +590,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             >
               <Download size={13} />
             </button>
+            <button
+              onClick={() => setIsFindOpen(true)}
+              className="p-1 hover:bg-white/10 text-slate-400 hover:text-sky-300 rounded transition-colors"
+              title="查找与替换 (Ctrl+F)"
+            >
+              <Search size={13} />
+            </button>
           </div>
 
           {!showOutline && (
@@ -412,9 +616,30 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       </div>
 
       {/* 主工作区：左侧正文编辑区（标题靠左） + 右侧目录大纲栏（相对向右缩进伴随索引） */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="flex-1 flex overflow-hidden min-h-0 relative">
+        {/* 全局查找与替换微工具条 */}
+        <FindReplaceBar
+          isOpen={isFindOpen}
+          onClose={() => setIsFindOpen(false)}
+          findQuery={findQuery}
+          setFindQuery={setFindQuery}
+          replaceQuery={replaceQuery}
+          setReplaceQuery={setReplaceQuery}
+          caseSensitive={caseSensitive}
+          setCaseSensitive={setCaseSensitive}
+          currentMatch={currentMatchIndex}
+          totalMatches={findMatches.length}
+          onFindNext={handleFindNext}
+          onFindPrev={handleFindPrev}
+          onReplaceCurrent={handleReplaceCurrent}
+          onReplaceAll={handleReplaceAll}
+        />
         {/* 页面内容正文区域 (包含顶部沉浸式大封面条带及正文流) */}
-        <div className="flex-1 overflow-y-auto min-w-0 doc-typography custom-scrollbar">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScrollContent}
+          className="flex-1 overflow-y-auto min-w-0 doc-typography custom-scrollbar"
+        >
           {/* 若 page.cover 存在：在页面正文滚动区最顶端渲染 h-40 的大封面条带 */}
           {page.cover && (
             <div className="relative w-full h-40 group select-none overflow-hidden shrink-0">
@@ -567,6 +792,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     onFocusNext={() => handleFocusNext(block.id)}
                     pages={pages}
                     onNavigatePage={onNavigatePage}
+                    isDragging={draggingBlockId === block.id}
+                    dropIndicator={dropTarget?.blockId === block.id ? dropTarget.position : null}
+                    onDragStartBlock={handleDragStartBlock}
+                    onDragEndBlock={handleDragEndBlock}
+                    onDragOverBlock={handleDragOverBlock}
+                    onDropBlock={handleDropBlock}
                   />
                 );
               })}
@@ -600,32 +831,68 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               </button>
             </div>
 
-            {outlineHeadings.length === 0 ? (
+            {/* 智能层级过滤胶囊组 (全部 / 仅 H1 / H1 + H2) */}
+            <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-lg mb-2">
+              {(
+                [
+                  { id: 'all', label: '全部' },
+                  { id: 'h1', label: '仅H1' },
+                  { id: 'h1-h2', label: 'H1+H2' },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setOutlineFilter(f.id)}
+                  className={`flex-1 text-[10px] py-0.5 rounded transition-all text-center ${
+                    outlineFilter === f.id
+                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {filteredHeadings.length === 0 ? (
               <div className="text-[11px] text-slate-600 py-6 text-center italic">
-                当前文档暂无标题 (H1/H2/H3)
+                {outlineHeadings.length === 0 ? '当前文档暂无标题 (H1/H2/H3)' : '无匹配层级标题'}
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                {outlineHeadings.map((heading) => (
-                  <button
-                    key={heading.id}
-                    onClick={() => handleScrollToHeading(heading.id)}
-                    className={`w-full text-left truncate rounded-md transition-colors block text-xs py-1 px-1.5 ${
-                      heading.type === 'h1'
-                        ? 'font-medium text-slate-200 hover:text-white hover:bg-white/5 pl-1.5'
-                        : heading.type === 'h2'
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5 pl-4'
-                        : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 pl-6 text-[11px]'
-                    }`}
-                    title={heading.text}
-                  >
-                    {heading.text}
-                  </button>
-                ))}
+              <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
+                {filteredHeadings.map((heading) => {
+                  const isActive = activeHeadingId === heading.id;
+                  return (
+                    <button
+                      key={heading.id}
+                      onClick={() => handleScrollToHeading(heading.id)}
+                      className={`w-full text-left truncate rounded-md transition-all block text-xs py-1 px-1.5 relative ${
+                        isActive
+                          ? 'bg-sky-500/10 text-sky-300 font-medium'
+                          : heading.type === 'h1'
+                          ? 'font-medium text-slate-200 hover:text-white hover:bg-white/5'
+                          : heading.type === 'h2'
+                          ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 text-[11px]'
+                      } ${
+                        heading.type === 'h1' ? 'pl-2' : heading.type === 'h2' ? 'pl-4' : 'pl-6'
+                      }`}
+                      title={heading.text}
+                    >
+                      {isActive && (
+                        <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-sky-400 rounded-full shadow-[0_0_6px_rgba(56,189,248,0.8)]" />
+                      )}
+                      {heading.text}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
         )}
+
+        {/* 实时字数、字符数与阅读时长微光统计胶囊 */}
+        <DocStatsBadge blocks={blocks} />
       </div>
 
       {/* 封面选择器弹窗 (CoverPicker) */}

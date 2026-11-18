@@ -20,6 +20,7 @@ import {
   AlignRight,
   Code as CodeIcon,
   Workflow,
+  GripVertical,
 } from 'lucide-react';
 import {
   highlightCode,
@@ -69,6 +70,13 @@ interface BlockItemProps {
   pages?: DocPage[];
   /** 点击双向页面引用胶囊时的跳转回调 */
   onNavigatePage?: (pageId: string) => void;
+  /** 块拖拽重排交互属性与回调 */
+  isDragging?: boolean;
+  dropIndicator?: 'top' | 'bottom' | null;
+  onDragStartBlock?: (blockId: string) => void;
+  onDragEndBlock?: () => void;
+  onDragOverBlock?: (blockId: string, position: 'top' | 'bottom') => void;
+  onDropBlock?: (sourceBlockId: string, targetBlockId: string, position: 'top' | 'bottom') => void;
 }
 
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
@@ -133,10 +141,84 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   seqNumber,
   pages,
   onNavigatePage,
+  isDragging,
+  dropIndicator,
+  onDragStartBlock,
+  onDragEndBlock,
+  onDragOverBlock,
+  onDropBlock,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
   const isComposingRef = useRef(false);
+
+  // 原生拖拽辅助函数与落点事件
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isTop = e.clientY - rect.top < rect.height / 2;
+    onDragOverBlock?.(block.id, isTop ? 'top' : 'bottom');
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain');
+    if (sourceId && sourceId !== block.id) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const isTop = e.clientY - rect.top < rect.height / 2;
+      onDropBlock?.(sourceId, block.id, isTop ? 'top' : 'bottom');
+    }
+  };
+
+  const renderSideHandle = (topClass = 'top-1') => (
+    <div
+      className={`absolute -left-9 ${topClass} flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10 gap-0.5`}
+    >
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', block.id);
+          e.dataTransfer.effectAllowed = 'move';
+          onDragStartBlock?.(block.id);
+        }}
+        onDragEnd={() => {
+          onDragEndBlock?.();
+        }}
+        className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded cursor-grab active:cursor-grabbing transition-colors"
+        title="按住拖拽调整块顺序"
+      >
+        <GripVertical size={13} />
+      </div>
+      <button
+        type="button"
+        onClick={() => onInsertBelow('p')}
+        className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded transition-colors cursor-pointer"
+        title="在下方插入块"
+      >
+        <Plus size={12} />
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+        title="删除块"
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  );
+
+  const renderDropIndicator = () => (
+    <>
+      {dropIndicator === 'top' && (
+        <div className="absolute -top-1 left-0 right-0 h-0.5 bg-sky-400 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.9)] z-30 pointer-events-none animate-pulse" />
+      )}
+      {dropIndicator === 'bottom' && (
+        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-sky-400 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.9)] z-30 pointer-events-none animate-pulse" />
+      )}
+    </>
+  );
 
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
@@ -1036,24 +1118,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     // showIconPicker / setShowIconPicker 来自顶层 state（已声明在组件顶部）
 
     return (
-      <div id={`block-${block.id}`} className="group relative flex items-start py-1 my-0.5">
-        {/* 悬浮侧柄 */}
-        <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">
-          <button
-            onClick={() => onInsertBelow('p')}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
-            title="在下方插入块"
-          >
-            <Plus size={12} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除块"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 my-0.5 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-1')}
 
         {/* 主体卡片 */}
         <div className={`flex-1 flex items-start gap-3 p-3 rounded-xl border ${themeClass}`}>
@@ -1152,16 +1226,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 分隔线特殊渲染
   if (block.blockType === 'divider') {
     return (
-      <div id={`block-${block.id}`} className="group relative flex items-center py-2 my-1">
-        <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除分隔线"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-center py-2 my-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-1')}
         <div className="flex-1 h-px bg-white/10" />
       </div>
     );
@@ -1170,16 +1244,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 数据表格块特殊渲染 (Simple Table Block)
   if (block.blockType === 'table') {
     return (
-      <div id={`block-${block.id}`} className="group relative flex items-start py-1">
-        <div className="absolute -left-8 top-3 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除表格"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
         <div className="flex-1 min-w-0">
           <TableBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
         </div>
@@ -1190,23 +1264,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 思维导图嵌入卡片 (MindMap Block)
   if (block.blockType === 'mindmap') {
     return (
-      <div id={`block-${block.id}`} className="group relative flex items-start py-1">
-        <div className="absolute -left-8 top-3 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
-          <button
-            onClick={() => onInsertBelow('p')}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
-            title="在下方插入块"
-          >
-            <Plus size={12} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除思维导图"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
         <div className="flex-1 min-w-0">
           <MindMapEmbedBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
         </div>
@@ -1217,23 +1284,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   // 数学公式卡片 (Math Block)
   if (block.blockType === 'math') {
     return (
-      <div id={`block-${block.id}`} className="group relative flex items-start py-1">
-        <div className="absolute -left-8 top-3 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
-          <button
-            onClick={() => onInsertBelow('p')}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
-            title="在下方插入块"
-          >
-            <Plus size={12} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除数学公式"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
         <div className="flex-1 min-w-0">
           <MathBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
         </div>
@@ -1267,24 +1327,16 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
     if (!src) {
       return (
-        <div id={`block-${block.id}`} className="group relative flex items-start py-2 my-1">
-          {/* 悬浮操作侧柄 */}
-          <div className="absolute -left-8 top-2 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
-            <button
-              onClick={() => onInsertBelow('p')}
-              className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
-              title="在下方插入块"
-            >
-              <Plus size={12} />
-            </button>
-            <button
-              onClick={onDelete}
-              className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-              title="删除块"
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
+        <div
+          id={`block-${block.id}`}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className={`group relative flex items-start py-2 my-1 ${
+            isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+          }`}
+        >
+          {renderDropIndicator()}
+          {renderSideHandle('top-2')}
 
           {/* 空状态：优雅浅灰边框卡片 */}
           <div className="flex-1 p-5 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col items-center justify-center gap-3.5 text-center">
@@ -1346,26 +1398,15 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     return (
       <div
         id={`block-${block.id}`}
-        className="group relative py-2 my-1.5"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative py-2 my-1.5 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
         style={{ textAlign: align }}
       >
-        {/* 悬浮操作侧柄 */}
-        <div className="absolute -left-8 top-2 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 select-none">
-          <button
-            onClick={() => onInsertBelow('p')}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
-            title="在下方插入块"
-          >
-            <Plus size={12} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-            title="删除块"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+        {renderDropIndicator()}
+        {renderSideHandle('top-2')}
 
         {/* 已载入图片主体 */}
         <div className="relative inline-block max-w-full">
@@ -1460,25 +1501,14 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       id={`block-${block.id}`}
       onContextMenu={handleContextMenu}
       onClick={handleBlockClick}
-      className={`group relative flex items-start ${getBlockMarginClass()}`}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      className={`group relative flex items-start ${getBlockMarginClass()} ${
+        isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+      }`}
     >
-      {/* 悬浮操作侧柄 */}
-      <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">
-        <button
-          onClick={() => onInsertBelow('p')}
-          className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-slate-300 rounded"
-          title="在下方插入块"
-        >
-          <Plus size={12} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-0.5 hover:bg-white/10 text-slate-500 hover:text-rose-400 rounded"
-          title="删除块"
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>
+      {renderDropIndicator()}
+      {renderSideHandle('top-1')}
 
       {/* 待办复选框 */}
       {block.blockType === 'todo' && (

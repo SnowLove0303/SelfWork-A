@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.60] - 2026-11-18
+
+### Feat (文档引擎：阶段 3 - 写作交互与生产力增强：全局查找替换、块级拖拽重排、ScrollSpy 目录大纲与实时字数统计)
+
+- **全局查找与替换微工具条 (`Ctrl+F` / `FindReplaceBar.tsx`)**：
+  - 新增 `FindReplaceBar.tsx` 独立微光工具条组件，支持按下 `Ctrl + F` / `Cmd + F` 或点击顶栏放大镜图标即时唤出；
+  - 实时正则匹配全文所有块文本，并在右上角显示 `当前匹配序号 / 总匹配数`；
+  - 键盘 `Enter` / `Shift+Enter` 快速在匹配项间平滑滚动切换并聚焦目标块；
+  - 提供单次精准替换与批量全部替换功能，全部替换前自动压入 Undo 栈，支持 `Ctrl+Z` 瞬时恢复。
+
+- **块级原生拖拽重排与 6 点手柄 (`GripVertical` & HTML5 Drag & Drop)**：
+  - 在 `BlockItem.tsx` 统一抽象 `renderSideHandle` 与 `renderDropIndicator`，为所有块类型（常规文本、标题、引用、列表、待办、代码、Callout、数据表格、思维导图、数学公式、图片等）统一注入 6 点拖拽抓手；
+  - 拖拽经过目标块时，根据鼠标相对中心高度智能显示顶部或底部蓝色高亮指示线（`h-0.5 bg-sky-400 animate-pulse`）；
+  - 释放拖拽时在 `BlockEditor.tsx` 中执行数组切片原子重排，连续重新赋予自增 `sortOrder`，并异步持久化保存至本地 SQLite 数据库。
+
+- **实时字数、字符数与阅读时长统计微光胶囊 (`DocStatsBadge.tsx`)**：
+  - 在右下角挂载暗黑磨砂玻璃胶囊，实时计算文档总块数、中文字数、英文单词数、字符数以及按 300字/分钟预估的阅读时长；
+  - 深度监听 `selectionchange` 事件，当用户在正文划选任意选区时，统计胶囊即刻高亮提示当前选区的词数与字符数，选区取消后平滑还原为全局统计。
+
+- **目录大纲智能层级过滤与 ScrollSpy 导航 (`outline:scrollspy-and-filter`)**：
+  - 目录大纲顶部增加「全部」、「仅 H1」、「H1 + H2」微型层级过滤胶囊切换，帮助快速把握长文档骨架；
+  - 正文滚动区域监听滚动事件，动态计算视口顶部 120px 范围内的阅读章节，在右侧大纲对应条目呈现亮青色侧指示标与背景微光；
+  - 点击任意大纲标题平滑滚动定位并自动激活该标题。
+
 ## [0.1.59] - 2026-11-18
 
 ### Feat (文档引擎：阶段 2 - 多维图表嵌入、内嵌思维导图、Mermaid 架构流程图与双向知识关联)
