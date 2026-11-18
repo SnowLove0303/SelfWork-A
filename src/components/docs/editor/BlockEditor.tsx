@@ -451,7 +451,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             </div>
           )}
 
-          <div className={`px-8 lg:px-12 ${page.cover ? 'pb-8 pt-0' : 'py-8'}`}>
+          <div className={`px-8 lg:px-12 ${page.cover ? 'pb-48 pt-0' : 'pt-8 pb-48'}`}>
             <div className="max-w-3xl lg:max-w-4xl space-y-4">
               {/* 文档图标与大标题 (若有 cover，Emoji 使用 -mt-7 ml-8 浮空重叠在封面上) */}
               <div className="space-y-2 mb-6 group/header">
@@ -511,6 +511,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   placeholder="无标题文档"
                   className="w-full text-3xl font-bold text-white bg-transparent border-none outline-none placeholder-slate-600 leading-snug tracking-tight"
                 />
+                {/* 标题与正文黄金过渡层 */}
+                <div className="mt-4 mb-2 border-b border-white/[0.04]" />
               </div>
 
             {/* 块流渲染 */}
@@ -564,12 +566,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               })}
             </div>
 
-            {/* 底部点击空白插入块 */}
+            {/* 底部打字机留白与点击空白插入块 */}
             <div
               onClick={() => handleInsertBelow(blocks[blocks.length - 1]?.id || '', 'p')}
-              className="py-12 cursor-text flex items-center justify-center text-sm text-slate-500 hover:text-slate-300 transition-colors"
+              className="py-10 mt-6 cursor-text flex items-center justify-center text-xs font-mono text-slate-600 hover:text-slate-400 transition-colors border border-dashed border-transparent hover:border-white/10 rounded-xl select-none"
             >
-              点击此处添加新段落，或按 '/' 唤出格式菜单...
+              + 点击此处添加新段落，或按 '/' 唤出快捷菜单...
             </div>
           </div>
         </div>

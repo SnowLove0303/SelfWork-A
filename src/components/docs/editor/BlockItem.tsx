@@ -854,6 +854,25 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     );
   };
 
+  // 获取不同块类型的外边距与垂直排版呼吸空间类
+  const getBlockMarginClass = () => {
+    switch (block.blockType) {
+      case 'h1':
+        return 'mt-10 mb-2.5 pt-2';
+      case 'h2':
+        return 'mt-8 mb-2 pt-1';
+      case 'h3':
+        return 'mt-5 mb-1.5';
+      case 'divider':
+        return 'my-6';
+      case 'code':
+      case 'table':
+        return 'my-3.5';
+      default:
+        return 'py-1 my-0.5';
+    }
+  };
+
   // 获取不同块类型的特定样式类
   const getBlockStyle = () => {
     switch (block.blockType) {
@@ -1277,7 +1296,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     <div
       id={`block-${block.id}`}
       onContextMenu={handleContextMenu}
-      className="group relative flex items-start py-1 my-0.5"
+      className={`group relative flex items-start ${getBlockMarginClass()}`}
     >
       {/* 悬浮操作侧柄 */}
       <div className="absolute -left-8 top-1 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10">

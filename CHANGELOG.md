@@ -2,6 +2,26 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.58] - 2026-11-18
+
+### Feat (文档引擎：阶段 1 - 排版垂直节奏重塑、标题呼吸空间与正文结尾打字机沉浸式留白)
+
+- **各级标题垂直排版节奏重构 (`typography:heading-rhythm`)**：
+  - 彻底根治所有块统一硬编码 `py-1 my-0.5`（仅 2px 间距）导致的标题与上一段正文“贴脸拥挤”问题；
+  - 严格遵循出版物“临近原则（Proximity Principle）”，动态计算各级标题外边距：
+    - `case 'h1'`: 上外边距大幅拉升至 40px，下外边距 10px（`mt-10 mb-2.5 pt-2`），形成开阔的章节开辟呼吸感；
+    - `case 'h2'`: 上外边距 32px，下外边距 8px（`mt-8 mb-2 pt-1`），中层小节自然舒展；
+    - `case 'h3'`: 上外边距 20px，下外边距 6px（`mt-5 mb-1.5`）；
+    - 普通段落、列表保持紧凑工整 `py-1 my-0.5`，卡片类块保持 `my-3.5`。
+
+- **正文结尾打字机模式留白 (`ux:typewriter-bottom-scroll`)**：
+  - 正文滚动容器底部内边距由原先逼仄的 `pb-8`（32px）大幅提升至 **`pb-48`（192px 约半屏净空）**；
+  - 确保长篇文档滚动到底部时，最后一行文字永远悬停在视口中上方黄金视野，彻底消除光标卡死在屏幕下边缘的触底压迫感；
+  - 优化底部新增段落占位微交互为柔和幽灵虚线边框卡片（`border-dashed hover:border-white/10`）。
+
+- **大标题与正文起首黄金过渡层 (`typography:title-spacing`)**：
+  - 大标题输入框下方建立 `mt-4 mb-2 border-b border-white/[0.04]` 微弱基准线与 32px 空间，形成封面/标题与正文起首的优雅过渡。
+
 ## [0.1.57] - 2026-11-18
 
 ### Feat (文档引擎：对标 Notion/BlockSuite 简单数据表格 TableBlock 与多维可视化深度重构)
