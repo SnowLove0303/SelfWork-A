@@ -18,7 +18,8 @@ export type BlockType =
   | 'image'
   | 'mindmap'
   | 'math'
-  | 'columns';
+  | 'columns'
+  | 'toc';
 
 export interface ColumnItem {
   id: string;

@@ -2,6 +2,33 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.62] - 2026-11-19
+
+### Feat (文档引擎：阶段五·维度 1 - 知识网络与双向拓扑闭环：反向链接、目录大纲卡片、关联力导向图谱与键盘流换块)
+
+- **双向反向链接底栏 (`network:backlinks-panel` / `BacklinksPanel.tsx` & `backlinks.ts`)**：
+  - 新增 `backlinks.ts` 全库双向引用扫描服务与 `BacklinksPanel.tsx` 正文底栏微光卡片；
+  - 自动遍历全库页面块提取包含 `#/page/${targetId}` 的引用上下文与源页面元数据；
+  - 底部优雅折叠显示引用计数徽标（如 `X 处引用`）、源文档标题、最后更新相对时间与正文上下文摘要；
+  - 支持单击卡片一键穿透直达源页面，实现网状双向知识链接无缝漫游。
+
+- **正文内嵌动态目录卡片 (`layout:toc-block` / `TableOfContentsBlock.tsx` & `/toc`)**：
+  - 新增 `TableOfContentsBlock.tsx` 正文内嵌动态大纲块，在 `src/types/docs.ts` 扩展 `BlockType` 增补 `'toc'`；
+  - 斜杠菜单支持 `/toc` 或键入 `toc` 快速插入；
+  - 动态响应式提取当前文档内的全部 H1、H2、H3 标题，层级缩进排列；
+  - 点击目录项平滑滚动至对应标题位置，导出 HTML/Markdown 时自动转为标准跳转超链接。
+
+- **局部文档关联力导向图谱 (`network:local-graph` / `DocLocalGraph.tsx`)**：
+  - 新增 `DocLocalGraph.tsx`，基于原生 React + SVG 纯弹簧动力学方程计算节点坐标；
+  - 在右侧大纲栏顶部提供「大纲」与「图谱」双标签页一键切换；
+  - 自动提取当前文档的出度引用（天蓝色边框）与入度被引用（紫色边框），中心辐射环状围绕；
+  - 支持节点物理拖拽、阻尼回弹、连线高亮与双击一键穿透跳转，独立无依赖纯自研实现。
+
+- **键盘流快速上下交换块 (`keyboard:swap-blocks` / `Alt + ↑/↓`)**：
+  - 在 `BlockItem.tsx` 键盘监听中拦截 `Alt + ArrowUp` 与 `Alt + ArrowDown`；
+  - 在 `BlockEditor.tsx` 中执行原子数组对调并重新编排 `sortOrder`；
+  - 移动后自动保留当前光标聚焦状态并压入 Undo/Redo 历史栈，大幅提升键盘流重构体验。
+
 ## [0.1.61] - 2026-11-19
 
 ### Feat (文档引擎：阶段 4 - 块级流转、模板库、历史版本快照与高保真导出)

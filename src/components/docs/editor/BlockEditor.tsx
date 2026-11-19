@@ -9,9 +9,12 @@ import { DocTemplatePicker } from './DocTemplatePicker.tsx';
 import { DocTemplateDefinition } from '../../../services/docTemplates.ts';
 import { DocHistoryDrawer } from './DocHistoryDrawer.tsx';
 import { saveDocSnapshot } from '../../../services/docHistory.ts';
+import { BacklinksPanel } from './BacklinksPanel.tsx';
+import { DocLocalGraph } from './DocLocalGraph.tsx';
 import {
   FileText,
   ListTree,
+  Share2,
   PanelRightClose,
   PanelRightOpen,
   Undo2,
@@ -89,6 +92,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [dropTarget, setDropTarget] = useState<{ blockId: string; position: 'top' | 'bottom' } | null>(null);
 
   // 目录大纲智能层级过滤与 ScrollSpy 导航
+  const [rightPanelTab, setRightPanelTab] = useState<'toc' | 'graph'>('toc');
   const [outlineFilter, setOutlineFilter] = useState<'all' | 'h1' | 'h1-h2'>('all');
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -535,6 +539,35 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     [page.id, pushUndo]
   );
 
+  // 9. 键盘流快速上下交换块 (Alt + Up / Down)
+  const handleSwapBlock = useCallback(
+    (blockId: string, direction: 'up' | 'down') => {
+      const current = [...blocksRef.current];
+      const idx = current.findIndex((b) => b.id === blockId);
+      if (idx === -1) return;
+      if (direction === 'up' && idx === 0) return;
+      if (direction === 'down' && idx === current.length - 1) return;
+
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      const temp = current[idx];
+      current[idx] = current[targetIdx];
+      current[targetIdx] = temp;
+
+      const reordered = current.map((b, i) => ({
+        ...b,
+        sortOrder: i + 1,
+        updatedAt: Date.now(),
+      }));
+
+      pushUndo(blocksRef.current);
+      setBlocks(reordered);
+      blocksRef.current = reordered;
+      setFocusedBlockId(blockId);
+      saveDocBlocks(page.id, reordered);
+    },
+    [page.id, pushUndo]
+  );
+
   // 全文匹配项计算 (实时检索当前页面的所有文本块)
   const findMatches = useMemo(() => {
     if (!findQuery.trim()) return [];
@@ -963,10 +996,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     onDragEndBlock={handleDragEndBlock}
                     onDragOverBlock={handleDragOverBlock}
                     onDropBlock={handleDropBlock}
+                    onSwapBlock={(dir) => handleSwapBlock(block.id, dir)}
+                    allBlocks={blocks}
+                    onScrollToHeading={handleScrollToHeading}
                   />
                 );
               })}
             </div>
+
+            {/* 双向反向链接底栏 (BacklinksPanel) */}
+            <BacklinksPanel
+              pageId={page.id}
+              allPages={pages}
+              onNavigatePage={onNavigatePage}
+            />
 
             {/* 底部打字机留白与点击空白插入块 */}
             <div
@@ -979,79 +1022,112 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       </div>
 
-        {/* 右侧轻量目录大纲栏 (Notion 风格微光胶囊，字号与间距精心收敛) */}
+        {/* 右侧轻量目录大纲与局部图谱栏 (Notion 风格微光胶囊，字号与间距精心收敛) */}
         {showOutline && (
           <div className="w-56 border-l border-white/5 bg-black/10 backdrop-blur-sm p-4 flex flex-col shrink-0 select-none">
             <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/5">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-300">
-                <ListTree size={14} className="text-sky-400" />
-                <span>目录大纲</span>
+              <div className="flex items-center gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab('toc')}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-all ${
+                    rightPanelTab === 'toc'
+                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <ListTree size={12} />
+                  <span>大纲</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab('graph')}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-all ${
+                    rightPanelTab === 'graph'
+                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Share2 size={12} />
+                  <span>图谱</span>
+                </button>
               </div>
               <button
                 onClick={() => setShowOutline(false)}
                 className="p-1 hover:bg-white/5 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
-                title="收起大纲"
+                title="收起侧栏"
               >
                 <PanelRightClose size={13} />
               </button>
             </div>
 
-            {/* 智能层级过滤胶囊组 (全部 / 仅 H1 / H1 + H2) */}
-            <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-lg mb-2">
-              {(
-                [
-                  { id: 'all', label: '全部' },
-                  { id: 'h1', label: '仅H1' },
-                  { id: 'h1-h2', label: 'H1+H2' },
-                ] as const
-              ).map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setOutlineFilter(f.id)}
-                  className={`flex-1 text-[10px] py-0.5 rounded transition-all text-center ${
-                    outlineFilter === f.id
-                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {filteredHeadings.length === 0 ? (
-              <div className="text-[11px] text-slate-600 py-6 text-center italic">
-                {outlineHeadings.length === 0 ? '当前文档暂无标题 (H1/H2/H3)' : '无匹配层级标题'}
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
-                {filteredHeadings.map((heading) => {
-                  const isActive = activeHeadingId === heading.id;
-                  return (
+            {rightPanelTab === 'toc' ? (
+              <>
+                {/* 智能层级过滤胶囊组 (全部 / 仅 H1 / H1 + H2) */}
+                <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-lg mb-2">
+                  {(
+                    [
+                      { id: 'all', label: '全部' },
+                      { id: 'h1', label: '仅H1' },
+                      { id: 'h1-h2', label: 'H1+H2' },
+                    ] as const
+                  ).map((f) => (
                     <button
-                      key={heading.id}
-                      onClick={() => handleScrollToHeading(heading.id)}
-                      className={`w-full text-left truncate rounded-md transition-all block text-xs py-1 px-1.5 relative ${
-                        isActive
-                          ? 'bg-sky-500/10 text-sky-300 font-medium'
-                          : heading.type === 'h1'
-                          ? 'font-medium text-slate-200 hover:text-white hover:bg-white/5'
-                          : heading.type === 'h2'
-                          ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 text-[11px]'
-                      } ${
-                        heading.type === 'h1' ? 'pl-2' : heading.type === 'h2' ? 'pl-4' : 'pl-6'
+                      key={f.id}
+                      onClick={() => setOutlineFilter(f.id)}
+                      className={`flex-1 text-[10px] py-0.5 rounded transition-all text-center ${
+                        outlineFilter === f.id
+                          ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
                       }`}
-                      title={heading.text}
                     >
-                      {isActive && (
-                        <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-sky-400 rounded-full shadow-[0_0_6px_rgba(56,189,248,0.8)]" />
-                      )}
-                      {heading.text}
+                      {f.label}
                     </button>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+
+                {filteredHeadings.length === 0 ? (
+                  <div className="text-[11px] text-slate-600 py-6 text-center italic">
+                    {outlineHeadings.length === 0 ? '当前文档暂无标题 (H1/H2/H3)' : '无匹配层级标题'}
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
+                    {filteredHeadings.map((heading) => {
+                      const isActive = activeHeadingId === heading.id;
+                      return (
+                        <button
+                          key={heading.id}
+                          onClick={() => handleScrollToHeading(heading.id)}
+                          className={`w-full text-left truncate rounded-md transition-all block text-xs py-1 px-1.5 relative ${
+                            isActive
+                              ? 'bg-sky-500/10 text-sky-300 font-medium'
+                              : heading.type === 'h1'
+                              ? 'font-medium text-slate-200 hover:text-white hover:bg-white/5'
+                              : heading.type === 'h2'
+                              ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                              : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 text-[11px]'
+                          } ${
+                            heading.type === 'h1' ? 'pl-2' : heading.type === 'h2' ? 'pl-4' : 'pl-6'
+                          }`}
+                          title={heading.text}
+                        >
+                          {isActive && (
+                            <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-sky-400 rounded-full shadow-[0_0_6px_rgba(56,189,248,0.8)]" />
+                          )}
+                          {heading.text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <DocLocalGraph
+                currentPage={page}
+                allPages={pages || []}
+                currentBlocks={blocks}
+                onNavigatePage={onNavigatePage}
+              />
             )}
           </div>
         )}

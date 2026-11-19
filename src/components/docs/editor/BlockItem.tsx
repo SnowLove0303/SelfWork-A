@@ -32,6 +32,7 @@ import { MindMapEmbedBlock } from './MindMapEmbedBlock.tsx';
 import { MermaidPreview } from './MermaidPreview.tsx';
 import { MathBlock } from './MathBlock.tsx';
 import { MultiColumnBlock } from './MultiColumnBlock.tsx';
+import { TableOfContentsBlock } from './TableOfContentsBlock.tsx';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -78,6 +79,12 @@ interface BlockItemProps {
   onDragEndBlock?: () => void;
   onDragOverBlock?: (blockId: string, position: 'top' | 'bottom') => void;
   onDropBlock?: (sourceBlockId: string, targetBlockId: string, position: 'top' | 'bottom') => void;
+  /** 键盘快捷上下位移回调 (Alt + Up / Down) */
+  onSwapBlock?: (direction: 'up' | 'down') => void;
+  /** 全量块流（用于 /toc 动态大纲卡片提取） */
+  allBlocks?: DocBlock[];
+  /** 点击大纲项滚动锚点定位回调 */
+  onScrollToHeading?: (headingId: string) => void;
 }
 
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
@@ -148,6 +155,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   onDragEndBlock,
   onDragOverBlock,
   onDropBlock,
+  onSwapBlock,
+  allBlocks,
+  onScrollToHeading,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
@@ -508,6 +518,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   // 5. 键盘事件快捷流 (Enter / Backspace / Tab / Arrow / Shortcuts)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 快捷键 Alt + ↑ / Alt + ↓ 快速上下对调块位置
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      onSwapBlock?.(e.key === 'ArrowUp' ? 'up' : 'down');
+      return;
+    }
+
     // 段落行首直接敲空格或回车触发 ```<lang> 代码块蜕变
     if (block.blockType === 'p') {
       const text = editorRef.current?.innerText?.trim() || '';
@@ -1317,6 +1334,30 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         {renderSideHandle('top-3')}
         <div className="flex-1 min-w-0">
           <MultiColumnBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
+        </div>
+      </div>
+    );
+  }
+
+  // 正文内嵌动态目录卡片 (TOC Block)
+  if (block.blockType === 'toc') {
+    return (
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
+        <div className="flex-1 min-w-0">
+          <TableOfContentsBlock
+            allBlocks={allBlocks || []}
+            onScrollToHeading={onScrollToHeading}
+            onDelete={onDelete}
+          />
         </div>
       </div>
     );

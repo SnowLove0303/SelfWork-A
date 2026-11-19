@@ -19,6 +19,7 @@ import {
   Workflow,
   Sigma,
   Columns2,
+  ListTree,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -146,6 +147,12 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     label: '多栏排版 (Columns)',
     desc: '并排 2 栏或 3 栏内容对比与并列排版',
     icon: <Columns2 size={14} className="text-cyan-400" />,
+  },
+  {
+    type: 'toc',
+    label: '目录大纲 (TOC)',
+    desc: '在正文内嵌入可交互的目录大纲卡片',
+    icon: <ListTree size={14} className="text-sky-400" />,
   },
 ];
 

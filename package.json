@@ -16,7 +16,7 @@
     "clsx": "^2.1.1",
     "katex": "^0.19.1",
     "lucide-react": "^1.16.0",
-    "mermaid": "link:D:/APP/AI app/deepseek/node_modules/mermaid",
+    "mermaid": "^12.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
