@@ -18,11 +18,10 @@ interface BlockToggleProps {
 }
 
 /**
- * Toggle 折叠块：
- *   - 标题行（▶/▼ 箭头 + 可编辑 summary，来自 block.content）
- *   - 点击箭头或在 summary 上按 Enter 切换展开/折叠
- *   - 展开时显示子内容区（properties.children as string）
- *   - 子内容与 summary 均持久化至 block.properties
+ * 现代轻量多级折叠列表块 (BlockToggle)
+ * - 标题行：平滑旋转箭头 (▶/▼) + 可编辑摘要标题 (block.content)
+ * - 子内容区：展开时具有微光层级指示竖线与多段文本输入 (block.properties.children)
+ * - 支持键盘快捷流：Enter 展开并聚焦，Backspace 空标题降级
  */
 export const BlockToggle: React.FC<BlockToggleProps> = ({
   block,
@@ -39,11 +38,10 @@ export const BlockToggle: React.FC<BlockToggleProps> = ({
   const isOpen = block.properties?.isOpen === true;
   const childrenContent = (block.properties?.children as string) || '';
 
-  // autoFocus 支持
+  // 聚焦管理
   useEffect(() => {
     if (autoFocus && summaryRef.current) {
       summaryRef.current.focus();
-      // 将光标移至末尾
       const range = document.createRange();
       const sel = window.getSelection();
       range.selectNodeContents(summaryRef.current);
@@ -53,14 +51,13 @@ export const BlockToggle: React.FC<BlockToggleProps> = ({
     }
   }, [autoFocus]);
 
-  // 同步子内容 DOM（受控内容）
+  // 同步 DOM 内容
   useEffect(() => {
     if (childrenRef.current && childrenRef.current.innerHTML !== childrenContent) {
       childrenRef.current.innerHTML = childrenContent;
     }
   }, [childrenContent]);
 
-  // 同步 summary DOM（受控内容）
   useEffect(() => {
     if (summaryRef.current && summaryRef.current.innerHTML !== block.content) {
       summaryRef.current.innerHTML = block.content;
@@ -68,31 +65,38 @@ export const BlockToggle: React.FC<BlockToggleProps> = ({
   }, [block.content]);
 
   const toggleOpen = () => {
-    onUpdate(block.content, 'toggle', { ...block.properties, isOpen: !isOpen }, true);
+    onUpdate(block.content, 'toggle', { ...(block.properties || {}), isOpen: !isOpen }, true);
   };
 
   const handleSummaryInput = () => {
     const innerText = summaryRef.current?.innerHTML ?? '';
-    onUpdate(innerText, 'toggle', { ...(block.properties ?? {}), isOpen }, false);
+    onUpdate(innerText, 'toggle', { ...(block.properties || {}), isOpen }, false);
   };
 
   const handleChildrenInput = () => {
     const innerText = childrenRef.current?.innerHTML ?? '';
-    onUpdate(block.content, 'toggle', { ...(block.properties ?? {}), isOpen, children: innerText }, false);
+    onUpdate(block.content, 'toggle', { ...(block.properties || {}), isOpen, children: innerText }, false);
   };
 
   const handleSummaryKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Enter 切换展开状态
-      toggleOpen();
+      if (!isOpen) {
+        // 若折叠，回车自动展开并聚焦
+        onUpdate(block.content, 'toggle', { ...(block.properties || {}), isOpen: true }, true);
+        setTimeout(() => {
+          childrenRef.current?.focus();
+        }, 50);
+      } else {
+        // 若已展开，回车聚焦子内容
+        childrenRef.current?.focus();
+      }
       return;
     }
     if (e.key === 'Backspace') {
       const content = summaryRef.current?.innerText ?? '';
-      if (content === '') {
+      if (content === '' || content === '\n') {
         e.preventDefault();
-        // 降级为 p 块
         onUpdate('', 'p', {}, true);
         return;
       }
@@ -105,8 +109,13 @@ export const BlockToggle: React.FC<BlockToggleProps> = ({
       }
     }
     if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      onFocusNext();
+      if (isOpen && childrenRef.current) {
+        e.preventDefault();
+        childrenRef.current.focus();
+      } else {
+        e.preventDefault();
+        onFocusNext();
+      }
     }
     if (e.key === 'Delete' && (summaryRef.current?.innerText ?? '') === '') {
       e.preventDefault();
@@ -117,56 +126,60 @@ export const BlockToggle: React.FC<BlockToggleProps> = ({
   const handleChildrenKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // 在子内容末尾按 Enter，在折叠块下方插入新段落
       onInsertBelow('p');
     }
     if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      summaryRef.current?.focus();
+      const sel = window.getSelection();
+      if (sel && sel.anchorOffset === 0) {
+        e.preventDefault();
+        summaryRef.current?.focus();
+      }
     }
   };
 
   return (
     <div
-      id={`block-${block.id}`}
-      className="group relative flex flex-col"
+      className="group/toggle flex flex-col w-full my-0.5 rounded-lg transition-colors"
     >
-      {/* 标题行 */}
-      <div className="flex items-start gap-1 min-h-[1.6rem]">
-        {/* 折叠箭头 */}
+      {/* 标题摘要行 */}
+      <div className="flex items-start gap-1.5 min-h-[1.75rem] py-0.5">
         <button
+          type="button"
           onClick={toggleOpen}
-          className="mt-[3px] shrink-0 p-0.5 text-slate-500 hover:text-slate-200 hover:bg-white/10 rounded transition-all duration-150 select-none"
-          title={isOpen ? '点击折叠' : '点击展开'}
+          className="mt-[3px] shrink-0 p-0.5 text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 rounded-md transition-all select-none"
+          title={isOpen ? '点击收起' : '点击展开'}
         >
           <ChevronRight
-            size={14}
-            className={`transition-transform duration-150 ${isOpen ? 'rotate-90' : 'rotate-0'}`}
+            size={15}
+            className={`transition-transform duration-200 text-slate-400 group-hover/toggle:text-sky-400 ${
+              isOpen ? 'rotate-90 text-sky-400' : 'rotate-0'
+            }`}
           />
         </button>
 
-        {/* Summary 可编辑区 */}
         <div
           ref={summaryRef}
           contentEditable
           suppressContentEditableWarning
           onInput={handleSummaryInput}
           onKeyDown={handleSummaryKeyDown}
-          data-placeholder="折叠块标题..."
-          className="flex-1 outline-none font-semibold text-slate-200 leading-relaxed break-words min-h-[1.4rem] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-600"
+          data-placeholder="折叠列表标题 (按回车展开)..."
+          className="flex-1 outline-none font-medium text-slate-200 leading-relaxed break-words min-h-[1.4rem] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-600"
         />
       </div>
 
-      {/* 子内容区（展开时显示） */}
+      {/* 展开子内容容器 */}
       {isOpen && (
-        <div className="ml-5 mt-1 pl-3 border-l border-white/10">
+        <div className="ml-5 pl-3.5 my-1 border-l-2 border-sky-500/30 hover:border-sky-500/60 transition-colors">
           <div
             ref={childrenRef}
             contentEditable
             suppressContentEditableWarning
             onInput={handleChildrenInput}
             onKeyDown={handleChildrenKeyDown}
-            data-placeholder="在此输入内容..."
-            className="outline-none text-slate-400 leading-relaxed break-words min-h-[1.4rem] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-600"
+            data-placeholder="在此输入折叠详细内容..."
+            className="outline-none text-slate-300 text-sm leading-relaxed break-words min-h-[1.5rem] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-600"
           />
         </div>
       )}

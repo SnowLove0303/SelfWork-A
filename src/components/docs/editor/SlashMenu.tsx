@@ -20,6 +20,8 @@ import {
   Sigma,
   Columns2,
   ListTree,
+  Film,
+  Link2,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -153,6 +155,18 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     label: '目录大纲 (TOC)',
     desc: '在正文内嵌入可交互的目录大纲卡片',
     icon: <ListTree size={14} className="text-sky-400" />,
+  },
+  {
+    type: 'media',
+    label: '音视频媒体 (Media)',
+    desc: '嵌入音频播放条或视频播放器',
+    icon: <Film size={14} className="text-pink-400" />,
+  },
+  {
+    type: 'synced',
+    label: '跨文档同步块 (Synced Block)',
+    desc: '在多篇文档中保持内容完全一致的同步引用',
+    icon: <Link2 size={14} className="text-teal-400" />,
   },
 ];
 

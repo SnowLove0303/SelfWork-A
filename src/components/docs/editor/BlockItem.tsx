@@ -21,6 +21,8 @@ import {
   Code as CodeIcon,
   Workflow,
   GripVertical,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import {
   highlightCode,
@@ -33,6 +35,9 @@ import { MermaidPreview } from './MermaidPreview.tsx';
 import { MathBlock } from './MathBlock.tsx';
 import { MultiColumnBlock } from './MultiColumnBlock.tsx';
 import { TableOfContentsBlock } from './TableOfContentsBlock.tsx';
+import { BlockToggle } from './BlockToggle.tsx';
+import { MediaEmbedBlock } from './MediaEmbedBlock.tsx';
+import { SyncedBlock } from './SyncedBlock.tsx';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -257,6 +262,19 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [lineCount, setLineCount] = useState(() =>
     Math.max(1, (block.content || '').split('\n').length)
   );
+  // 代码块全屏沉浸阅读浮窗状态
+  const [isFullscreenCode, setIsFullscreenCode] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreenCode) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreenCode(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isFullscreenCode]);
 
   // Callout 块图标选择器状态
   const [showIconPicker, setShowIconPicker] = useState(false);
@@ -1363,6 +1381,82 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     );
   }
 
+  // 折叠列表块 (Toggle Block)
+  if (block.blockType === 'toggle') {
+    return (
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-2')}
+        <div className="flex-1 min-w-0">
+          <BlockToggle
+            block={block}
+            autoFocus={autoFocus}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+            onInsertBelow={onInsertBelow}
+            onFocusPrev={onFocusPrev}
+            onFocusNext={onFocusNext}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // 音视频多媒体卡片 (Media Block)
+  if (block.blockType === 'media') {
+    return (
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
+        <div className="flex-1 min-w-0">
+          <MediaEmbedBlock
+            block={block}
+            onUpdate={onUpdate as any}
+            onDelete={onDelete}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // 跨文档同步引用块 (Synced Block)
+  if (block.blockType === 'synced') {
+    return (
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
+        <div className="flex-1 min-w-0">
+          <SyncedBlock
+            block={block}
+            onUpdate={onUpdate as any}
+            onDelete={onDelete}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // 图片块渲染（支持本地上传 base64 与网络图片 URL 嵌入）
   if (block.blockType === 'image') {
     const src = block.properties?.src as string | undefined;
@@ -1802,6 +1896,17 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                       </>
                     )}
                   </button>
+
+                  {/* 全屏阅读切换 */}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setIsFullscreenCode(!isFullscreenCode)}
+                    className="p-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title={isFullscreenCode ? '退出全屏 (Esc)' : '全屏沉浸阅读'}
+                  >
+                    {isFullscreenCode ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                  </button>
                 </div>
               </div>
             )}
@@ -1860,6 +1965,71 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                         : 'whitespace-pre overflow-x-auto no-scrollbar'
                     }`}
                   />
+
+                  {/* 全屏阅读模态浮窗 */}
+                  {isFullscreenCode && (
+                    <div
+                      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-150"
+                      onClick={() => setIsFullscreenCode(false)}
+                    >
+                      <div
+                        className="w-full max-w-5xl h-[85vh] bg-[#0d1117] border border-white/15 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="h-10 px-4 bg-[#161b22] border-b border-white/[0.08] flex items-center justify-between select-none">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+                            <span className="text-xs font-mono text-slate-300 ml-2 font-medium">
+                              {SUPPORTED_CODE_LANGUAGES.find((l) => l.id === currentLang)?.name || currentLang}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const text = editorRef.current?.innerText || block.content;
+                                navigator.clipboard.writeText(text);
+                                setCopiedCode(true);
+                                setTimeout(() => setCopiedCode(false), 1800);
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-xs text-slate-200 transition-colors"
+                            >
+                              {copiedCode ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                              <span>{copiedCode ? '已复制' : '复制'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsFullscreenCode(false)}
+                              className="p-1 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors"
+                              title="退出全屏 (Esc)"
+                            >
+                              <Minimize2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 overflow-auto flex font-mono text-sm leading-[24px] p-4 bg-[#0d1117]">
+                          {isLineNumbersEnabled && (
+                            <div
+                              className="select-none pr-4 text-right text-slate-600 font-mono text-sm leading-[24px] border-r border-white/[0.08] shrink-0 tabular-nums"
+                              style={{ minWidth: '3.5rem' }}
+                            >
+                              {Array.from({ length: lineCount }, (_, i) => (
+                                <div key={i}>{i + 1}</div>
+                              ))}
+                            </div>
+                          )}
+                          <pre
+                            className="flex-1 pl-4 text-slate-200 outline-none overflow-x-auto"
+                            dangerouslySetInnerHTML={{ __html: highlightCode(block.content, currentLang) }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             ) : (

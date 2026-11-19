@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DocPage, DocBlock, BlockType, DocSnapshot } from '../../../types/docs.ts';
 import { BlockItem } from './BlockItem.tsx';
-import { BlockToggle } from './BlockToggle.tsx';
 import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
 import { exportBlocksToMarkdown } from '../../../services/markdownExport.ts';
 import { exportBlocksToHtml } from '../../../services/htmlExport.ts';
@@ -957,22 +956,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     }
                   }
                   seqNumber = count;
-                }
-                if (block.blockType === 'toggle') {
-                  return (
-                    <BlockToggle
-                      key={block.id}
-                      block={block}
-                      autoFocus={focusedBlockId === block.id}
-                      onUpdate={(content, blockType, properties, isStructural) =>
-                        handleUpdateBlock(block.id, content, blockType, properties, isStructural)
-                      }
-                      onDelete={() => handleDeleteBlock(block.id)}
-                      onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
-                      onFocusPrev={() => handleFocusPrev(block.id)}
-                      onFocusNext={() => handleFocusNext(block.id)}
-                    />
-                  );
                 }
 
                 return (

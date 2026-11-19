@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.63] - 2026-11-19
+
+### Feat (文档引擎：阶段五·维度 2 - 结构化排版与高级块类型：多级折叠列表、专业代码块全屏、音视频媒体卡片与跨页双向同步块)
+
+- **多级折叠列表块重塑 (`layout:toggle-block` / `BlockToggle.tsx` & `/toggle`)**：
+  - 将 `BlockToggle.tsx` 统合收拢进 `BlockItem.tsx` 统一管道，原生继承 6 点抓手拖拽与 `Alt + ↑/↓` 换块监听；
+  - 增强折叠箭头旋转动画与展开时左侧渐变微光竖线层级指示；
+  - 优化回车换行与光标聚焦体验，折叠状态实时持久化于 SQLite 与本地缓存。
+
+- **专业代码块深度增强 (`code:enhanced-codeblock` / 行号/复制/沉浸全屏)**：
+  - 行号动态自适应计算且强制禁止选中（`select-none`），代码复制绝对无行号与空行干扰；
+  - 点击一键复制呈现 1.5 秒绿色 Check 动效与已复制轻提示；
+  - 新增全屏沉浸阅读浮窗（`fixed inset-0` 毛玻璃大视口弹窗），支持语法高亮实时查看与 `Esc` / 按钮快捷退出。
+
+- **音视频与多媒体外链卡片 (`media:embed-card` / `MediaEmbedBlock.tsx` & `/media`)**：
+  - 新增 `MediaEmbedBlock.tsx`，支持斜杠菜单键入 `/media`、`/video` 或 `/audio` 快捷插入；
+  - 智能识别 mp4/webm 视频与 mp3/wav 音频直链；
+  - 音频渲染紧凑暗黑声波微光播放条与时长进度，视频渲染自适应等比圆角毛玻璃硬件加速播放器。
+
+- **跨文档双向同步引用块 (`network:synced-block` / `SyncedBlock.tsx` & `syncedBlocks.ts` & `/synced`)**：
+  - 新增 `syncedBlocks.ts` 全局 Sync ID 唯一内容管理服务；
+  - 新增 `SyncedBlock.tsx`，支持创建独立同步源块或跨文档绑定已有 Sync ID 嵌入引用；
+  - 具有专属晶体翡翠/天蓝微光边框与「🔗 跨文档同步块」微徽标，任一处文档修改内容，全库所有引用处即时自动同步更新。
+
 ## [0.1.62] - 2026-11-19
 
 ### Feat (文档引擎：阶段五·维度 1 - 知识网络与双向拓扑闭环：反向链接、目录大纲卡片、关联力导向图谱与键盘流换块)

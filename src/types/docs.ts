@@ -19,7 +19,22 @@ export type BlockType =
   | 'mindmap'
   | 'math'
   | 'columns'
-  | 'toc';
+  | 'toc'
+  | 'media'
+  | 'synced';
+
+export interface MediaBlockProperties {
+  url?: string;
+  mediaType?: 'video' | 'audio' | 'embed';
+  title?: string;
+  autoplay?: boolean;
+}
+
+export interface SyncedBlockProperties {
+  syncId: string;
+  isOriginal?: boolean;
+  title?: string;
+}
 
 export interface ColumnItem {
   id: string;
