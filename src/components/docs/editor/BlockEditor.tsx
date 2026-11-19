@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { DocPage, DocBlock, BlockType } from '../../../types/docs.ts';
+import { DocPage, DocBlock, BlockType, DocSnapshot } from '../../../types/docs.ts';
 import { BlockItem } from './BlockItem.tsx';
 import { BlockToggle } from './BlockToggle.tsx';
 import { loadDocBlocks, saveDocBlocks } from '../../../services/docsDb.ts';
 import { exportBlocksToMarkdown } from '../../../services/markdownExport.ts';
+import { exportBlocksToHtml } from '../../../services/htmlExport.ts';
+import { DocTemplatePicker } from './DocTemplatePicker.tsx';
+import { DocTemplateDefinition } from '../../../services/docTemplates.ts';
+import { DocHistoryDrawer } from './DocHistoryDrawer.tsx';
+import { saveDocSnapshot } from '../../../services/docHistory.ts';
 import {
   FileText,
   ListTree,
@@ -18,6 +23,11 @@ import {
   Check,
   Palette,
   Search,
+  Sparkles,
+  History,
+  Printer,
+  ChevronDown,
+  Clock,
 } from 'lucide-react';
 import { FindReplaceBar } from './FindReplaceBar.tsx';
 import { DocStatsBadge } from './DocStatsBadge.tsx';
@@ -83,6 +93,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // 模板库与版本历史状态
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [previewSnapshot, setPreviewSnapshot] = useState<DocSnapshot | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const isEmptyDoc = blocks.length <= 1 && (blocks[0]?.content.trim() === '' || blocks.length === 0);
+
   // 监听 Ctrl + F / Cmd + F 唤起查找与替换
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -147,16 +164,65 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     await saveDocBlocks(page.id, next);
   }, [page.id]);
 
-  // 导出为 Markdown（降级至剪贴板，不依赖 Tauri dialog/fs 插件）
-  const handleExportMarkdown = useCallback(async () => {
+  // 导出为 Markdown 文件
+  const handleExportMarkdown = useCallback(() => {
     const md = exportBlocksToMarkdown(page.title, page.icon, blocksRef.current);
-    try {
-      await navigator.clipboard.writeText(md);
-      alert(`Markdown 已复制到剪贴板（${blocksRef.current.length} 个块）`);
-    } catch {
-      console.error('[Export] 复制到剪贴板失败', md);
-    }
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${page.title || 'untitled'}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
   }, [page.title, page.icon]);
+
+  // 导出为独立完整 HTML 文件
+  const handleExportHtml = useCallback(() => {
+    const html = exportBlocksToHtml(page.title, page.icon, blocksRef.current);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${page.title || 'untitled'}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  }, [page.title, page.icon]);
+
+  // 触发高保真打印 / 另存为 PDF
+  const handlePrintPdf = useCallback(() => {
+    setShowExportMenu(false);
+    setTimeout(() => {
+      window.print();
+    }, 120);
+  }, []);
+
+  // 模板选择与原子注入
+  const handleSelectTemplate = useCallback(
+    (template: DocTemplateDefinition) => {
+      const newBlocks = template.buildBlocks(page.id);
+      pushUndo(blocksRef.current);
+      setBlocks(newBlocks);
+      blocksRef.current = newBlocks;
+      saveDocBlocks(page.id, newBlocks);
+      saveDocSnapshot(page.id, newBlocks, `应用模板: ${template.name}`);
+      setShowTemplatePicker(false);
+    },
+    [page.id, pushUndo]
+  );
+
+  // 历史版本快照恢复
+  const handleRestoreSnapshot = useCallback(
+    (restoredBlocks: DocBlock[]) => {
+      pushUndo(blocksRef.current);
+      setBlocks(restoredBlocks);
+      blocksRef.current = restoredBlocks;
+      saveDocBlocks(page.id, restoredBlocks);
+      setPreviewSnapshot(null);
+    },
+    [page.id, pushUndo]
+  );
 
   // 全局撤销/重做快捷键监听
   useEffect(() => {
@@ -334,10 +400,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     setBlocks(nextBlocks);
     blocksRef.current = nextBlocks;
 
-    // 500ms 防抖保存至底层 SQLite
+    // 500ms 防抖保存至底层 SQLite 并更新版本快照
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveDocBlocks(page.id, nextBlocks);
+      saveDocSnapshot(page.id, nextBlocks);
     }, 500);
   };
 
@@ -583,13 +650,29 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             >
               <Redo2 size={13} />
             </button>
+            {/* 技术模板库按钮 */}
             <button
-              onClick={handleExportMarkdown}
-              className="p-1 hover:bg-white/10 text-slate-400 hover:text-slate-200 rounded transition-colors"
-              title="导出为 Markdown (.md)"
+              onClick={() => setShowTemplatePicker(!showTemplatePicker)}
+              className={`p-1 hover:bg-white/10 rounded transition-colors ${
+                showTemplatePicker ? 'text-sky-400 bg-sky-500/10' : 'text-slate-400 hover:text-sky-300'
+              }`}
+              title="技术模板库"
             >
-              <Download size={13} />
+              <Sparkles size={13} />
             </button>
+
+            {/* 版本历史与快照抽屉按钮 */}
+            <button
+              onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
+              className={`p-1 hover:bg-white/10 rounded transition-colors ${
+                showHistoryDrawer ? 'text-sky-400 bg-sky-500/10' : 'text-slate-400 hover:text-sky-300'
+              }`}
+              title="版本历史与快照"
+            >
+              <History size={13} />
+            </button>
+
+            {/* 查找与替换 */}
             <button
               onClick={() => setIsFindOpen(true)}
               className="p-1 hover:bg-white/10 text-slate-400 hover:text-sky-300 rounded transition-colors"
@@ -597,6 +680,48 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             >
               <Search size={13} />
             </button>
+
+            {/* 导出菜单组 (Markdown / HTML / 打印与PDF) */}
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="p-1 hover:bg-white/10 text-slate-400 hover:text-slate-200 rounded transition-colors flex items-center gap-0.5"
+                title="导出与打印"
+              >
+                <Download size={13} />
+                <ChevronDown size={10} className="text-slate-500" />
+              </button>
+
+              {showExportMenu && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 w-48 bg-[#12161f]/95 border border-white/10 rounded-xl shadow-2xl p-1 z-50 backdrop-blur-md animate-in fade-in select-none text-xs text-slate-200"
+                  onClick={() => setShowExportMenu(false)}
+                >
+                  <button
+                    onClick={handleExportMarkdown}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Download size={13} className="text-sky-400" />
+                    <span>导出为 Markdown (.md)</span>
+                  </button>
+                  <button
+                    onClick={handleExportHtml}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <FileText size={13} className="text-amber-400" />
+                    <span>导出为独立网页 (.html)</span>
+                  </button>
+                  <div className="h-px bg-white/5 my-1" />
+                  <button
+                    onClick={handlePrintPdf}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Printer size={13} className="text-emerald-400" />
+                    <span>打印 / 另存为 PDF</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {!showOutline && (
@@ -744,9 +869,49 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <div className="mt-4 mb-2 border-b border-white/[0.04]" />
               </div>
 
+              {/* 历史快照预览提醒横幅 */}
+              {previewSnapshot && (
+                <div className="mb-4 p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between text-xs text-amber-200 backdrop-blur-md animate-in fade-in select-none">
+                  <div className="flex items-center gap-2">
+                    <Clock size={15} className="text-amber-400 shrink-0" />
+                    <span>
+                      正在只读预览历史快照：
+                      <span className="font-mono text-amber-300 ml-1">
+                        {new Date(previewSnapshot.timestamp).toLocaleString()}
+                      </span>
+                    </span>
+                    <span className="text-amber-400/70 font-mono text-[11px]">
+                      ({previewSnapshot.blockCount} 块 · {previewSnapshot.wordCount} 字)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRestoreSnapshot(previewSnapshot.blocks)}
+                      className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg font-medium transition-colors cursor-pointer"
+                    >
+                      恢复到此版本
+                    </button>
+                    <button
+                      onClick={() => setPreviewSnapshot(null)}
+                      className="px-2.5 py-1 bg-white/10 hover:bg-white/15 text-slate-200 rounded-lg transition-colors cursor-pointer"
+                    >
+                      退出预览
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 空白文档技术模板快捷选择卡片 */}
+              {(isEmptyDoc || showTemplatePicker) && !previewSnapshot && (
+                <DocTemplatePicker
+                  onSelectTemplate={handleSelectTemplate}
+                  onDismiss={showTemplatePicker ? () => setShowTemplatePicker(false) : undefined}
+                />
+              )}
+
             {/* 块流渲染 */}
             <div className="space-y-0.5 min-h-[400px]">
-              {blocks.map((block, idx) => {
+              {(previewSnapshot ? previewSnapshot.blocks : blocks).map((block, idx) => {
                 // 计算有序列表块的连续序号（遇到非 numbered 块重置计数）
                 let seqNumber: number | undefined;
                 if (block.blockType === 'numbered') {
@@ -889,6 +1054,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* 右侧历史版本与快照时间轴抽屉 */}
+        {showHistoryDrawer && (
+          <DocHistoryDrawer
+            pageId={page.id}
+            currentBlocks={blocks}
+            onRestoreSnapshot={handleRestoreSnapshot}
+            onPreviewSnapshot={(snap) => setPreviewSnapshot(snap)}
+            onClose={() => {
+              setShowHistoryDrawer(false);
+              setPreviewSnapshot(null);
+            }}
+          />
         )}
 
         {/* 实时字数、字符数与阅读时长微光统计胶囊 */}

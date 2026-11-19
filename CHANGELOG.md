@@ -2,6 +2,37 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.61] - 2026-11-19
+
+### Feat (文档引擎：阶段 4 - 块级流转、模板库、历史版本快照与高保真导出)
+
+- **开箱即用技术文档模板库 (`template:doc-templates` / `DocTemplatePicker.tsx` & `docTemplates.ts`)**：
+  - 新增 `DocTemplatePicker.tsx` 与工业级模板服务 `docTemplates.ts`；
+  - 空白文档状态下自动呈现 4 款高频技术模板卡片：
+    - 💡 **技术方案设计规范 (RFC/Spec)**：包含背景问题、Mermaid 系统架构、方案评估决策表格与自验证清单；
+    - 🐞 **Bug 深度复盘 (5-Whys)**：包含故障基本信息表格、5-Whys 根因深度穿透与 L1/L2/L3 长效防线；
+    - 📅 **研发周报与版本发布日志 (Changelog)**：包含完成交付物、阻塞点应对与下阶段迭代里程碑；
+    - 📚 **核心知识点与技术卡片**：包含通俗机制比喻、新手易犯陷阱避坑代码对照与速记口诀；
+  - 顶栏增设「✨ 模板库」快捷入口，点击瞬时注入完整块流并触发原子持久化。
+
+- **多栏排版布局卡片 (`layout:multi-columns` / `MultiColumnBlock.tsx` & `/columns`)**：
+  - 新增独立多栏排版块 `MultiColumnBlock.tsx`，支持斜杠菜单 `/columns` 或快捷指令极速插入；
+  - 支持 **双栏 (1:1)** 与 **三栏 (1:1:1)** 自由切换，各栏独立 contenteditable 富文本输入与换行排版；
+  - 容器自适应响应式栅格，小屏或窄视口时优雅折叠为纵向流动布局，防止内容挤压溢出；
+  - 原生继承 6 点拖拽抓手与落点指示线，支持整体拖拽重排与持久化。
+
+- **文档历史快照与时间轴回滚 (`history:version-timeline` / `docHistory.ts` & `DocHistoryDrawer.tsx`)**：
+  - 新增 `docHistory.ts` 快照服务与 `DocHistoryDrawer.tsx` 右侧时间轴抽屉；
+  - 文档保存时防抖自动沉淀时间戳快照，同时支持顶栏「创建当前版本快照」手动打标；
+  - 抽屉清晰展示倒序时间轴、相对时间、块数与字数指标；
+  - 支持点击任一历史快照在主编辑区以只读模式实时预览当时完整内容；
+  - 提供「恢复到此版本」功能，恢复前自动对当前最新状态执行防御性备份，确保数据零丢失。
+
+- **高保真独立 HTML 导出与打印/PDF 样式 (`export:print-pdf-html` / `htmlExport.ts` & `@media print`)**：
+  - 新增 `htmlExport.ts` 单文件高保真独立 HTML 导出引擎，内嵌现代暗黑/明亮排版 CSS，可脱离环境在任何浏览器离线阅读；
+  - 完善 `src/styles/globals.css` 中的 `@media print` 媒体查询规则，打印或另存为 PDF 时强制自动隐蔽侧边栏、标题栏、大纲栏、手柄、按钮等所有界面控件；
+  - 顶栏导出按钮升级为微型下拉卡片，提供 Markdown (.md)、独立网页 (.html) 与 打印/另存为 PDF (Ctrl+P) 三大选项。
+
 ## [0.1.60] - 2026-11-18
 
 ### Feat (文档引擎：阶段 3 - 写作交互与生产力增强：全局查找替换、块级拖拽重排、ScrollSpy 目录大纲与实时字数统计)

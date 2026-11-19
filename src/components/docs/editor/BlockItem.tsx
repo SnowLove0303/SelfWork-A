@@ -31,6 +31,7 @@ import { TableBlock } from './TableBlock.tsx';
 import { MindMapEmbedBlock } from './MindMapEmbedBlock.tsx';
 import { MermaidPreview } from './MermaidPreview.tsx';
 import { MathBlock } from './MathBlock.tsx';
+import { MultiColumnBlock } from './MultiColumnBlock.tsx';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -1296,6 +1297,26 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         {renderSideHandle('top-3')}
         <div className="flex-1 min-w-0">
           <MathBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
+        </div>
+      </div>
+    );
+  }
+
+  // 多栏排版卡片 (Multi-Column Block)
+  if (block.blockType === 'columns') {
+    return (
+      <div
+        id={`block-${block.id}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={`group relative flex items-start py-1 ${
+          isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+        }`}
+      >
+        {renderDropIndicator()}
+        {renderSideHandle('top-3')}
+        <div className="flex-1 min-w-0">
+          <MultiColumnBlock block={block} onUpdate={onUpdate} onDelete={onDelete} />
         </div>
       </div>
     );

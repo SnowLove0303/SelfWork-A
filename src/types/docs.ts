@@ -17,7 +17,29 @@ export type BlockType =
   | 'toggle'
   | 'image'
   | 'mindmap'
-  | 'math';
+  | 'math'
+  | 'columns';
+
+export interface ColumnItem {
+  id: string;
+  content: string;
+}
+
+export interface ColumnsBlockProperties {
+  columnCount: 2 | 3;
+  columns: ColumnItem[];
+}
+
+export interface DocSnapshot {
+  id: string;
+  pageId: string;
+  timestamp: number;
+  label?: string;
+  blockCount: number;
+  wordCount: number;
+  charCount: number;
+  blocks: DocBlock[];
+}
 
 export interface TableBlockProperties {
   hasHeaderRow?: boolean;

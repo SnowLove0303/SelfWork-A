@@ -305,3 +305,49 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+/* ==========================================================================
+   高保真打印与另存为 PDF 专属样式 (@media print)
+   ========================================================================== */
+@media print {
+  aside,
+  header,
+  nav,
+  .no-print,
+  .doc-stats-badge,
+  .find-replace-bar,
+  .group:hover .opacity-100,
+  button,
+  .h-\[49px\],
+  .w-56,
+  .w-80 {
+    display: none !important;
+  }
+
+  body, html, #root {
+    background: #ffffff !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    height: auto !important;
+    user-select: text !important;
+  }
+
+  .doc-typography {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .doc-typography * {
+    color: #111827 !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  pre, code, .callout, table {
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+  }
+}

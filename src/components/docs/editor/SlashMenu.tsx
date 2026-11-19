@@ -18,6 +18,7 @@ import {
   Network,
   Workflow,
   Sigma,
+  Columns2,
 } from 'lucide-react';
 
 export interface SlashMenuItem {
@@ -139,6 +140,12 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     label: '图片',
     desc: '上传本地图片或嵌入网络图片',
     icon: <ImageIcon size={14} className="text-pink-400" />,
+  },
+  {
+    type: 'columns',
+    label: '多栏排版 (Columns)',
+    desc: '并排 2 栏或 3 栏内容对比与并列排版',
+    icon: <Columns2 size={14} className="text-cyan-400" />,
   },
 ];
 
