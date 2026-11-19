@@ -376,24 +376,36 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       .filter((item) => item.text !== '');
   }, [blocks]);
 
-  // 2.1 赋予大纲标题父子管辖元信息 (hasChildren, childCount)
+  // 2.0 智能推导大纲项真实语义层级深度（结合基础标签与点分编号如 1.1, 2.1 启发自愈）
+  const getHeadingDepth = useCallback((type: BlockType | string, text: string): number => {
+    const clean = text.trim();
+    if (type === 'h1') return 1;
+    // 若为 h2 但以点分数字编号开头 (如 1.1, 1.2, 2.1)，在人类心智和排版树上为下属子节，自愈为深度 3
+    if (type === 'h2' && /^\d+\.\d+/.test(clean)) return 3;
+    if (type === 'h2') return 2;
+    if (type === 'h3' && /^\d+\.\d+\.\d+/.test(clean)) return 4;
+    return 3;
+  }, []);
+
+  // 2.1 赋予大纲标题多层级父子管辖元信息 (depth, hasChildren, childCount)
   const outlineHeadingsWithMeta = useMemo(() => {
     return outlineHeadings.map((heading, i) => {
-      const curWeight = heading.type === 'h1' ? 1 : heading.type === 'h2' ? 2 : 3;
+      const curDepth = getHeadingDepth(heading.type, heading.text);
       let childCount = 0;
       for (let j = i + 1; j < outlineHeadings.length; j++) {
         const next = outlineHeadings[j];
-        const nextWeight = next.type === 'h1' ? 1 : next.type === 'h2' ? 2 : 3;
-        if (nextWeight <= curWeight) break;
+        const nextDepth = getHeadingDepth(next.type, next.text);
+        if (nextDepth <= curDepth) break;
         childCount++;
       }
       return {
         ...heading,
+        depth: curDepth,
         hasChildren: childCount > 0,
         childCount,
       };
     });
-  }, [outlineHeadings]);
+  }, [outlineHeadings, getHeadingDepth]);
 
   // 2.2 父子折叠交互控制函数
   const toggleHeadingFold = (headingId: string, e: React.MouseEvent) => {
@@ -422,21 +434,21 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     }
   };
 
-  // 3. 结合层级过滤器与父子折叠状态推导最终可见大纲列表
+  // 3. 结合多层级深度与父子折叠状态推导最终可见大纲列表
   const filteredHeadings = useMemo(() => {
     const visible: typeof outlineHeadingsWithMeta = [];
-    let blockedWeight: number | null = null;
+    let blockedDepth: number | null = null;
 
     for (const heading of outlineHeadingsWithMeta) {
-      const weight = heading.type === 'h1' ? 1 : heading.type === 'h2' ? 2 : 3;
+      const depth = heading.depth;
 
-      // 若当前层级小于等于之前的阻断层级，说明已脱离前一个折叠父节点的管辖范围
-      if (blockedWeight !== null && weight <= blockedWeight) {
-        blockedWeight = null;
+      // 若当前层级深度小于等于之前的阻断深度，说明已走出前一个折叠父节点的管辖范围
+      if (blockedDepth !== null && depth <= blockedDepth) {
+        blockedDepth = null;
       }
 
       // 若当前未被父级折叠阻断
-      if (blockedWeight === null) {
+      if (blockedDepth === null) {
         const matchesFilter =
           outlineFilter === 'all' ||
           (outlineFilter === 'h1' && heading.type === 'h1') ||
@@ -446,9 +458,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           visible.push(heading);
         }
 
-        // 若当前项被折叠且拥有子项，则对后续比当前更深层级的项开启阻断
+        // 若当前项被折叠且拥有子项，对后续比当前更深层级的项开启阻断
         if (collapsedHeadingIds.has(heading.id) && heading.hasChildren) {
-          blockedWeight = weight;
+          blockedDepth = depth;
         }
       }
     }
@@ -1185,13 +1197,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         {showOutline && (
           <div className="w-52 border-l border-white/5 bg-black/15 backdrop-blur-sm p-3.5 flex flex-col shrink-0 select-none">
             <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/5">
-              <div className="flex items-center gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/5">
+              <div className="flex items-center gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/5 w-full">
                 <button
                   type="button"
                   onClick={() => setRightPanelTab('toc')}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-0.5 rounded text-[11px] transition-all ${
                     rightPanelTab === 'toc'
-                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30'
+                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -1201,9 +1213,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => setRightPanelTab('graph')}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-0.5 rounded text-[11px] transition-all ${
                     rightPanelTab === 'graph'
-                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30'
+                      ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -1211,13 +1223,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   <span>图谱</span>
                 </button>
               </div>
-              <button
-                onClick={() => setShowOutline(false)}
-                className="p-1 hover:bg-white/5 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
-                title="收起侧栏"
-              >
-                <PanelRightClose size={13} />
-              </button>
             </div>
 
             {rightPanelTab === 'toc' ? (
@@ -1280,7 +1285,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                               ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                               : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 text-[11px]'
                           } ${
-                            heading.type === 'h1' ? 'pl-1.5' : heading.type === 'h2' ? 'pl-3.5' : 'pl-5.5'
+                            heading.depth === 1 ? 'pl-1.5' : heading.depth === 2 ? 'pl-3.5' : heading.depth === 3 ? 'pl-5.5' : 'pl-7'
                           }`}
                           title={heading.text}
                         >
