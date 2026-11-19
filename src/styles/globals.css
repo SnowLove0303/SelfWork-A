@@ -351,3 +351,16 @@ body {
     border-radius: 6px !important;
   }
 }
+
+/* ==========================================================================
+   文档正文 Word 级自然沉浸选区 (Word-like Natural Selection)
+   ========================================================================== */
+::selection {
+  background-color: rgba(56, 189, 248, 0.28) !important;
+  color: #f8fafc !important;
+}
+
+::-moz-selection {
+  background-color: rgba(56, 189, 248, 0.28) !important;
+  color: #f8fafc !important;
+}

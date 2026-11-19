@@ -2,6 +2,21 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.71] - 2026-11-19
+
+### Feat (文档引擎：大块内容 Word 级自然选区重塑与段落块辅助化)
+
+- **彻底消除段落块外层卡片化轮廓 (`editor:de-cardify-selection` / `BlockItem.tsx`)**：
+  - 响应用户核心体验诉求：“不要让段落块明显影响内容选中，段落块是辅助作用，不能牵住基本操作”；
+  - 彻底剥离段落外层宿主容器上的卡片式 `bg-sky-500/15` 底色、`ring-1` 外边框与 `rounded-xl` 大圆角；
+  - 段落容器回归纯粹的排版定位辅助，左侧悬浮拖拽手柄在划选大片文本期间自动静默（`pointer-events-none !opacity-0`），绝不抢占指针焦点与遮挡阅读视线。
+
+- **选区高亮精准下沉至文本流 (`editor:text-stream-selection` / `BlockItem.tsx` & `globals.css`)**：
+  - 将选区高亮深度下沉至正文文本承载区（`renderContent`），贴合文字行排版（`bg-sky-500/20 text-slate-100 rounded-sm px-1 -mx-1`）；
+  - 在 `globals.css` 中声明全局沉浸式 `::selection` 伪元素高亮，使单段内的原生文字划选与跨段多选区在色彩饱和度、透明度与对比度上实现像素级视觉一致；
+  - 划选大篇幅文本时，行与行之间自然顺畅贴合，彻底还原 Office Word 般自由流畅的经典文字处理体验；
+  - 跨段 `Ctrl+C` 格式化合并复制与 `Backspace`/`Delete` 批量删除能力 100% 保持。
+
 ## [0.1.70] - 2026-11-19
 
 ### Feat (文档引擎：大纲顶部仅H1/H2过滤条彻底清除与大纲结构纯化)

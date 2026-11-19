@@ -195,7 +195,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
   const renderSideHandle = (topClass = 'top-1') => (
     <div
-      className={`absolute -left-9 ${topClass} flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10 gap-0.5`}
+      className={`absolute -left-9 ${topClass} flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity select-none z-10 gap-0.5 ${
+        isCrossSelected ? 'pointer-events-none !opacity-0' : ''
+      }`}
     >
       <div
         draggable={true}
@@ -1240,7 +1242,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             onContextMenu={handleContextMenu}
             data-placeholder={getPlaceholder()}
             style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
-            className="flex-1 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-base leading-relaxed break-words"
+            className={`flex-1 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-base leading-relaxed break-words ${
+              isCrossSelected ? 'bg-sky-500/20 text-slate-100 rounded-sm px-1 -mx-1 transition-colors duration-75' : ''
+            }`}
           />
         </div>
 
@@ -1692,8 +1696,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={`group relative flex items-start ${getBlockMarginClass()} ${
-        isCrossSelected ? 'bg-sky-500/15 ring-1 ring-sky-500/30 rounded-xl transition-colors duration-75' : ''
-      } ${isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''}`}
+        isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
+      }`}
     >
       {renderDropIndicator()}
       {renderSideHandle('top-1')}
@@ -1744,7 +1748,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           <div
             className={`flex-1 min-w-0 ${
               block.blockType === 'code'
-                ? 'my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden group/code transition-all hover:border-white/[0.14] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20'
+                ? `my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden group/code transition-all hover:border-white/[0.14] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20 ${
+                    isCrossSelected ? 'ring-1 ring-sky-500/40' : ''
+                  }`
                 : ''
             }`}
             style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
@@ -2078,6 +2084,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                 style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
                 className={`w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} break-words ${
                   isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
+                } ${
+                  isCrossSelected
+                    ? 'bg-sky-500/20 text-slate-100 rounded-sm px-1 -mx-1 transition-colors duration-75'
+                    : ''
                 }`}
               />
             )}
