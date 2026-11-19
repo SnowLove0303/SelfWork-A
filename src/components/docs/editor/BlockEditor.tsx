@@ -108,9 +108,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ blockId: string; position: 'top' | 'bottom' } | null>(null);
 
-  // 目录大纲智能层级过滤与 ScrollSpy 导航
+  // 目录大纲与图谱面板切换及 ScrollSpy 导航
   const [rightPanelTab, setRightPanelTab] = useState<'toc' | 'graph'>('toc');
-  const [outlineFilter, setOutlineFilter] = useState<'all' | 'h1' | 'h1-h2'>('all');
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   // 目录父子级标题折叠状态集合
   const [collapsedHeadingIds, setCollapsedHeadingIds] = useState<Set<string>>(new Set());
@@ -451,16 +450,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         blockedDepth = null;
       }
 
-      // 若当前未被父级折叠阻断
+      // 若当前未被父级折叠阻断，加入可见列表
       if (blockedDepth === null) {
-        const matchesFilter =
-          outlineFilter === 'all' ||
-          (outlineFilter === 'h1' && heading.type === 'h1') ||
-          (outlineFilter === 'h1-h2' && (heading.type === 'h1' || heading.type === 'h2'));
-
-        if (matchesFilter) {
-          visible.push(heading);
-        }
+        visible.push(heading);
 
         // 若当前项被折叠且拥有子项，对后续比当前更深层级的项开启阻断
         if (collapsedHeadingIds.has(heading.id) && heading.hasChildren) {
@@ -470,7 +462,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     }
 
     return visible;
-  }, [outlineHeadingsWithMeta, outlineFilter, collapsedHeadingIds]);
+  }, [outlineHeadingsWithMeta, collapsedHeadingIds]);
 
   // 3.1 跨块连续拖选鼠标手势协同器
   useEffect(() => {
@@ -1365,44 +1357,25 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             {rightPanelTab === 'toc' ? (
               <>
                 {/* 智能层级过滤胶囊组与全局折叠微操作 */}
-                <div className="flex items-center justify-between gap-1 mb-2">
-                  <div className="flex-1 flex items-center gap-1 bg-white/[0.04] p-1 rounded-lg">
-                    {(
-                      [
-                        { id: 'all', label: '全部' },
-                        { id: 'h1', label: '仅H1' },
-                        { id: 'h1-h2', label: 'H1+H2' },
-                      ] as const
-                    ).map((f) => (
-                      <button
-                        key={f.id}
-                        onClick={() => setOutlineFilter(f.id)}
-                        className={`flex-1 text-[10px] py-0.5 rounded transition-all text-center ${
-                          outlineFilter === f.id
-                            ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                  {outlineHeadings.some((h) => h.type === 'h1' || h.type === 'h2') && (
+                {/* 大纲结构头部与全局折叠快捷微操作 */}
+                {outlineHeadingsWithMeta.some((h) => h.hasChildren) && (
+                  <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/5 text-[11px] text-slate-400">
+                    <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">目录结构</span>
                     <button
                       type="button"
                       onClick={toggleAllHeadingsFold}
-                      className="px-1.5 py-1 text-[10px] text-slate-400 hover:text-sky-300 hover:bg-white/5 rounded-lg border border-white/5 transition-colors flex items-center gap-0.5 shrink-0"
+                      className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-sky-300 hover:bg-white/5 rounded border border-white/5 transition-colors flex items-center gap-1"
                       title={hasAnyCollapsed ? "一键全部展开" : "一键全部折叠"}
                     >
                       {hasAnyCollapsed ? <ChevronsDown size={11} /> : <ChevronsUp size={11} />}
-                      <span>{hasAnyCollapsed ? "展开" : "折叠"}</span>
+                      <span>{hasAnyCollapsed ? "全部展开" : "全部折叠"}</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {filteredHeadings.length === 0 ? (
                   <div className="text-[11px] text-slate-600 py-6 text-center italic">
-                    {outlineHeadings.length === 0 ? '当前文档暂无标题 (H1/H2/H3)' : '无匹配层级标题'}
+                    当前文档暂无标题 (H1/H2/H3)
                   </div>
                 ) : (
                   <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
