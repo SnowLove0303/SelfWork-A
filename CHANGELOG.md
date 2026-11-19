@@ -2,6 +2,30 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.64] - 2026-11-19
+
+### Feat (文档引擎：阶段五·维度 3 - 富交互与行内极客体验：划词批注评论流、浮动工具条补全、全局折叠控制与全景字数透视)
+
+- **行内划词批注与文档评论流 (`comments:inline-comments` / `DocCommentDrawer.tsx` & `docComments.ts`)**：
+  - 新增 `docComments.ts` 本地批注管理服务与 `DocCommentDrawer.tsx` 侧滑抽屉；
+  - 正文划选任意文字通过浮动工具条一键标注并添加行内批注，被批注文字呈现黄色微光引用卡片；
+  - 侧滑抽屉清晰分类展示「未解决 (待办)」、「已解决」与「全部」批注列表；
+  - 支持直接在卡片内多轮追加探讨回复、标为解决与删除，顶栏自动显示待办批注数量微光 Badge。
+
+- **划选即时浮动工具条深度补全 (`toolbar:floating-enhancements` / `FloatingFormatToolbar.tsx`)**：
+  - 浮动工具栏增加「💬 添加行内批注」一键快捷入口；
+  - 优化 5 色柔和微光荧光调色板（黄/绿/蓝/紫/粉），选区着色与清除格式平滑生效；
+  - 增强行内代码标签转化与清除选区内联样式按钮。
+
+- **全局折叠块一键展开与收起 (`layout:global-fold-control` / `DocFoldControl`)**：
+  - 当文档存在至少 1 个折叠块 (`toggle`) 时，顶栏操作区自适应呈现「展开全部 / 收起全部」控制胶囊；
+  - 点击一键统一翻转全文所有折叠块的 `properties.isOpen`，并批量持久化至本地数据库，解决长文阅读操作痛点。
+
+- **细粒度阅读指标与字数透视卡片 (`stats:reading-metrics-modal` / `DocStatsBadge.tsx`)**：
+  - 点击右下角微光字数胶囊瞬时弹出全景细粒度阅读指标透视卡片；
+  - 准确拆分中文字符、英文字词、总代码行数、表格与多媒体块密度；
+  - 提供双速阅读预估时长：默读时长（按 350 字/分）与朗读演讲时长（按 180 字/分）。
+
 ## [0.1.63] - 2026-11-19
 
 ### Feat (文档引擎：阶段五·维度 2 - 结构化排版与高级块类型：多级折叠列表、专业代码块全屏、音视频媒体卡片与跨页双向同步块)

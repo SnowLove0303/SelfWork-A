@@ -90,6 +90,8 @@ interface BlockItemProps {
   allBlocks?: DocBlock[];
   /** 点击大纲项滚动锚点定位回调 */
   onScrollToHeading?: (headingId: string) => void;
+  /** 划词添加批注回调 */
+  onAddComment?: (text: string, blockId: string) => void;
 }
 
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
@@ -163,6 +165,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   onSwapBlock,
   allBlocks,
   onScrollToHeading,
+  onAddComment,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
@@ -2061,6 +2064,12 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           onApplyLink={handleApplyLink}
           onApplyHighlight={handleApplyHighlight}
           onApplyAlign={handleApplyAlign}
+          onAddComment={() => {
+            const selText = window.getSelection()?.toString().trim();
+            if (selText && onAddComment) {
+              onAddComment(selText, block.id);
+            }
+          }}
           onClose={() => setFloatingToolbarOpen(false)}
         />
       )}

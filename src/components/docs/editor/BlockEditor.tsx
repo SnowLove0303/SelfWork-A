@@ -10,10 +10,13 @@ import { DocHistoryDrawer } from './DocHistoryDrawer.tsx';
 import { saveDocSnapshot } from '../../../services/docHistory.ts';
 import { BacklinksPanel } from './BacklinksPanel.tsx';
 import { DocLocalGraph } from './DocLocalGraph.tsx';
+import { DocCommentDrawer } from './DocCommentDrawer.tsx';
+import { getCommentsForPage, addComment } from '../../../services/docComments.ts';
 import {
   FileText,
   ListTree,
   Share2,
+  MessageSquare,
   PanelRightClose,
   PanelRightOpen,
   Undo2,
@@ -102,6 +105,40 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [previewSnapshot, setPreviewSnapshot] = useState<DocSnapshot | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const isEmptyDoc = blocks.length <= 1 && (blocks[0]?.content.trim() === '' || blocks.length === 0);
+
+  // 行内批注与评论流状态
+  const [showCommentDrawer, setShowCommentDrawer] = useState(false);
+  const [unresolvedCommentCount, setUnresolvedCommentCount] = useState(0);
+
+  useEffect(() => {
+    setUnresolvedCommentCount(
+      getCommentsForPage(page.id).filter((c) => !c.isResolved).length
+    );
+  }, [page.id, showCommentDrawer]);
+
+  const handleAddComment = (selectedText: string, blockId: string) => {
+    addComment(page.id, selectedText, '请在此输入批注思考...', '当前用户', blockId);
+    setShowCommentDrawer(true);
+    setUnresolvedCommentCount(
+      getCommentsForPage(page.id).filter((c) => !c.isResolved).length
+    );
+  };
+
+  // 全局折叠块统计与一键收展
+  const toggleCount = blocks.filter((b) => b.blockType === 'toggle').length;
+  const handleToggleFoldAll = (isOpen: boolean) => {
+    const nextBlocks = blocks.map((b) => {
+      if (b.blockType === 'toggle') {
+        return {
+          ...b,
+          properties: { ...(b.properties || {}), isOpen },
+        };
+      }
+      return b;
+    });
+    setBlocks(nextBlocks);
+    saveDocBlocks(page.id, nextBlocks).catch(() => {});
+  };
 
   // 监听 Ctrl + F / Cmd + F 唤起查找与替换
   useEffect(() => {
@@ -704,6 +741,44 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               <History size={13} />
             </button>
 
+            {/* 行内批注与评论流抽屉按钮 */}
+            <button
+              onClick={() => setShowCommentDrawer(!showCommentDrawer)}
+              className={`relative p-1 hover:bg-white/10 rounded transition-colors ${
+                showCommentDrawer ? 'text-sky-400 bg-sky-500/10' : 'text-slate-400 hover:text-sky-300'
+              }`}
+              title="行内批注与讨论"
+            >
+              <MessageSquare size={13} />
+              {unresolvedCommentCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-sky-500 text-[9px] text-white font-bold flex items-center justify-center shadow-md animate-pulse">
+                  {unresolvedCommentCount}
+                </span>
+              )}
+            </button>
+
+            {/* 全局折叠块展开/收起胶囊 */}
+            {toggleCount > 0 && (
+              <div className="flex items-center gap-0.5 p-0.5 bg-white/[0.04] border border-white/5 rounded-md text-[10px] text-slate-400">
+                <button
+                  type="button"
+                  onClick={() => handleToggleFoldAll(true)}
+                  className="px-1.5 py-0.5 rounded hover:bg-white/10 hover:text-white transition-colors"
+                  title="展开全文所有折叠块"
+                >
+                  展开
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFoldAll(false)}
+                  className="px-1.5 py-0.5 rounded hover:bg-white/10 hover:text-white transition-colors"
+                  title="收起全文所有折叠块"
+                >
+                  收起
+                </button>
+              </div>
+            )}
+
             {/* 查找与替换 */}
             <button
               onClick={() => setIsFindOpen(true)}
@@ -982,6 +1057,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     onSwapBlock={(dir) => handleSwapBlock(block.id, dir)}
                     allBlocks={blocks}
                     onScrollToHeading={handleScrollToHeading}
+                    onAddComment={handleAddComment}
                   />
                 );
               })}
@@ -1128,6 +1204,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             }}
           />
         )}
+
+        {/* 右侧行内批注与讨论抽屉 */}
+        <DocCommentDrawer
+          pageId={page.id}
+          isOpen={showCommentDrawer}
+          onClose={() => setShowCommentDrawer(false)}
+        />
 
         {/* 实时字数、字符数与阅读时长微光统计胶囊 */}
         <DocStatsBadge blocks={blocks} />

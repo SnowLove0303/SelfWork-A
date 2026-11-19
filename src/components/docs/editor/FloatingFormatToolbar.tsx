@@ -11,6 +11,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  MessageSquare,
 } from 'lucide-react';
 
 export interface FloatingFormatToolbarProps {
@@ -21,6 +22,7 @@ export interface FloatingFormatToolbarProps {
   onApplyLink?: (url: string) => void;
   onApplyHighlight?: (color: string) => void;
   onApplyAlign?: (align: 'left' | 'center' | 'right') => void;
+  onAddComment?: () => void;
   onClose: () => void;
 }
 
@@ -39,6 +41,7 @@ export const FloatingFormatToolbar: React.FC<FloatingFormatToolbarProps> = ({
   onApplyLink,
   onApplyHighlight,
   onApplyAlign,
+  onAddComment,
   onClose,
 }) => {
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -294,6 +297,21 @@ export const FloatingFormatToolbar: React.FC<FloatingFormatToolbarProps> = ({
           >
             <Eraser size={13} />
           </button>
+
+          {/* 💬 添加行内批注 */}
+          {onAddComment && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onAddComment();
+                onClose();
+              }}
+              className="p-1.5 rounded-lg hover:bg-sky-500/20 text-slate-300 hover:text-sky-300 transition-colors ml-0.5"
+              title="添加行内批注"
+            >
+              <MessageSquare size={13} />
+            </button>
+          )}
         </>
       )}
     </div>,

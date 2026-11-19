@@ -36,6 +36,38 @@ export interface SyncedBlockProperties {
   title?: string;
 }
 
+// 文档行内批注与评论流模型 (DocComment)
+export interface DocCommentReply {
+  id: string;
+  author: string;
+  content: string;
+  createdAt: number;
+}
+
+export interface DocComment {
+  id: string;
+  pageId: string;
+  blockId?: string;
+  highlightedText: string;
+  content: string;
+  author: string;
+  createdAt: number;
+  isResolved: boolean;
+  replies?: DocCommentReply[];
+}
+
+// 细粒度阅读指标模型 (DocReadingMetrics)
+export interface DocReadingMetrics {
+  totalWords: number;
+  chineseChars: number;
+  englishWords: number;
+  codeLines: number;
+  imageCount: number;
+  tableCount: number;
+  estimatedSilentReadMinutes: number;
+  estimatedSpeechMinutes: number;
+}
+
 export interface ColumnItem {
   id: string;
   content: string;
