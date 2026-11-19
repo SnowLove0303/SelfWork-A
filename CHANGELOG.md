@@ -2,6 +2,32 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.65] - 2026-11-19
+
+### Feat (文档引擎：阶段五·维度 4 - 数据工程与全库深度管理：全库全局模糊检索、文档废纸篓软删除、侧栏多选批量管理与外部 Markdown 批量导入)
+
+- **全库块级全局模糊检索引擎 (`search:global-fuzzy-spotlight` / `Ctrl+Shift+F` / `DocGlobalSearchModal.tsx`)**：
+  - 新增 `DocGlobalSearchModal.tsx`，支持全局快捷键 `Ctrl+Shift+F` 或点击侧栏检索栏胶囊瞬时唤起；
+  - 跨越全库所有文档的所有块（正文、代码、表格、公式、待办等）进行毫秒级模糊扫描；
+  - 预设「全部 / 正文 / 代码 / 表格 / 待办 / 标题」6 大块类型过滤器与匹配关键词黄色微光高亮；
+  - 支持键盘 `↑` / `↓` 焦点穿梭，`Enter` 键平滑穿透至目标文档并高亮目标块。
+
+- **文档废纸篓与软删除恢复机 (`trash:soft-delete-recycle-bin` / `DocTrashDrawer.tsx` & `docTrash.ts`)**：
+  - 页面模型扩展 `isDeleted` 与 `deletedAt` 软删除状态，彻底终结单页误点击物理抹除风险；
+  - 侧边栏常驻底部「🗑️ 废纸篓」入口与待清理文档数量 Badge；
+  - 新增侧滑 `DocTrashDrawer.tsx` 抽屉，展示 30 天保留倒计时、一键原位还原与二次确认彻底粉碎；
+  - 提供「清空废纸篓」一键终极物理粉碎。
+
+- **文档侧栏多选批量管理 (`batch:sidebar-multi-select` / `DocBatchManager.tsx`)**：
+  - 侧栏顶端检索栏增加「☑️ 批量操作」切换开关，开启后各文档项左侧呈现独立勾选框；
+  - 勾选 $\ge 1$ 篇文档时，底部平滑滑出毛玻璃批量浮动手柄工具条；
+  - 支持一键批量移动至目标分区（私人根分区或指定子分区）、批量设为收藏、批量移入废纸篓与批量导出为独立 Markdown 文件。
+
+- **外部 Markdown 批量导入还原器 (`importer:markdown-batch-ingestion` / `DocBatchImporter.tsx` & `markdownImport.ts`)**：
+  - 新增高保真行状态机解析器 `markdownImport.ts`，精准映射 `# 一级标题`、`## 二级标题`、`### 三级标题`、`- [ ] 待办`、代码块、表格、列表与普通段落；
+  - 新增 `DocBatchImporter.tsx` 对话框，支持拖拽或多选本地 `.md` 文件，指定目标分区后一键解析存库；
+  - 导入完成后侧边栏页面列表瞬时无损刷新并自动定位到最新导入文档。
+
 ## [0.1.64] - 2026-11-19
 
 ### Feat (文档引擎：阶段五·维度 3 - 富交互与行内极客体验：划词批注评论流、浮动工具条补全、全局折叠控制与全景字数透视)

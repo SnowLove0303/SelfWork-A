@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { DocPage, DbCollection, DocPartition } from '../types/docs.ts';
 import {
   loadDocPartitions,
@@ -7,7 +7,6 @@ import {
   createSubPartition,
   loadDocPages,
   saveDocPage,
-  deleteDocPage,
   loadDbCollections,
   saveDbCollection,
   deleteDbCollection,
@@ -15,6 +14,11 @@ import {
 } from '../services/docsDb.ts';
 import { BlockEditor } from './docs/editor/BlockEditor.tsx';
 import { TableDatabaseView } from './docs/database/TableDatabaseView.tsx';
+import { DocGlobalSearchModal } from './docs/DocGlobalSearchModal.tsx';
+import { DocTrashDrawer } from './docs/DocTrashDrawer.tsx';
+import { DocBatchManager } from './docs/DocBatchManager.tsx';
+import { DocBatchImporter } from './docs/DocBatchImporter.tsx';
+import { softDeleteDocPage } from '../services/docTrash.ts';
 import {
   Plus,
   Trash2,
@@ -30,6 +34,8 @@ import {
   Edit2,
   Check,
   X,
+  CheckSquare,
+  Upload,
 } from 'lucide-react';
 
 export const DocsView: React.FC = () => {
@@ -41,6 +47,47 @@ export const DocsView: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
+  const [isImporterOpen, setIsImporterOpen] = useState(false);
+
+  // 批量导入完成回调
+  const handleImportSuccess = (newPages: DocPage[]) => {
+    setPages((prev) => [...newPages, ...prev]);
+    if (newPages.length > 0) {
+      setActiveType('page');
+      setActiveId(newPages[0].id);
+    }
+  };
+
+  // 全局快捷键监听 Ctrl+Shift+F 唤起全库全局搜索
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+        e.preventDefault();
+        setIsGlobalSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleNavigateToBlock = (pageId: string, blockId?: string) => {
+    setActiveType('page');
+    setActiveId(pageId);
+    if (blockId) {
+      setTimeout(() => {
+        const el = document.getElementById(`block-${blockId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-sky-400/60');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-sky-400/60'), 2000);
+        }
+      }, 300);
+    }
+  };
 
   // 子分区新建与重命名状态
   const [isCreatingSubPart, setIsCreatingSubPart] = useState(false);
@@ -183,14 +230,15 @@ export const DocsView: React.FC = () => {
     await saveDbCollection(newCol);
   };
 
-  // 7. 删除页面
+  // 7. 软删除页面移入废纸篓
   const handleDeletePage = async (e: React.MouseEvent, pageId: string) => {
     e.stopPropagation();
-    const nextPages = pages.filter((p) => p.id !== pageId);
+    const nextPages = await softDeleteDocPage(pageId);
     setPages(nextPages);
     if (activeId === pageId) {
-      if (nextPages.length > 0) {
-        setActiveId(nextPages[0].id);
+      const activePages = nextPages.filter((p) => !p.isDeleted);
+      if (activePages.length > 0) {
+        setActiveId(activePages[0].id);
       } else if (collections.length > 0) {
         setActiveType('collection');
         setActiveId(collections[0].id);
@@ -198,7 +246,6 @@ export const DocsView: React.FC = () => {
         setActiveId('');
       }
     }
-    await deleteDocPage(pageId);
   };
 
   // 8. 删除笔记数据库
@@ -316,14 +363,16 @@ export const DocsView: React.FC = () => {
 
   // 最近
   const recentItems = useMemo(() => {
-    const pItems = pages.map((p) => ({
-      id: p.id,
-      title: p.title || '未命名笔记',
-      icon: p.icon || '📄',
-      type: 'page' as const,
-      updatedAt: p.updatedAt,
-      isFavorite: p.isFavorite,
-    }));
+    const pItems = pages
+      .filter((p) => !p.isDeleted)
+      .map((p) => ({
+        id: p.id,
+        title: p.title || '未命名笔记',
+        icon: p.icon || '📄',
+        type: 'page' as const,
+        updatedAt: p.updatedAt,
+        isFavorite: p.isFavorite,
+      }));
     const cItems = collections.map((c) => ({
       id: c.id,
       title: c.name || '未命名数据库',
@@ -341,7 +390,7 @@ export const DocsView: React.FC = () => {
   // 收藏
   const favoriteItems = useMemo(() => {
     const pItems = pages
-      .filter((p) => p.isFavorite)
+      .filter((p) => !p.isDeleted && p.isFavorite)
       .map((p) => ({
         id: p.id,
         title: p.title || '未命名笔记',
@@ -402,13 +451,46 @@ export const DocsView: React.FC = () => {
                 />
                 <input
                   type="text"
-                  placeholder="搜索或询问 Ctrl+K"
+                  placeholder="搜索或全库 Ctrl+Shift+F"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
-                  className="w-full bg-white/5 border border-white/5 rounded-md pl-7 pr-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500/50"
+                  className="w-full bg-white/5 border border-white/5 rounded-md pl-7 pr-16 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500/50"
                 />
+                <button
+                  onClick={() => setIsGlobalSearchOpen(true)}
+                  title="全库模糊搜索 (Ctrl+Shift+F)"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 px-1 py-0.5 text-[9px] text-slate-400 hover:text-sky-300 bg-white/5 hover:bg-white/10 rounded border border-white/5 transition-colors font-mono"
+                >
+                  Ctrl+Shift+F
+                </button>
               </div>
             </div>
+          )}
+
+          {!sidebarCollapsed && (
+            <>
+              <button
+                onClick={() => setIsImporterOpen(true)}
+                className="p-1 mr-1 text-slate-500 hover:text-sky-300 hover:bg-white/5 rounded transition-colors shrink-0"
+                title="批量导入 Markdown"
+              >
+                <Upload size={13} />
+              </button>
+              <button
+                onClick={() => {
+                  setIsBatchMode(!isBatchMode);
+                  if (isBatchMode) setSelectedPageIds([]);
+                }}
+                className={`p-1 mr-1 rounded transition-colors shrink-0 ${
+                  isBatchMode
+                    ? 'text-sky-400 bg-sky-500/20'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                }`}
+                title={isBatchMode ? '退出多选' : '批量多选'}
+              >
+                <CheckSquare size={13} />
+              </button>
+            </>
           )}
 
           <button
@@ -502,7 +584,7 @@ export const DocsView: React.FC = () => {
                   {subPartitions.map((sub) => {
                     const isCollapsed = sub.isCollapsed;
                     const isEditing = editingPartId === sub.id;
-                    const subPages = pages.filter((p) => p.partitionId === sub.id);
+                    const subPages = pages.filter((p) => !p.isDeleted && p.partitionId === sub.id);
                     const subCols = collections.filter((c) => c.partitionId === sub.id);
 
                     return (
@@ -643,6 +725,22 @@ export const DocsView: React.FC = () => {
                                   }`}
                                 >
                                   <div className="flex items-center gap-1.5 truncate">
+                                    {isBatchMode && (
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedPageIds.includes(p.id)}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedPageIds((prev) =>
+                                            prev.includes(p.id)
+                                              ? prev.filter((id) => id !== p.id)
+                                              : [...prev, p.id]
+                                          );
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-3 h-3 rounded bg-white/10 border border-white/20 text-sky-500 focus:ring-0 shrink-0 cursor-pointer"
+                                      />
+                                    )}
                                     <span className="text-xs shrink-0">{p.icon || '📄'}</span>
                                     <span className="truncate">{p.title || '未命名笔记'}</span>
                                   </div>
@@ -710,7 +808,11 @@ export const DocsView: React.FC = () => {
                     })}
 
                   {pages
-                    .filter((p) => !p.partitionId || p.partitionId === 'part_private')
+                    .filter(
+                      (p) =>
+                        !p.isDeleted &&
+                        (!p.partitionId || p.partitionId === 'part_private')
+                    )
                     .map((p) => {
                       const isActive = activeType === 'page' && activeId === p.id;
                       return (
@@ -727,6 +829,22 @@ export const DocsView: React.FC = () => {
                           }`}
                         >
                           <div className="flex items-center gap-1.5 truncate">
+                            {isBatchMode && (
+                              <input
+                                type="checkbox"
+                                checked={selectedPageIds.includes(p.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPageIds((prev) =>
+                                    prev.includes(p.id)
+                                      ? prev.filter((id) => id !== p.id)
+                                      : [...prev, p.id]
+                                  );
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-3.5 h-3.5 rounded bg-white/10 border border-white/20 text-sky-500 focus:ring-0 shrink-0 cursor-pointer"
+                              />
+                            )}
                             <span className="text-xs shrink-0">{p.icon || '📄'}</span>
                             <span className="truncate">{p.title || '未命名笔记'}</span>
                           </div>
@@ -861,6 +979,30 @@ export const DocsView: React.FC = () => {
           </div>
         )}
 
+        {/* 侧栏底部：常驻废纸篓入口 */}
+        <div className="p-2 border-t border-white/5 shrink-0">
+          <button
+            onClick={() => setIsTrashOpen(true)}
+            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors group ${
+              sidebarCollapsed ? 'justify-center px-0' : ''
+            }`}
+            title="废纸篓"
+          >
+            <div className="flex items-center gap-2">
+              <Trash2
+                size={13}
+                className="text-slate-500 group-hover:text-rose-400 transition-colors shrink-0"
+              />
+              {!sidebarCollapsed && <span>废纸篓</span>}
+            </div>
+            {!sidebarCollapsed && pages.filter((p) => p.isDeleted).length > 0 && (
+              <span className="px-1.5 py-0.2 text-[10px] bg-rose-500/20 text-rose-300 rounded font-mono">
+                {pages.filter((p) => p.isDeleted).length}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* 折叠模式 */}
         {sidebarCollapsed && (
           <div className="flex-1 py-3 flex flex-col items-center gap-2">
@@ -946,6 +1088,44 @@ export const DocsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* 全库块级全局模糊检索模态框 */}
+      <DocGlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        pages={pages}
+        onNavigateToBlock={handleNavigateToBlock}
+      />
+
+      {/* 废纸篓侧滑抽屉 */}
+      <DocTrashDrawer
+        isOpen={isTrashOpen}
+        onClose={() => setIsTrashOpen(false)}
+        pages={pages}
+        onPagesChange={setPages}
+        onNavigatePage={(pId) => {
+          setActiveType('page');
+          setActiveId(pId);
+        }}
+      />
+
+      {/* 侧栏多选批量管理浮动手柄 */}
+      <DocBatchManager
+        selectedIds={selectedPageIds}
+        pages={pages}
+        partitions={partitions}
+        onClearSelection={() => setSelectedPageIds([])}
+        onPagesChange={setPages}
+      />
+
+      {/* 外部 Markdown 批量导入还原器 */}
+      <DocBatchImporter
+        isOpen={isImporterOpen}
+        onClose={() => setIsImporterOpen(false)}
+        partitions={partitions}
+        currentPartitionId={selectedPage?.partitionId}
+        onImportSuccess={handleImportSuccess}
+      />
     </div>
   );
 };

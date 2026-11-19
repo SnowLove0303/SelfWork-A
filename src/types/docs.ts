@@ -147,6 +147,8 @@ export interface DocPage {
   properties?: Record<string, any>; // 页面绑定的多维属性字典 (Row-as-Page 核心)
   isFavorite: boolean;
   isArchived: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
