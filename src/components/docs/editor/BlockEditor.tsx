@@ -32,6 +32,9 @@ import {
   History,
   Printer,
   ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
   Clock,
 } from 'lucide-react';
 import { FindReplaceBar } from './FindReplaceBar.tsx';
@@ -109,6 +112,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [rightPanelTab, setRightPanelTab] = useState<'toc' | 'graph'>('toc');
   const [outlineFilter, setOutlineFilter] = useState<'all' | 'h1' | 'h1-h2'>('all');
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  // 目录父子级标题折叠状态集合
+  const [collapsedHeadingIds, setCollapsedHeadingIds] = useState<Set<string>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // 模板库与版本历史状态
@@ -371,16 +376,85 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       .filter((item) => item.text !== '');
   }, [blocks]);
 
-  // 3. 智能过滤后的大纲列表 (支持全部 / 仅 H1 / H1 + H2)
+  // 2.1 赋予大纲标题父子管辖元信息 (hasChildren, childCount)
+  const outlineHeadingsWithMeta = useMemo(() => {
+    return outlineHeadings.map((heading, i) => {
+      const curWeight = heading.type === 'h1' ? 1 : heading.type === 'h2' ? 2 : 3;
+      let childCount = 0;
+      for (let j = i + 1; j < outlineHeadings.length; j++) {
+        const next = outlineHeadings[j];
+        const nextWeight = next.type === 'h1' ? 1 : next.type === 'h2' ? 2 : 3;
+        if (nextWeight <= curWeight) break;
+        childCount++;
+      }
+      return {
+        ...heading,
+        hasChildren: childCount > 0,
+        childCount,
+      };
+    });
+  }, [outlineHeadings]);
+
+  // 2.2 父子折叠交互控制函数
+  const toggleHeadingFold = (headingId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCollapsedHeadingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(headingId)) {
+        next.delete(headingId);
+      } else {
+        next.add(headingId);
+      }
+      return next;
+    });
+  };
+
+  const hasAnyCollapsed = collapsedHeadingIds.size > 0;
+  const toggleAllHeadingsFold = () => {
+    if (hasAnyCollapsed) {
+      setCollapsedHeadingIds(new Set());
+    } else {
+      const allParents = new Set<string>();
+      outlineHeadingsWithMeta.forEach((h) => {
+        if (h.hasChildren) allParents.add(h.id);
+      });
+      setCollapsedHeadingIds(allParents);
+    }
+  };
+
+  // 3. 结合层级过滤器与父子折叠状态推导最终可见大纲列表
   const filteredHeadings = useMemo(() => {
-    if (outlineFilter === 'h1') {
-      return outlineHeadings.filter((h) => h.type === 'h1');
+    const visible: typeof outlineHeadingsWithMeta = [];
+    let blockedWeight: number | null = null;
+
+    for (const heading of outlineHeadingsWithMeta) {
+      const weight = heading.type === 'h1' ? 1 : heading.type === 'h2' ? 2 : 3;
+
+      // 若当前层级小于等于之前的阻断层级，说明已脱离前一个折叠父节点的管辖范围
+      if (blockedWeight !== null && weight <= blockedWeight) {
+        blockedWeight = null;
+      }
+
+      // 若当前未被父级折叠阻断
+      if (blockedWeight === null) {
+        const matchesFilter =
+          outlineFilter === 'all' ||
+          (outlineFilter === 'h1' && heading.type === 'h1') ||
+          (outlineFilter === 'h1-h2' && (heading.type === 'h1' || heading.type === 'h2'));
+
+        if (matchesFilter) {
+          visible.push(heading);
+        }
+
+        // 若当前项被折叠且拥有子项，则对后续比当前更深层级的项开启阻断
+        if (collapsedHeadingIds.has(heading.id) && heading.hasChildren) {
+          blockedWeight = weight;
+        }
+      }
     }
-    if (outlineFilter === 'h1-h2') {
-      return outlineHeadings.filter((h) => h.type === 'h1' || h.type === 'h2');
-    }
-    return outlineHeadings;
-  }, [outlineHeadings, outlineFilter]);
+
+    return visible;
+  }, [outlineHeadingsWithMeta, outlineFilter, collapsedHeadingIds]);
 
   // 4. ScrollSpy: 监听正文滚动，计算视口内当前正在阅读的章节标题
   const handleScrollContent = useCallback(() => {
@@ -843,19 +917,27 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             </div>
           </div>
 
-          {!showOutline && (
-            <button
-              onClick={() => setShowOutline(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 rounded-lg transition-colors select-none"
-              title="展开目录大纲"
-            >
+          <button
+            onClick={() => setShowOutline(!showOutline)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg transition-all select-none border ${
+              showOutline
+                ? 'bg-sky-500/15 text-sky-300 border-sky-500/30 font-medium'
+                : 'text-slate-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.08] border-white/5'
+            }`}
+            title={showOutline ? "收起目录大纲" : "展开目录大纲"}
+          >
+            {showOutline ? (
+              <PanelRightClose size={13} className="text-sky-400" />
+            ) : (
               <PanelRightOpen size={13} className="text-sky-400" />
-              <span>目录大纲</span>
-              {outlineHeadings.length > 0 && (
-                <span className="text-[10px] text-slate-500 font-mono">({outlineHeadings.length})</span>
-              )}
-            </button>
-          )}
+            )}
+            <span>目录大纲</span>
+            {outlineHeadings.length > 0 && (
+              <span className={`text-[10px] font-mono ${showOutline ? 'text-sky-400/80' : 'text-slate-500'}`}>
+                ({outlineHeadings.length})
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1097,17 +1179,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       </div>
 
-        {/* 当大纲收起时，右侧悬浮极简指示胶囊 */}
-        {!showOutline && (
-          <button
-            onClick={() => setShowOutline(true)}
-            className="absolute right-4 top-4 z-20 flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-800 border border-white/10 rounded-xl text-xs text-slate-300 hover:text-sky-300 shadow-xl backdrop-blur-md transition-all select-none group"
-            title="展开目录大纲 (支持 ScrollSpy 导航)"
-          >
-            <ListTree size={13} className="text-sky-400 group-hover:scale-110 transition-transform" />
-            <span>大纲</span>
-          </button>
-        )}
+
 
         {/* 右侧轻量目录大纲与局部图谱栏 (Notion 风格微光胶囊，字号与间距精心收敛) */}
         {showOutline && (
@@ -1150,27 +1222,40 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
             {rightPanelTab === 'toc' ? (
               <>
-                {/* 智能层级过滤胶囊组 (全部 / 仅 H1 / H1 + H2) */}
-                <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-lg mb-2">
-                  {(
-                    [
-                      { id: 'all', label: '全部' },
-                      { id: 'h1', label: '仅H1' },
-                      { id: 'h1-h2', label: 'H1+H2' },
-                    ] as const
-                  ).map((f) => (
+                {/* 智能层级过滤胶囊组与全局折叠微操作 */}
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <div className="flex-1 flex items-center gap-1 bg-white/[0.04] p-1 rounded-lg">
+                    {(
+                      [
+                        { id: 'all', label: '全部' },
+                        { id: 'h1', label: '仅H1' },
+                        { id: 'h1-h2', label: 'H1+H2' },
+                      ] as const
+                    ).map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setOutlineFilter(f.id)}
+                        className={`flex-1 text-[10px] py-0.5 rounded transition-all text-center ${
+                          outlineFilter === f.id
+                            ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  {outlineHeadings.some((h) => h.type === 'h1' || h.type === 'h2') && (
                     <button
-                      key={f.id}
-                      onClick={() => setOutlineFilter(f.id)}
-                      className={`flex-1 text-[10px] py-0.5 rounded transition-all text-center ${
-                        outlineFilter === f.id
-                          ? 'bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-                      }`}
+                      type="button"
+                      onClick={toggleAllHeadingsFold}
+                      className="px-1.5 py-1 text-[10px] text-slate-400 hover:text-sky-300 hover:bg-white/5 rounded-lg border border-white/5 transition-colors flex items-center gap-0.5 shrink-0"
+                      title={hasAnyCollapsed ? "一键全部展开" : "一键全部折叠"}
                     >
-                      {f.label}
+                      {hasAnyCollapsed ? <ChevronsDown size={11} /> : <ChevronsUp size={11} />}
+                      <span>{hasAnyCollapsed ? "展开" : "折叠"}</span>
                     </button>
-                  ))}
+                  )}
                 </div>
 
                 {filteredHeadings.length === 0 ? (
@@ -1181,11 +1266,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
                     {filteredHeadings.map((heading) => {
                       const isActive = activeHeadingId === heading.id;
+                      const isCollapsed = collapsedHeadingIds.has(heading.id);
                       return (
-                        <button
+                        <div
                           key={heading.id}
                           onClick={() => handleScrollToHeading(heading.id)}
-                          className={`w-full text-left truncate rounded-md transition-all block text-xs py-1 px-1.5 relative ${
+                          className={`w-full group/item text-left rounded-md transition-all flex items-center text-xs py-1 px-1.5 relative cursor-pointer select-none ${
                             isActive
                               ? 'bg-sky-500/10 text-sky-300 font-medium'
                               : heading.type === 'h1'
@@ -1194,15 +1280,41 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                               ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                               : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 text-[11px]'
                           } ${
-                            heading.type === 'h1' ? 'pl-2' : heading.type === 'h2' ? 'pl-4' : 'pl-6'
+                            heading.type === 'h1' ? 'pl-1.5' : heading.type === 'h2' ? 'pl-3.5' : 'pl-5.5'
                           }`}
                           title={heading.text}
                         >
                           {isActive && (
                             <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-sky-400 rounded-full shadow-[0_0_6px_rgba(56,189,248,0.8)]" />
                           )}
-                          {heading.text}
-                        </button>
+
+                          {/* 父子折叠微指示箭头 */}
+                          {heading.hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={(e) => toggleHeadingFold(heading.id, e)}
+                              className="p-0.5 -ml-0.5 mr-1 hover:bg-white/10 rounded text-slate-400 hover:text-sky-300 transition-colors shrink-0"
+                              title={isCollapsed ? "展开下属子标题" : "折叠下属子标题"}
+                            >
+                              {isCollapsed ? (
+                                <ChevronRight size={11} className="text-slate-400" />
+                              ) : (
+                                <ChevronDown size={11} className="text-sky-400/80" />
+                              )}
+                            </button>
+                          ) : (
+                            <span className="w-3 mr-1 shrink-0" />
+                          )}
+
+                          <span className="truncate flex-1">{heading.text}</span>
+
+                          {/* 折叠时展示包含子标题数量小 Badge */}
+                          {isCollapsed && heading.childCount > 0 && (
+                            <span className="text-[9px] font-mono px-1 py-0.2 bg-white/5 text-slate-400 rounded shrink-0 ml-1">
+                              +{heading.childCount}
+                            </span>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

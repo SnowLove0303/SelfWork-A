@@ -2,6 +2,21 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.67] - 2026-11-19
+
+### Feat (文档引擎：大纲展开入口收敛与父子级标题折叠系统)
+
+- **大纲展开入口唯一化收拢 (`toc:entrypoint-unification` / `BlockEditor.tsx`)**：
+  - 彻底移除了正文编辑容器内部悬浮常驻的右侧下方「大纲」胶囊按钮，消除双重入口冗余与视觉干扰；
+  - 改造顶栏右侧「目录大纲」按钮为常驻双向切换（Toggle）：收起时点击展开、展开时高亮激活且点击可收起，状态无缝持久化保存于 `selfwork_doc_outline_visible`。
+
+- **目录父子级标题折叠系统与树状导航交互 (`toc:hierarchical-heading-fold` / `BlockEditor.tsx`)**：
+  - 引入 `collapsedHeadingIds` 状态，根据 H1 ($W=1$)、H2 ($W=2$)、H3 ($W=3$) 动态推导父子管辖层级；
+  - 为所有拥有下属子标题的父节点渲染独立的折叠微箭头指示图标（`ChevronDown` 展开 / `ChevronRight` 折叠），点击箭头仅控制子树折叠展开，并显式阻止冒泡 (`stopPropagation`)，彻底与正文跳转解耦；
+  - 点击标题文本依然精确平滑穿梭滚动至正文对应位置；
+  - 父节点折叠时，在条目右侧呈现包含子标题数量的小徽标（如 `+3`）；
+  - 大纲头部工具区增加一键「全部折叠 / 全部展开」微按钮，完美兼容「全部 / 仅H1 / H1+H2」多维层级过滤。
+
 ## [0.1.66] - 2026-11-19
 
 ### Feat (文档引擎：排版呼吸感、水平空间舒展与划选浮动格式工具条防遮挡优化)
