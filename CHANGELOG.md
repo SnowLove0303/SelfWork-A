@@ -2,6 +2,21 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.69] - 2026-11-19
+
+### Feat (文档引擎：Word 级自然无阻断跨块划选与批量协同操作)
+
+- **跨块选区协同器 (`editor:cross-block-selection` / `BlockEditor.tsx` & `BlockItem.tsx`)**：
+  - 彻底终结多 `contenteditable` 孤岛机制对鼠标划选的物理截断限制；
+  - 在正文编辑容器层引入 `crossSelectedBlockIds` 手势协同器，当用户在某块内按住鼠标左键并拖拽跨越块边界时，平滑捕获起始块至当前指针所在的全部块；
+  - 被选中的多块呈现连续连贯的深蓝微光沉浸式高亮背景 (`bg-sky-500/15 ring-1 ring-sky-500/30 rounded-xl`)，彻底还原 Microsoft Word 般的无缝大片划选体验；
+  - 单块内正常打字、光标箭头穿梭、双击选词、三击选行保持 100% 原生手感，点击空白处即刻自然恢复。
+
+- **跨块批量操作与剪贴板协同 (`editor:cross-block-batch-ops` / `BlockEditor.tsx`)**：
+  - 支持跨块多段 `Ctrl+C` 批量复制，自动按换行与列表符号格式化写入系统剪贴板，粘贴时结构完整无损；
+  - 支持跨块多段 `Backspace` / `Delete` 批量一键删除，并平滑保留单个聚焦空段落块；
+  - 支持按 `Escape` 键一键退出跨块选区。
+
 ## [0.1.68] - 2026-11-19
 
 ### Feat (文档引擎：大纲侧栏收起按钮彻底清除与智能多层级深度父子折叠)

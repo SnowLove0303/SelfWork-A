@@ -114,6 +114,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   // 目录父子级标题折叠状态集合
   const [collapsedHeadingIds, setCollapsedHeadingIds] = useState<Set<string>>(new Set());
+  // 跨块连续划选协同状态 (Cross-Block Selection Coordinator)
+  const [crossSelectedBlockIds, setCrossSelectedBlockIds] = useState<Set<string>>(new Set());
+  const isMouseDownRef = useRef(false);
+  const dragAnchorBlockIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // 模板库与版本历史状态
@@ -467,6 +471,122 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     return visible;
   }, [outlineHeadingsWithMeta, outlineFilter, collapsedHeadingIds]);
+
+  // 3.1 跨块连续拖选鼠标手势协同器
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isMouseDownRef.current || !dragAnchorBlockIdRef.current) return;
+      if ((e.buttons & 1) === 0) {
+        isMouseDownRef.current = false;
+        dragAnchorBlockIdRef.current = null;
+        return;
+      }
+
+      const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      if (!target) return;
+      const blockEl = target.closest('[id^="block-"]') as HTMLElement | null;
+      if (!blockEl) return;
+      const currentBlockId = blockEl.id.replace('block-', '');
+      const anchorId = dragAnchorBlockIdRef.current;
+
+      if (currentBlockId === anchorId) {
+        if (crossSelectedBlockIds.size > 1) {
+          setCrossSelectedBlockIds(new Set());
+        }
+        return;
+      }
+
+      const anchorIndex = blocks.findIndex((b) => b.id === anchorId);
+      const currentIndex = blocks.findIndex((b) => b.id === currentBlockId);
+      if (anchorIndex === -1 || currentIndex === -1) return;
+
+      const start = Math.min(anchorIndex, currentIndex);
+      const end = Math.max(anchorIndex, currentIndex);
+
+      const selectedIds = new Set<string>();
+      for (let i = start; i <= end; i++) {
+        selectedIds.add(blocks[i].id);
+      }
+      setCrossSelectedBlockIds(selectedIds);
+    };
+
+    const handleGlobalMouseUp = () => {
+      isMouseDownRef.current = false;
+      dragAnchorBlockIdRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [blocks, crossSelectedBlockIds.size]);
+
+  // 3.2 跨块批量复制接管 (Ctrl+C / Cmd+C)
+  useEffect(() => {
+    const handleCopy = (e: ClipboardEvent) => {
+      if (crossSelectedBlockIds.size <= 1) return;
+      const selectedBlocks = blocks.filter((b) => crossSelectedBlockIds.has(b.id));
+      if (selectedBlocks.length === 0) return;
+
+      const fullText = selectedBlocks
+        .map((b) => {
+          let text = b.content.replace(/<[^>]*>/g, '').trim();
+          if (b.blockType === 'bullet') text = `• ${text}`;
+          else if (b.blockType === 'todo') text = `[${b.properties?.checked ? 'x' : ' '}] ${text}`;
+          else if (b.blockType === 'quote') text = `> ${text}`;
+          else if (b.blockType === 'code') text = (b.properties?.code as string) || text;
+          return text;
+        })
+        .join('\n');
+
+      e.preventDefault();
+      e.clipboardData?.setData('text/plain', fullText);
+    };
+
+    window.addEventListener('copy', handleCopy);
+    return () => window.removeEventListener('copy', handleCopy);
+  }, [blocks, crossSelectedBlockIds]);
+
+  // 3.3 跨块批量删除与按键接管
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (crossSelectedBlockIds.size <= 1) return;
+
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        const firstSelected = blocks.find((b) => crossSelectedBlockIds.has(b.id));
+        if (!firstSelected) return;
+
+        const remainingBlocks = blocks.filter((b) => !crossSelectedBlockIds.has(b.id));
+        const newBlock: DocBlock = {
+          id: `blk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          pageId: page.id,
+          blockType: 'p',
+          content: '',
+          sortOrder: firstSelected.sortOrder,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        const insertIndex = blocks.findIndex((b) => b.id === firstSelected.id);
+        const nextBlocks = [...remainingBlocks];
+        nextBlocks.splice(Math.max(0, insertIndex), 0, newBlock);
+        const sorted = nextBlocks.map((b, i) => ({ ...b, sortOrder: i }));
+
+        saveDocBlocks(page.id, sorted);
+        setBlocks(sorted);
+        setCrossSelectedBlockIds(new Set());
+        setFocusedBlockId(newBlock.id);
+      } else if (e.key === 'Escape') {
+        setCrossSelectedBlockIds(new Set());
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [blocks, crossSelectedBlockIds, page.id]);
 
   // 4. ScrollSpy: 监听正文滚动，计算视口内当前正在阅读的章节标题
   const handleScrollContent = useCallback(() => {
@@ -1127,7 +1247,23 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               )}
 
             {/* 块流渲染 (解冻垂直排版外边距，彻底移除破坏性的 space-y-*) */}
-            <div className="min-h-[400px]">
+            <div
+              className="min-h-[400px]"
+              onMouseDown={(e) => {
+                if (e.button !== 0) return;
+                const target = e.target as HTMLElement;
+                if (target.closest('button') || target.closest('input') || target.closest('[draggable="true"]')) {
+                  return;
+                }
+                const blockEl = target.closest('[id^="block-"]') as HTMLElement | null;
+                if (blockEl) {
+                  isMouseDownRef.current = true;
+                  dragAnchorBlockIdRef.current = blockEl.id.replace('block-', '');
+                } else if (crossSelectedBlockIds.size > 0) {
+                  setCrossSelectedBlockIds(new Set());
+                }
+              }}
+            >
               {(previewSnapshot ? previewSnapshot.blocks : blocks).map((block, idx) => {
                 // 计算有序列表块的连续序号（遇到非 numbered 块重置计数）
                 let seqNumber: number | undefined;
@@ -1168,6 +1304,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     allBlocks={blocks}
                     onScrollToHeading={handleScrollToHeading}
                     onAddComment={handleAddComment}
+                    isCrossSelected={crossSelectedBlockIds.has(block.id)}
                   />
                 );
               })}

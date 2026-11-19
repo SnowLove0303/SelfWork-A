@@ -92,6 +92,8 @@ interface BlockItemProps {
   onScrollToHeading?: (headingId: string) => void;
   /** 划词添加批注回调 */
   onAddComment?: (text: string, blockId: string) => void;
+  /** 跨块连续划选高亮状态 */
+  isCrossSelected?: boolean;
 }
 
 // 格式转换器：将旧存量 Markdown 代码自动平滑转为高保真 HTML 格式，保证所见即所得
@@ -166,6 +168,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   allBlocks,
   onScrollToHeading,
   onAddComment,
+  isCrossSelected,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isLocalInputRef = useRef(false);
@@ -1689,8 +1692,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={`group relative flex items-start ${getBlockMarginClass()} ${
-        isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
-      }`}
+        isCrossSelected ? 'bg-sky-500/15 ring-1 ring-sky-500/30 rounded-xl transition-colors duration-75' : ''
+      } ${isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''}`}
     >
       {renderDropIndicator()}
       {renderSideHandle('top-1')}
