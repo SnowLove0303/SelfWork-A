@@ -2,6 +2,27 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.66] - 2026-11-19
+
+### Feat (文档引擎：排版呼吸感、水平空间舒展与划选浮动格式工具条防遮挡优化)
+
+- **块级垂直外边距与黄金排版呼吸节奏解冻 (`typography:vertical-breathing-rhythm` / `BlockItem.tsx` & `BlockEditor.tsx`)**：
+  - 彻底移除了 `BlockEditor.tsx` 块流容器上强制覆盖子元素 margin 的 `space-y-0.5` 类，彻底解放块级外边距自由度；
+  - 重构 `BlockItem.tsx` 中的 `getBlockMarginClass`，为 H1 (`mt-10 mb-3`)、H2 (`mt-8 mb-2.5`)、H3 (`mt-5 mb-2`)、段落 (`my-2.5 py-0.5`)、代码块与表格 (`my-4`) 注入明确的层级停顿与留白；
+  - 将段落行高升级至 `leading-[1.75]`（黄金阅读行高）并微调字号为 `text-[15px]`，密集专业长文彻底告别视觉压迫与拥挤粘连；
+  - 将 Callout 提示框等特殊块统一纳入独立外边距计算。
+
+- **编辑器水平空间舒展与大纲栏智能收展 (`layout:horizontal-spatial-declutter` / `BlockEditor.tsx`)**：
+  - 支持右侧大纲栏一键折叠收起，状态持久化保存于 `selfwork_doc_outline_visible`；
+  - 大纲收起时正文编辑容器自动从 `max-w-3xl` 动态舒展为 `max-w-4xl xl:max-w-5xl` 宽屏沉浸模式；
+  - 大纲收起时右侧顶栏常驻极简微光大纲指示胶囊，点击即可滑出大纲；
+  - 展开时大纲栏宽度收拢至紧凑的 `w-52` (208px)，释放正文横向视野。
+
+- **划选浮动格式工具条防遮挡与层级收敛 (`toolbar:floating-declutter-and-flip` / `BlockItem.tsx` & `FloatingFormatToolbar.tsx`)**：
+  - 引入 `contextMenuOpenRef` 互斥保护机制，右键菜单呼出时彻底抑制浮动条，彻底消除划词浮动条与右键“转换为”菜单双层重叠互叠贴脸的界面瑕疵；
+  - 在 `checkSelection` 中增加防遮挡智能垂直翻转算法：当选区靠近视口顶部（`rect.top - 48 < 12`）时，自动翻转至选区正下方（`rect.bottom + 8`），杜绝挡住被选文本与上下文；
+  - 收敛 `FloatingFormatToolbar` 的 `zIndex` 至 `999990`，确保与右键菜单层级清晰无干扰。
+
 ## [0.1.65] - 2026-11-19
 
 ### Feat (文档引擎：阶段五·维度 4 - 数据工程与全库深度管理：全库全局模糊检索、文档废纸篓软删除、侧栏多选批量管理与外部 Markdown 批量导入)

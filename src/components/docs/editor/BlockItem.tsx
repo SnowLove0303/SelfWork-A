@@ -249,8 +249,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   const [mentionMenuPos, setMentionMenuPos] = useState({ top: 0, left: 0 });
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
 
-  // 右键划选排版菜单状态
+  // 右键划选排版菜单状态与互斥锁
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const contextMenuOpenRef = useRef(false);
+  const updateContextMenuOpen = (open: boolean) => {
+    contextMenuOpenRef.current = open;
+    setContextMenuOpen(open);
+  };
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const [savedSelectionText, setSavedSelectionText] = useState('');
   const savedRangeRef = useRef<Range | null>(null);
@@ -338,9 +343,19 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     }
   }, [autoFocus]);
 
-  // 3. 选区检测与浮动工具条调度
+  // 3. 选区检测与浮动工具条调度（增加右键菜单互斥与防遮挡智能翻转）
   const checkSelection = () => {
+    if (contextMenuOpenRef.current) {
+      setFloatingToolbarOpen(false);
+      return;
+    }
+
     setTimeout(() => {
+      if (contextMenuOpenRef.current) {
+        setFloatingToolbarOpen(false);
+        return;
+      }
+
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !editorRef.current) {
         setFloatingToolbarOpen(false);
@@ -359,10 +374,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         setSavedSelectionText(text);
 
         const rect = range.getBoundingClientRect();
-        setFloatingToolbarPos({
-          top: rect.top - 46,
-          left: Math.max(16, rect.left + rect.width / 2 - 110),
-        });
+        // 防遮挡智能垂直翻转算法：浮动条高度约 40px，上方预留 8px 间距
+        // 若 rect.top - 48 < 12 (靠近视口顶部)，则翻转至选区正下方 (rect.bottom + 8)，杜绝挡住被选文本
+        const shouldFlip = rect.top - 48 < 12;
+        const top = shouldFlip ? rect.bottom + 8 : rect.top - 48;
+        const left = Math.max(16, Math.min(window.innerWidth - 320, rect.left + rect.width / 2 - 120));
+
+        setFloatingToolbarPos({ top, left });
         setFloatingToolbarOpen(true);
       } else {
         setFloatingToolbarOpen(false);
@@ -835,8 +853,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({
 
     setSavedSelectionText(text);
     setContextMenuPos({ x: e.clientX, y: e.clientY });
-    setContextMenuOpen(true);
     setFloatingToolbarOpen(false);
+    updateContextMenuOpen(true);
   };
 
   // 7. 原生富文本排版应用：严格锁定选区，消除失焦与局部失效
@@ -1084,40 +1102,48 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     );
   };
 
-  // 获取不同块类型的外边距与垂直排版呼吸空间类
+  // 获取不同块类型的外边距与垂直排版呼吸空间类 (消除拥挤粘连，构筑黄金排版韵律)
   const getBlockMarginClass = () => {
     switch (block.blockType) {
       case 'h1':
-        return 'mt-10 mb-2.5 pt-2';
+        return 'mt-10 mb-3 pt-2';
       case 'h2':
-        return 'mt-8 mb-2 pt-1';
+        return 'mt-8 mb-2.5 pt-1.5';
       case 'h3':
-        return 'mt-5 mb-1.5';
+        return 'mt-5 mb-2';
       case 'divider':
         return 'my-6';
       case 'code':
       case 'table':
+        return 'my-4';
+      case 'quote':
+        return 'my-3.5 py-1';
+      case 'callout':
         return 'my-3.5';
+      case 'todo':
+      case 'bullet':
+      case 'numbered':
+        return 'my-1.5 py-0.5';
       default:
-        return 'py-1 my-0.5';
+        return 'my-2.5 py-0.5';
     }
   };
 
-  // 获取不同块类型的特定样式类
+  // 获取不同块类型的特定样式类 (科学梯度字阶与 1.75 倍黄金阅读行高)
   const getBlockStyle = () => {
     switch (block.blockType) {
       case 'h1':
-        return 'text-[28px] font-bold text-white leading-tight';
+        return 'text-[26px] font-bold text-white leading-tight tracking-tight';
       case 'h2':
-        return 'text-[22px] font-semibold text-slate-100 leading-snug';
+        return 'text-[20px] font-semibold text-slate-100 leading-snug tracking-tight';
       case 'h3':
-        return 'text-lg font-semibold text-slate-200 leading-snug';
+        return 'text-[17px] font-semibold text-slate-200 leading-snug';
       case 'quote':
-        return 'italic text-slate-300 text-base leading-relaxed';
+        return 'italic text-slate-300 text-base leading-[1.75]';
       case 'code':
         return 'font-mono text-[13px] text-slate-200 leading-[22px] tracking-normal';
       default:
-        return 'text-base text-slate-200 leading-relaxed';
+        return 'text-[15px] text-slate-200 leading-[1.75] tracking-wide';
     }
   };
 
@@ -1161,7 +1187,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
         id={`block-${block.id}`}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`group relative flex items-start py-1 my-0.5 ${
+        className={`group relative flex items-start ${getBlockMarginClass()} ${
           isDragging ? 'opacity-30 scale-[0.99] transition-all' : ''
         }`}
       >
@@ -1255,7 +1281,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             onTurnInto={handleTurnInto}
             onCopy={handleCopy}
             onCut={handleCut}
-            onClose={() => setContextMenuOpen(false)}
+            onClose={() => updateContextMenuOpen(false)}
           />
         )}
       </div>
@@ -2111,7 +2137,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           onTurnInto={handleTurnInto}
           onCopy={handleCopy}
           onCut={handleCut}
-          onClose={() => setContextMenuOpen(false)}
+          onClose={() => updateContextMenuOpen(false)}
         />
       )}
     </div>

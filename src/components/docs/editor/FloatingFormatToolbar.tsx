@@ -107,7 +107,7 @@ export const FloatingFormatToolbar: React.FC<FloatingFormatToolbarProps> = ({
         position: 'fixed',
         top: `${top}px`,
         left: `${left}px`,
-        zIndex: 999999,
+        zIndex: 999990,
       }}
       className="flex items-center gap-0.5 bg-[#0c101a]/95 backdrop-blur-2xl border border-white/20 rounded-xl shadow-2xl p-1 text-slate-200 select-none animate-in fade-in zoom-in-95 duration-100"
     >

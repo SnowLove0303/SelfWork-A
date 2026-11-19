@@ -79,7 +79,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [customCoverUrl, setCustomCoverUrl] = useState('');
-  const [showOutline, setShowOutline] = useState(true);
+  const [showOutline, setShowOutlineState] = useState(() => {
+    const saved = localStorage.getItem('selfwork_doc_outline_visible');
+    if (saved !== null) return saved === 'true';
+    return typeof window !== 'undefined' ? window.innerWidth >= 1440 : false;
+  });
+
+  const setShowOutline = (val: boolean | ((prev: boolean) => boolean)) => {
+    setShowOutlineState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      localStorage.setItem('selfwork_doc_outline_visible', String(next));
+      return next;
+    });
+  };
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // 全局查找与替换状态 (Ctrl + F)
@@ -913,7 +925,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           )}
 
           <div className={`px-8 lg:px-12 ${page.cover ? 'pb-48 pt-0' : 'pt-8 pb-48'}`}>
-            <div className="max-w-3xl lg:max-w-4xl space-y-4">
+            <div
+              className={`space-y-4 transition-all duration-200 ${
+                showOutline ? 'max-w-3xl lg:max-w-4xl' : 'max-w-4xl xl:max-w-5xl'
+              }`}
+            >
               {/* 文档图标与大标题 (若有 cover，Emoji 使用 -mt-7 ml-8 浮空重叠在封面上) */}
               <div className="space-y-2 mb-6 group/header">
                 <div className="flex items-center gap-2">
@@ -1016,8 +1032,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 />
               )}
 
-            {/* 块流渲染 */}
-            <div className="space-y-0.5 min-h-[400px]">
+            {/* 块流渲染 (解冻垂直排版外边距，彻底移除破坏性的 space-y-*) */}
+            <div className="min-h-[400px]">
               {(previewSnapshot ? previewSnapshot.blocks : blocks).map((block, idx) => {
                 // 计算有序列表块的连续序号（遇到非 numbered 块重置计数）
                 let seqNumber: number | undefined;
@@ -1081,9 +1097,21 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       </div>
 
+        {/* 当大纲收起时，右侧悬浮极简指示胶囊 */}
+        {!showOutline && (
+          <button
+            onClick={() => setShowOutline(true)}
+            className="absolute right-4 top-4 z-20 flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-800 border border-white/10 rounded-xl text-xs text-slate-300 hover:text-sky-300 shadow-xl backdrop-blur-md transition-all select-none group"
+            title="展开目录大纲 (支持 ScrollSpy 导航)"
+          >
+            <ListTree size={13} className="text-sky-400 group-hover:scale-110 transition-transform" />
+            <span>大纲</span>
+          </button>
+        )}
+
         {/* 右侧轻量目录大纲与局部图谱栏 (Notion 风格微光胶囊，字号与间距精心收敛) */}
         {showOutline && (
-          <div className="w-56 border-l border-white/5 bg-black/10 backdrop-blur-sm p-4 flex flex-col shrink-0 select-none">
+          <div className="w-52 border-l border-white/5 bg-black/15 backdrop-blur-sm p-3.5 flex flex-col shrink-0 select-none">
             <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/5">
               <div className="flex items-center gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/5">
                 <button
