@@ -526,7 +526,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         return;
       }
 
-      // 跨块划选：构建真实字符级精准 DOM Range
+      // 跨块划选：1. 立即清除浏览器原生的选区残留，彻底消除“既选行又选字”的双重选区与叠色
+      const nativeSel = window.getSelection();
+      if (nativeSel && nativeSel.rangeCount > 0) {
+        nativeSel.removeAllRanges();
+      }
+
+      // 2. 构建真实字符级精准 DOM Range
       const range = new Range();
       const pos = anchor.node.compareDocumentPosition(focusNode);
       if (pos & Node.DOCUMENT_POSITION_FOLLOWING || (anchor.node === focusNode && anchor.offset <= focusOffset)) {

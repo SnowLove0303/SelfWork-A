@@ -2,6 +2,22 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.73] - 2026-11-20
+
+### Feat (文档引擎：选区单一权威归一化与消除双重高亮叠加)
+
+- **选区单一权威通道归一化 (`editor:single-authority-selection` / `BlockEditor.tsx`)**：
+  - 响应用户核心体验反馈：“现在好像会双重选中，又选中字，又选中行，导致双重高亮”；
+  - 确立选区单一权威法理（Single Source of Truth），严格禁止浏览器原生 Selection 与自定义 Highlight 并存打架；
+  - 跨段划选触发瞬间，立即调用 `window.getSelection()?.removeAllRanges()` 彻底清除原生选区残留，消除“既选行又选字”的冲突异象；
+  - 单段内划选时撤销自定义 Highlight，全权由单层原生选区承载；
+  - 彻底移除了代码块上的 `ring-1` 状态残留，块级绝无任何多余行边框与背景。
+
+- **消除双重色彩叠加与纯净单层视觉 (`editor:single-layer-highlight` / `BlockEditor.tsx` & `globals.css`)**：
+  - 根除 `::selection` 与 `::highlight` 的双层叠色，文字背景色统一保持单层 `0.28` 透明度清爽半透明水蓝（`rgba(56, 189, 248, 0.28)`）；
+  - 字符前景色锐利清晰，消除复合渲染引起的文字发虚、发暗或边缘撕裂；
+  - 字符级高精起止与 120Hz 零延迟极速跟手手感持续稳定生效。
+
 ## [0.1.72] - 2026-11-20
 
 ### Feat (文档引擎：W3C 标准字符级高精选区与零延迟即划即现引擎)

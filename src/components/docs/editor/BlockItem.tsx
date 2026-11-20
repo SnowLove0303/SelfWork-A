@@ -1746,9 +1746,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
           <div
             className={`flex-1 min-w-0 ${
               block.blockType === 'code'
-                ? `my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden group/code transition-all hover:border-white/[0.14] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20 ${
-                    isCrossSelected ? 'ring-1 ring-sky-500/40' : ''
-                  }`
+                ? 'my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden group/code transition-all hover:border-white/[0.14] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20'
                 : ''
             }`}
             style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
