@@ -2,6 +2,23 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.77] - 2026-11-20
+
+### Fix (文档引擎：Notion 扁平汇总残屑段落物理剔除、表格双倍克隆与竖线切裂深度自愈)
+
+- **Notion 扁平汇总残屑段落深度清除 (`purge:flat-summary` / `docHealingService.ts`)**：
+  - 响应用户关于表格上方长串重复文本（红框 1：`| 运算 Python 写法 结果 ... |`）的核心故障反馈；
+  - 查明该文本为 Notion 网页复制时附带的扁平化纯文本预览行，被旧版解析器误存为普通 `p` 段落；
+  - 编写残屑段落探测器 `isNotionFlatSummaryBlock`，并在存量数据库（`selfwork.db`）中物理剔除该段落；
+  - 在 `markdownImport.ts` 与 `docsDb.ts` 加载钩子中注入前置阻断防护，杜绝此类段落再次入流。
+- **表格双倍克隆列折叠与转义竖线切裂自愈 (`heal:table-dedup` / `docHealingService.ts` & `TableBlock.tsx`)**：
+  - 查明红框 2 表格因历史未保护转义竖线 `\|` 导致单元格被切成碎片，且表头存在双倍克隆列（`运算` | `运算` | `Python 写法` | `Python 写法` | `结果` | `结果`）；
+  - 实现通用自愈算法 `healTableRows`：自动折叠偶数克隆列，并将因转义竖线被切开的碎片单元格（`A \` 与 `B`）原子恢复为规范的 `A \| B`，将表格恢复为完美的 3 列 × 5 行标准结构；
+  - 在 `TableBlock.tsx` 挂载运行时 `useMemo` 自愈规范化防线，确保无论何时读取到历史旧数据均自动呈现纯净规整表格。
+- **存量文档就地自愈与本地 Markdown 物理镜像重新落盘 (`sync:markdown-mirror`)**：
+  - 针对《02.3-02.5 集合类型、映射类型与其他内置类型》存量页面执行事务级数据清洗；
+  - 重新原子生成 `%APPDATA%\SelfWork\documents\02.3-02.5 集合类型、映射类型与其他内置类型.md` 物理文件，确保磁盘镜像与界面绝对一致。
+
 ## [0.1.76] - 2026-11-20
 
 ### Feat (文档引擎：面向 MCP+AI 的真实物理绝对路径落盘与上线 URL 自适应切换)

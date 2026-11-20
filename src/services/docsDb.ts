@@ -1,3 +1,4 @@
+import { healDocumentBlocks } from './docHealingService.ts';
 import {
   DocPage,
   DocBlock,
@@ -326,8 +327,17 @@ export async function loadDocBlocks(pageId: string): Promise<DocBlock[]> {
         createdAt: b.createdAt,
         updatedAt: b.updatedAt,
       }));
-      localStorage.setItem(`${DOC_BLOCKS_PREFIX}${pageId}`, JSON.stringify(formatted));
-      return formatted;
+
+      // 挂载运行时深度自愈护盾：过滤残屑段落并修复破损表格
+      const { healedBlocks, hasChanged } = healDocumentBlocks(formatted);
+      if (hasChanged) {
+        saveDocBlocks(pageId, healedBlocks).catch((e) =>
+          console.warn('[docsDb] 自动保存自愈文档块失败', e)
+        );
+      }
+
+      localStorage.setItem(`${DOC_BLOCKS_PREFIX}${pageId}`, JSON.stringify(healedBlocks));
+      return healedBlocks;
     }
 
     const saved = localStorage.getItem(`${DOC_BLOCKS_PREFIX}${pageId}`);

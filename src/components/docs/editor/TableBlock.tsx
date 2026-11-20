@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { DocBlock } from '../../../types/docs.ts';
 import { Table, Plus, Trash2, Check, Copy, ToggleLeft, ToggleRight } from 'lucide-react';
+import { healTableRows } from '../../../services/docHealingService.ts';
 
 interface TableBlockProps {
   block: DocBlock;
@@ -20,11 +21,12 @@ export const TableBlock: React.FC<TableBlockProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
-  // 解析并规范化二维数据
+  // 解析并运行运行时自愈规范化二维数据（自动消除克隆列与转义字符切裂）
   const rawRows = (block.properties?.rows as string[][]) || [];
+  const healedRows = useMemo(() => healTableRows(rawRows), [rawRows]);
   const rows: string[][] =
-    rawRows.length > 0 && Array.isArray(rawRows[0])
-      ? rawRows
+    healedRows.length > 0 && Array.isArray(healedRows[0])
+      ? healedRows
       : [
           ['表头 1', '表头 2', '表头 3'],
           ['单元格 1', '单元格 2', '单元格 3'],

@@ -1,4 +1,5 @@
 import { DocBlock } from '../types/docs.ts';
+import { healTableRows, isNotionFlatSummaryBlock } from './docHealingService.ts';
 
 export interface ParsedMarkdownResult {
   title: string;
@@ -72,6 +73,12 @@ export function sanitizeImportText(rawText: string): {
   // 5. 清除输出代码后紧随的行号残屑（例如 \n3注意 -> \n注意）
   text = text.replace(/\n\d+(?=[\u4e00-\u9fa5])/g, '\n');
 
+  // 6. 清除 Notion 网页复制产生的扁平汇总长行（避免作为段落插入）
+  text = text
+    .split('\n')
+    .filter((line) => !isNotionFlatSummaryBlock({ blockType: 'p', content: line }))
+    .join('\n');
+
   return { text: text.trim(), detectedTitle, detectedIcon };
 }
 
@@ -88,28 +95,7 @@ export function splitTableRow(line: string): string[] {
  * 表格行规整与防克隆去重：对齐列数并消除重复克隆列
  */
 export function normalizeTableRows(rows: string[][]): string[][] {
-  if (rows.length === 0) return rows;
-  const header = rows[0];
-  let isDoubled = header.length > 2 && header.length % 2 === 0;
-  if (isDoubled) {
-    for (let c = 0; c < header.length; c += 2) {
-      if (header[c] !== header[c + 1]) {
-        isDoubled = false;
-        break;
-      }
-    }
-  }
-  let cleanedRows = rows;
-  if (isDoubled) {
-    cleanedRows = rows.map((r) => r.filter((_, idx) => idx % 2 === 0));
-  }
-  const maxCols = Math.max(...cleanedRows.map((r) => r.length));
-  return cleanedRows.map((r) => {
-    if (r.length < maxCols) {
-      return [...r, ...Array(maxCols - r.length).fill('')];
-    }
-    return r;
-  });
+  return healTableRows(rows);
 }
 
 /**
