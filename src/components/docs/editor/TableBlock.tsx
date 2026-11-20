@@ -8,9 +8,6 @@ import {
   Copy,
   ToggleLeft,
   ToggleRight,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Eraser,
   ArrowUp,
   ArrowDown,
@@ -20,21 +17,166 @@ import {
   Bold,
   Italic,
   Underline,
+  Strikethrough,
+  PaintBucket,
+  Grid3X3,
+  ChevronRight,
+  GripVertical,
+  Layers,
 } from 'lucide-react';
 import { healTableRows } from '../../../services/docHealingService.ts';
 import { FloatingFormatToolbar } from './FloatingFormatToolbar.tsx';
 
 export type TableColAlign = 'left' | 'center' | 'right';
+export type TableVAlign = 'top' | 'middle' | 'bottom';
 
-interface CellCoord {
+export type TableNineGridAlign =
+  | 'tl' // 顶端左对齐
+  | 'tc' // 顶端居中
+  | 'tr' // 顶端右对齐
+  | 'ml' // 居中左对齐
+  | 'mc' // 正中对齐
+  | 'mr' // 居中右对齐
+  | 'bl' // 底端左对齐
+  | 'bc' // 底端居中
+  | 'br'; // 底端右对齐
+
+export interface CellCoord {
   rIdx: number;
   cIdx: number;
 }
 
-interface CellRange {
+export interface CellRange {
   start: CellCoord;
   end: CellCoord;
 }
+
+// 莫兰迪暗黑低饱和度优雅底纹预设色卡
+export const SHADING_COLORS = [
+  { name: '无底色', value: '', label: '无', hex: 'transparent' },
+  { name: '暗灰', value: 'rgba(148, 163, 184, 0.16)', label: '灰', hex: '#94a3b8' },
+  { name: '冰蓝', value: 'rgba(56, 189, 248, 0.18)', label: '蓝', hex: '#38bdf8' },
+  { name: '翠绿', value: 'rgba(52, 211, 153, 0.18)', label: '绿', hex: '#34d399' },
+  { name: '暖珀', value: 'rgba(251, 191, 36, 0.18)', label: '黄', hex: '#fbbf24' },
+  { name: '绛红', value: 'rgba(251, 113, 133, 0.18)', label: '红', hex: '#fb7185' },
+  { name: '暮紫', value: 'rgba(167, 139, 250, 0.18)', label: '紫', hex: '#a78bfa' },
+  { name: '雅靛', value: 'rgba(99, 102, 241, 0.18)', label: '靛', hex: '#6366f1' },
+];
+
+export const NINE_GRID_CONFIG: {
+  id: TableNineGridAlign;
+  title: string;
+  hAlign: TableColAlign;
+  vAlign: TableVAlign;
+  dotPos: string;
+}[] = [
+  { id: 'tl', title: '顶端居左', hAlign: 'left', vAlign: 'top', dotPos: 'top-0.5 left-0.5' },
+  { id: 'tc', title: '顶端居中', hAlign: 'center', vAlign: 'top', dotPos: 'top-0.5 left-1/2 -translate-x-1/2' },
+  { id: 'tr', title: '顶端居右', hAlign: 'right', vAlign: 'top', dotPos: 'top-0.5 right-0.5' },
+  { id: 'ml', title: '居中居左', hAlign: 'left', vAlign: 'middle', dotPos: 'top-1/2 -translate-y-1/2 left-0.5' },
+  { id: 'mc', title: '垂直正中', hAlign: 'center', vAlign: 'middle', dotPos: 'top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2' },
+  { id: 'mr', title: '居中居右', hAlign: 'right', vAlign: 'middle', dotPos: 'top-1/2 -translate-y-1/2 right-0.5' },
+  { id: 'bl', title: '底端居左', hAlign: 'left', vAlign: 'bottom', dotPos: 'bottom-0.5 left-0.5' },
+  { id: 'bc', title: '底端居中', hAlign: 'center', vAlign: 'bottom', dotPos: 'bottom-0.5 left-1/2 -translate-x-1/2' },
+  { id: 'br', title: '底端居右', hAlign: 'right', vAlign: 'bottom', dotPos: 'bottom-0.5 right-0.5' },
+];
+
+/**
+ * 1. Word 标志性 3×3 九宫格对齐微选择器组件
+ */
+export const TableNineGridAlignment: React.FC<{
+  currentH: TableColAlign;
+  currentV: TableVAlign;
+  onSelect: (h: TableColAlign, v: TableVAlign, id: TableNineGridAlign) => void;
+  className?: string;
+}> = ({ currentH, currentV, onSelect, className = '' }) => {
+  return (
+    <div className={`p-1.5 bg-[#161b22] border border-white/10 rounded-xl shadow-2xl ${className}`}>
+      <div className="text-[10px] text-slate-400 font-medium px-1 mb-1 flex items-center justify-between">
+        <span>对齐方式 (Word 9宫格)</span>
+        <span className="text-[9px] text-sky-400/80 font-mono">水平×垂直</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1 w-[96px] h-[96px]">
+        {NINE_GRID_CONFIG.map((item) => {
+          const isActive = item.hAlign === currentH && item.vAlign === currentV;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              title={item.title}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(item.hAlign, item.vAlign, item.id);
+              }}
+              className={`relative rounded-md border transition-all cursor-pointer flex items-center justify-center ${
+                isActive
+                  ? 'bg-sky-500/25 border-sky-400 text-sky-300 ring-1 ring-sky-400/50'
+                  : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.1] hover:border-white/20 text-slate-400'
+              }`}
+            >
+              {/* 微对齐视效指示块 */}
+              <div className="w-5 h-5 relative border border-dashed border-white/20 rounded-[3px]">
+                <span
+                  className={`absolute w-1.5 h-1.5 rounded-full ${
+                    isActive ? 'bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.8)]' : 'bg-slate-400'
+                  } ${item.dotPos}`}
+                />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * 2. 单元格底纹/填充色微面板
+ */
+export const TableShadingPicker: React.FC<{
+  currentColor?: string;
+  onSelect: (color: string) => void;
+  className?: string;
+}> = ({ currentColor, onSelect, className = '' }) => {
+  return (
+    <div className={`p-1.5 bg-[#161b22] border border-white/10 rounded-xl shadow-2xl w-[140px] ${className}`}>
+      <div className="text-[10px] text-slate-400 font-medium px-1 mb-1 flex items-center justify-between">
+        <span>底纹颜色</span>
+        <PaintBucket size={10} className="text-slate-400" />
+      </div>
+      <div className="grid grid-cols-4 gap-1.5 p-0.5">
+        {SHADING_COLORS.map((c) => {
+          const isSelected = (!currentColor && !c.value) || currentColor === c.value;
+          return (
+            <button
+              key={c.name}
+              type="button"
+              title={c.name}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(c.value);
+              }}
+              className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all cursor-pointer ${
+                isSelected
+                  ? 'ring-2 ring-sky-400 border-white/40 scale-105'
+                  : 'border-white/10 hover:border-white/30 hover:scale-110'
+              }`}
+              style={{ backgroundColor: c.value || 'transparent' }}
+            >
+              {!c.value ? (
+                <div className="w-full h-full border border-dashed border-white/30 rounded-md flex items-center justify-center text-[9px] text-slate-400">
+                  ×
+                </div>
+              ) : isSelected ? (
+                <Check size={11} className="text-white drop-shadow" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 interface TableContextMenuProps {
   x: number;
@@ -43,10 +185,13 @@ interface TableContextMenuProps {
   cIdx: number;
   rowCount: number;
   colCount: number;
-  currentAlign: TableColAlign;
+  currentHAlign: TableColAlign;
+  currentVAlign: TableVAlign;
+  currentShading?: string;
   isRangeActive: boolean;
   selectedCellCount: number;
-  onAlignChange: (align: TableColAlign) => void;
+  onNineGridAlignChange: (h: TableColAlign, v: TableVAlign, id: TableNineGridAlign) => void;
+  onShadingChange: (color: string) => void;
   onInsertRowAbove: () => void;
   onInsertRowBelow: () => void;
   onInsertColLeft: () => void;
@@ -56,13 +201,18 @@ interface TableContextMenuProps {
   onDeleteRow: () => void;
   onDeleteCol: () => void;
   onClearRange: () => void;
-  onBatchFormat: (format: 'bold' | 'italic' | 'underline' | 'clear') => void;
+  onBatchFormat: (format: 'bold' | 'italic' | 'underline' | 'strike' | 'clear') => void;
+  onDistributeCols: () => void;
+  onDistributeRows: () => void;
   onCopyMarkdown: () => void;
   onCopySelectedRange: () => void;
   onDeleteTable: () => void;
   onClose: () => void;
 }
 
+/**
+ * 3. Word 式分层上下文菜单 (Top Mini Toolbar + Grouped Submenus)
+ */
 const TableContextMenu: React.FC<TableContextMenuProps> = ({
   x,
   y,
@@ -70,10 +220,13 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   cIdx,
   rowCount,
   colCount,
-  currentAlign,
+  currentHAlign,
+  currentVAlign,
+  currentShading,
   isRangeActive,
   selectedCellCount,
-  onAlignChange,
+  onNineGridAlignChange,
+  onShadingChange,
   onInsertRowAbove,
   onInsertRowBelow,
   onInsertColLeft,
@@ -84,12 +237,15 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   onDeleteCol,
   onClearRange,
   onBatchFormat,
+  onDistributeCols,
+  onDistributeRows,
   onCopyMarkdown,
   onCopySelectedRange,
   onDeleteTable,
   onClose,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [activeSubmenu, setActiveSubmenu] = useState<'insert' | 'delete' | 'align' | 'shading' | null>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -110,290 +266,350 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
     };
   }, [onClose]);
 
-  const menuWidth = 210;
-  const menuHeight = isRangeActive ? 420 : 390;
-  const clampedX = Math.min(x, window.innerWidth - menuWidth - 16);
-  const clampedY = Math.min(y, window.innerHeight - menuHeight - 16);
+  const menuWidth = 224;
+  const menuHeight = isRangeActive ? 430 : 380;
+  const clampedX = Math.min(x, window.innerWidth - menuWidth - 20);
+  const clampedY = Math.min(y, window.innerHeight - menuHeight - 20);
 
   return (
     <div
       ref={menuRef}
       style={{ left: `${Math.max(8, clampedX)}px`, top: `${Math.max(8, clampedY)}px` }}
-      className="fixed z-[999995] w-[210px] rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-[999995] w-[224px] rounded-2xl bg-[#161b22]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95 duration-100"
       onMouseDown={(e) => e.stopPropagation()}
     >
+      {/* 顶部 Word 风格浮动微格式工具栏 (Mini Toolbar) */}
+      <div className="flex items-center justify-between gap-1 p-1 mb-1 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+        <button
+          type="button"
+          onClick={() => onBatchFormat('bold')}
+          className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          title="加粗 (Ctrl+B)"
+        >
+          <Bold size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onBatchFormat('italic')}
+          className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          title="斜体 (Ctrl+I)"
+        >
+          <Italic size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onBatchFormat('underline')}
+          className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          title="下划线 (Ctrl+U)"
+        >
+          <Underline size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onBatchFormat('strike')}
+          className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          title="删除线"
+        >
+          <Strikethrough size={12} />
+        </button>
+        <div className="w-[1px] h-3 bg-white/10" />
+        {/* 9 宫格对齐微按钮 */}
+        <button
+          type="button"
+          onClick={() => setActiveSubmenu(activeSubmenu === 'align' ? null : 'align')}
+          className={`p-1 rounded-lg transition-colors cursor-pointer ${
+            activeSubmenu === 'align' ? 'bg-sky-500/25 text-sky-300' : 'hover:bg-white/10 text-slate-300'
+          }`}
+          title="Word 9宫格对齐方式"
+        >
+          <Grid3X3 size={12} />
+        </button>
+        {/* 底色微按钮 */}
+        <button
+          type="button"
+          onClick={() => setActiveSubmenu(activeSubmenu === 'shading' ? null : 'shading')}
+          className={`p-1 rounded-lg transition-colors cursor-pointer ${
+            activeSubmenu === 'shading' ? 'bg-amber-500/25 text-amber-300' : 'hover:bg-white/10 text-slate-300'
+          }`}
+          title="设置底纹颜色"
+        >
+          <PaintBucket size={12} />
+        </button>
+        {/* 清除格式 */}
+        <button
+          type="button"
+          onClick={() => onBatchFormat('clear')}
+          className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors cursor-pointer"
+          title="清除格式"
+        >
+          <Eraser size={12} />
+        </button>
+      </div>
+
+      {/* 9 宫格弹窗层 */}
+      {activeSubmenu === 'align' && (
+        <div className="mb-1.5 p-1 rounded-xl bg-black/40 border border-white/10">
+          <TableNineGridAlignment
+            currentH={currentHAlign}
+            currentV={currentVAlign}
+            onSelect={(h, v, id) => {
+              onNineGridAlignChange(h, v, id);
+              setActiveSubmenu(null);
+            }}
+          />
+        </div>
+      )}
+
+      {/* 底纹选择器弹窗层 */}
+      {activeSubmenu === 'shading' && (
+        <div className="mb-1.5 p-1 rounded-xl bg-black/40 border border-white/10">
+          <TableShadingPicker
+            currentColor={currentShading}
+            onSelect={(color) => {
+              onShadingChange(color);
+              setActiveSubmenu(null);
+            }}
+          />
+        </div>
+      )}
+
       {/* 多选范围指示器 */}
       {isRangeActive && (
-        <div className="mb-1 px-2 py-1 rounded bg-sky-500/20 border border-sky-500/30 text-sky-300 text-[11px] font-medium flex items-center justify-between">
+        <div className="mb-1 px-2.5 py-1 rounded-xl bg-sky-500/15 border border-sky-500/25 text-sky-300 text-[11px] font-medium flex items-center justify-between">
           <span>已选中 {selectedCellCount} 个单元格</span>
-          <span className="text-[10px] text-sky-400/80 font-mono">范围</span>
+          <span className="text-[10px] text-sky-400/80 font-mono">矩阵</span>
         </div>
       )}
 
-      {/* 跨选批量格式化 */}
-      {isRangeActive && (
-        <div className="mb-1 pb-1 border-b border-white/[0.08]">
-          <div className="px-2 py-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-            批量格式化
-          </div>
-          <div className="grid grid-cols-3 gap-1 px-1 pt-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                onBatchFormat('bold');
-                onClose();
-              }}
-              className="flex items-center justify-center gap-1 py-1 rounded border border-white/5 hover:bg-white/5 text-slate-300 hover:text-white text-[11px] cursor-pointer"
-              title="批量切换加粗"
-            >
-              <Bold size={11} />
-              <span>加粗</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onBatchFormat('italic');
-                onClose();
-              }}
-              className="flex items-center justify-center gap-1 py-1 rounded border border-white/5 hover:bg-white/5 text-slate-300 hover:text-white text-[11px] cursor-pointer"
-              title="批量切换斜体"
-            >
-              <Italic size={11} />
-              <span>斜体</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onBatchFormat('underline');
-                onClose();
-              }}
-              className="flex items-center justify-center gap-1 py-1 rounded border border-white/5 hover:bg-white/5 text-slate-300 hover:text-white text-[11px] cursor-pointer"
-              title="批量切换下划线"
-            >
-              <Underline size={11} />
-              <span>下划</span>
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              onClearRange();
-              onClose();
-            }}
-            className="w-full mt-1 flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
-          >
-            <Eraser size={13} className="text-amber-400" />
-            <span>清空所选 {selectedCellCount} 个单元格</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onCopySelectedRange();
-              onClose();
-            }}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-white transition-colors text-left cursor-pointer"
-          >
-            <Copy size={13} className="text-sky-400" />
-            <span>复制所选单元格 (TSV)</span>
-          </button>
-        </div>
-      )}
-
-      {/* 文本对齐方式 */}
-      <div className="px-2 py-1 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-        文本对齐 ({isRangeActive ? '所选范围' : `第 ${cIdx + 1} 列`})
-      </div>
-      <div className="grid grid-cols-3 gap-1 px-1 pb-1.5">
-        <button
-          type="button"
-          onClick={() => {
-            onAlignChange('left');
-            onClose();
-          }}
-          className={`flex items-center justify-center gap-1 py-1 rounded border text-[11px] transition-colors cursor-pointer ${
-            currentAlign === 'left'
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-medium'
-              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
-          }`}
-          title="居左对齐"
-        >
-          <AlignLeft size={12} />
-          <span>左</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            onAlignChange('center');
-            onClose();
-          }}
-          className={`flex items-center justify-center gap-1 py-1 rounded border text-[11px] transition-colors cursor-pointer ${
-            currentAlign === 'center'
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-medium'
-              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
-          }`}
-          title="居中对齐"
-        >
-          <AlignCenter size={12} />
-          <span>中</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            onAlignChange('right');
-            onClose();
-          }}
-          className={`flex items-center justify-center gap-1 py-1 rounded border text-[11px] transition-colors cursor-pointer ${
-            currentAlign === 'right'
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-medium'
-              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
-          }`}
-          title="居右对齐"
-        >
-          <AlignRight size={12} />
-          <span>右</span>
-        </button>
-      </div>
-
-      <div className="my-1 border-t border-white/[0.08]" />
-
-      {/* 行操作 */}
-      <div className="px-2 py-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-        行操作 (第 {rIdx + 1} 行)
+      {/* 1. 剪贴板与数据操作组 */}
+      <div className="px-1.5 py-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-wider flex items-center justify-between">
+        <span>剪贴板与数据</span>
       </div>
       <button
         type="button"
         onClick={() => {
-          onInsertRowAbove();
+          onCopySelectedRange();
           onClose();
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-slate-300 hover:text-white transition-colors text-left cursor-pointer"
       >
-        <ArrowUp size={13} className="text-emerald-400" />
-        <span>在上方插入行</span>
+        <span className="flex items-center gap-2">
+          <Copy size={13} className="text-sky-400" />
+          <span>{isRangeActive ? '复制选中单元格 (TSV)' : '复制当前单元格'}</span>
+        </span>
+        <span className="text-[10px] text-slate-500 font-mono">Ctrl+C</span>
       </button>
+
       <button
         type="button"
         onClick={() => {
-          onInsertRowBelow();
+          onClearRange();
           onClose();
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-amber-500/15 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
       >
-        <ArrowDown size={13} className="text-emerald-400" />
-        <span>在下方插入行</span>
-      </button>
-      {!isRangeActive && (
-        <button
-          type="button"
-          onClick={() => {
-            onClearRow();
-            onClose();
-          }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
-        >
+        <span className="flex items-center gap-2">
           <Eraser size={13} className="text-amber-400" />
-          <span>清空此行内容</span>
-        </button>
-      )}
-      <button
-        type="button"
-        disabled={rowCount <= 1}
-        onClick={() => {
-          onDeleteRow();
-          onClose();
-        }}
-        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left ${
-          rowCount <= 1
-            ? 'opacity-30 cursor-not-allowed text-slate-500'
-            : 'hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 cursor-pointer'
-        }`}
-      >
-        <Trash2 size={13} />
-        <span>删除当前行</span>
+          <span>{isRangeActive ? `清空所选 ${selectedCellCount} 格内容` : '清空当前格内容'}</span>
+        </span>
+        <span className="text-[10px] text-slate-500 font-mono">Del</span>
       </button>
 
       <div className="my-1 border-t border-white/[0.08]" />
 
-      {/* 列操作 */}
-      <div className="px-2 py-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-        列操作 (第 {cIdx + 1} 列)
+      {/* 2. 插入行列 (二级菜单) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setActiveSubmenu(activeSubmenu === 'insert' ? null : 'insert')}
+          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-left cursor-pointer ${
+            activeSubmenu === 'insert' ? 'bg-white/10 text-emerald-300' : 'hover:bg-white/5 text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Plus size={13} className="text-emerald-400" />
+            <span>插入行列</span>
+          </span>
+          <ChevronRight size={12} className="text-slate-500" />
+        </button>
+
+        {activeSubmenu === 'insert' && (
+          <div className="mt-1 mb-1 pl-2.5 border-l-2 border-emerald-500/40 space-y-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                onInsertRowAbove();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 text-left cursor-pointer text-[11px]"
+            >
+              <ArrowUp size={11} className="text-emerald-400" />
+              <span>在上方插入行</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onInsertRowBelow();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 text-left cursor-pointer text-[11px]"
+            >
+              <ArrowDown size={11} className="text-emerald-400" />
+              <span>在下方插入行</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onInsertColLeft();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 text-left cursor-pointer text-[11px]"
+            >
+              <ArrowLeft size={11} className="text-sky-400" />
+              <span>在左侧插入列</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onInsertColRight();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 text-left cursor-pointer text-[11px]"
+            >
+              <ArrowRight size={11} className="text-sky-400" />
+              <span>在右侧插入列</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3. 删除操作 (二级菜单) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setActiveSubmenu(activeSubmenu === 'delete' ? null : 'delete')}
+          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-left cursor-pointer ${
+            activeSubmenu === 'delete' ? 'bg-white/10 text-rose-300' : 'hover:bg-white/5 text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Trash2 size={13} className="text-rose-400" />
+            <span>删除操作</span>
+          </span>
+          <ChevronRight size={12} className="text-slate-500" />
+        </button>
+
+        {activeSubmenu === 'delete' && (
+          <div className="mt-1 mb-1 pl-2.5 border-l-2 border-rose-500/40 space-y-0.5">
+            <button
+              type="button"
+              disabled={rowCount <= 1}
+              onClick={() => {
+                onDeleteRow();
+                onClose();
+              }}
+              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-left text-[11px] ${
+                rowCount <= 1
+                  ? 'opacity-30 cursor-not-allowed text-slate-500'
+                  : 'hover:bg-rose-500/15 text-slate-300 hover:text-rose-300 cursor-pointer'
+              }`}
+            >
+              <Trash2 size={11} />
+              <span>删除当前行 (第 {rIdx + 1} 行)</span>
+            </button>
+            <button
+              type="button"
+              disabled={colCount <= 1}
+              onClick={() => {
+                onDeleteCol();
+                onClose();
+              }}
+              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-left text-[11px] ${
+                colCount <= 1
+                  ? 'opacity-30 cursor-not-allowed text-slate-500'
+                  : 'hover:bg-rose-500/15 text-slate-300 hover:text-rose-300 cursor-pointer'
+              }`}
+            >
+              <Trash2 size={11} />
+              <span>删除当前列 (第 {cIdx + 1} 列)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onClearRow();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-amber-500/15 text-slate-300 hover:text-amber-300 text-left cursor-pointer text-[11px]"
+            >
+              <Eraser size={11} className="text-amber-400" />
+              <span>清空当前行内容</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onClearCol();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-amber-500/15 text-slate-300 hover:text-amber-300 text-left cursor-pointer text-[11px]"
+            >
+              <Eraser size={11} className="text-amber-400" />
+              <span>清空当前列内容</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDeleteTable();
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-left cursor-pointer text-[11px]"
+            >
+              <Trash2 size={11} />
+              <span>删除整张表格</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="my-1 border-t border-white/[0.08]" />
+
+      {/* 4. 几何与分布 (Word 风格) */}
+      <div className="px-1.5 py-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+        尺寸与分布
       </div>
       <button
         type="button"
         onClick={() => {
-          onInsertColLeft();
+          onDistributeCols();
           onClose();
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-slate-300 hover:text-sky-300 transition-colors text-left cursor-pointer"
       >
-        <ArrowLeft size={13} className="text-sky-400" />
-        <span>在左侧插入列</span>
+        <Layers size={13} className="text-sky-400" />
+        <span>平均分布各列 (等宽)</span>
       </button>
+
       <button
         type="button"
         onClick={() => {
-          onInsertColRight();
+          onDistributeRows();
           onClose();
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-slate-300 hover:text-emerald-300 transition-colors text-left cursor-pointer"
       >
-        <ArrowRight size={13} className="text-sky-400" />
-        <span>在右侧插入列</span>
-      </button>
-      {!isRangeActive && (
-        <button
-          type="button"
-          onClick={() => {
-            onClearCol();
-            onClose();
-          }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
-        >
-          <Eraser size={13} className="text-amber-400" />
-          <span>清空此列内容</span>
-        </button>
-      )}
-      <button
-        type="button"
-        disabled={colCount <= 1}
-        onClick={() => {
-          onDeleteCol();
-          onClose();
-        }}
-        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left ${
-          colCount <= 1
-            ? 'opacity-30 cursor-not-allowed text-slate-500'
-            : 'hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 cursor-pointer'
-        }`}
-      >
-        <Trash2 size={13} />
-        <span>删除当前列</span>
+        <Layers size={13} className="text-emerald-400" />
+        <span>平均分布各行 (自适应)</span>
       </button>
 
-      <div className="my-1 border-t border-white/[0.08]" />
-
-      {/* 快捷与整表 */}
       <button
         type="button"
         onClick={() => {
           onCopyMarkdown();
           onClose();
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-slate-100 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-slate-300 hover:text-slate-100 transition-colors text-left cursor-pointer"
       >
         <Copy size={13} className="text-slate-400" />
         <span>复制整表为 Markdown</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          onDeleteTable();
-          onClose();
-        }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors text-left cursor-pointer"
-      >
-        <Trash2 size={13} />
-        <span>删除整个表格</span>
       </button>
     </div>
   );
@@ -420,6 +636,14 @@ export const TableBlock: React.FC<TableBlockProps> = ({
   const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const dragStartRef = useRef<CellCoord | null>(null);
+
+  // 顶层微工具栏弹出状态
+  const [showTopNineGrid, setShowTopNineGrid] = useState(false);
+  const [showTopShading, setShowTopShading] = useState(false);
+
+  // Notion 风格列把手与行把手弹窗状态
+  const [activeColMenu, setActiveColMenu] = useState<{ cIdx: number; x: number; y: number } | null>(null);
+  const [activeRowMenu, setActiveRowMenu] = useState<{ rIdx: number; x: number; y: number } | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -449,6 +673,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
         ];
 
   const hasHeaderRow = block.properties?.hasHeaderRow !== false;
+  const hasBandedRows = Boolean(block.properties?.hasBandedRows);
   const colCount = rows[0]?.length || 1;
   const rowCount = rows.length;
 
@@ -461,13 +686,24 @@ export const TableBlock: React.FC<TableBlockProps> = ({
   );
   const [localWidths, setLocalWidths] = useState<number[]>(initialWidths);
 
-  // 2. 每列文本对齐状态治理 (默认 'left')
+  // 2. 每列水平文本对齐状态治理 (默认 'left')
   const savedAlignments = (block.properties?.columnAlignments as TableColAlign[]) || [];
   const initialAlignments = Array.from(
     { length: colCount },
     (_, idx) => savedAlignments[idx] || 'left'
   );
   const [localAlignments, setLocalAlignments] = useState<TableColAlign[]>(initialAlignments);
+
+  // 3. 每列垂直文本对齐状态治理 (默认 'top')
+  const savedVAlignments = (block.properties?.columnVerticalAlignments as TableVAlign[]) || [];
+  const initialVAlignments = Array.from(
+    { length: colCount },
+    (_, idx) => savedVAlignments[idx] || 'top'
+  );
+  const [localVAlignments, setLocalVAlignments] = useState<TableVAlign[]>(initialVAlignments);
+
+  // 4. 单元格底纹状态字典 `${rIdx}-${cIdx}` -> color
+  const cellShading = (block.properties?.cellShading as Record<string, string>) || {};
 
   // 同步外部 properties 变更
   useEffect(() => {
@@ -483,6 +719,13 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       Array.from({ length: colCount }, (_, idx) => nextAligns[idx] || 'left')
     );
   }, [block.properties?.columnAlignments, colCount]);
+
+  useEffect(() => {
+    const nextVAligns = (block.properties?.columnVerticalAlignments as TableVAlign[]) || [];
+    setLocalVAlignments(
+      Array.from({ length: colCount }, (_, idx) => nextVAligns[idx] || 'top')
+    );
+  }, [block.properties?.columnVerticalAlignments, colCount]);
 
   // 全局鼠标拖拽选区结束监听
   useEffect(() => {
@@ -537,6 +780,8 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     nextRows: string[][],
     nextWidths?: number[],
     nextAlignments?: TableColAlign[],
+    nextVAlignments?: TableVAlign[],
+    nextShading?: Record<string, string>,
     saveHistory = true
   ) => {
     onUpdate(
@@ -547,6 +792,8 @@ export const TableBlock: React.FC<TableBlockProps> = ({
         rows: nextRows,
         columnWidths: nextWidths || localWidths,
         columnAlignments: nextAlignments || localAlignments,
+        columnVerticalAlignments: nextVAlignments || localVAlignments,
+        cellShading: nextShading !== undefined ? nextShading : cellShading,
       },
       saveHistory
     );
@@ -558,7 +805,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     const next = rows.map((row, r) =>
       r === rIdx ? row.map((cell, c) => (c === cIdx ? html : cell)) : [...row]
     );
-    updateRows(next, undefined, undefined, false);
+    updateRows(next, undefined, undefined, undefined, undefined, false);
   };
 
   // 3. 任意位置插入行 (above | below)
@@ -570,7 +817,21 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       newRow,
       ...rows.slice(insertAt),
     ];
-    updateRows(nextRows, undefined, undefined, true);
+
+    // 同步位移 cellShading 字典中插入行之后的行索引
+    const updatedShading: Record<string, string> = {};
+    Object.entries(cellShading).forEach(([key, color]) => {
+      const [rStr, cStr] = key.split('-');
+      const r = parseInt(rStr, 10);
+      const c = parseInt(cStr, 10);
+      if (r >= insertAt) {
+        updatedShading[`${r + 1}-${c}`] = color;
+      } else {
+        updatedShading[key] = color;
+      }
+    });
+
+    updateRows(nextRows, undefined, undefined, undefined, updatedShading, true);
   };
 
   // 增加末尾行
@@ -596,10 +857,29 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       'left',
       ...localAlignments.slice(insertAt),
     ];
+    const nextVAlignments: TableVAlign[] = [
+      ...localVAlignments.slice(0, insertAt),
+      'top',
+      ...localVAlignments.slice(insertAt),
+    ];
+
+    // 同步位移 cellShading 字典中插入列之后的列索引
+    const updatedShading: Record<string, string> = {};
+    Object.entries(cellShading).forEach(([key, color]) => {
+      const [rStr, cStr] = key.split('-');
+      const r = parseInt(rStr, 10);
+      const c = parseInt(cStr, 10);
+      if (c >= insertAt) {
+        updatedShading[`${r}-${c + 1}`] = color;
+      } else {
+        updatedShading[key] = color;
+      }
+    });
 
     setLocalWidths(nextWidths);
     setLocalAlignments(nextAlignments);
-    updateRows(nextRows, nextWidths, nextAlignments, true);
+    setLocalVAlignments(nextVAlignments);
+    updateRows(nextRows, nextWidths, nextAlignments, nextVAlignments, updatedShading, true);
   };
 
   // 增加末尾列
@@ -611,7 +891,21 @@ export const TableBlock: React.FC<TableBlockProps> = ({
   const handleDeleteRow = (rIdx: number) => {
     if (rowCount <= 1) return;
     const next = rows.filter((_, idx) => idx !== rIdx);
-    updateRows(next, undefined, undefined, true);
+
+    const updatedShading: Record<string, string> = {};
+    Object.entries(cellShading).forEach(([key, color]) => {
+      const [rStr, cStr] = key.split('-');
+      const r = parseInt(rStr, 10);
+      const c = parseInt(cStr, 10);
+      if (r === rIdx) return; // 移除被删除行
+      if (r > rIdx) {
+        updatedShading[`${r - 1}-${c}`] = color;
+      } else {
+        updatedShading[key] = color;
+      }
+    });
+
+    updateRows(next, undefined, undefined, undefined, updatedShading, true);
   };
 
   // 清空指定行
@@ -619,7 +913,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     const next = rows.map((row, r) =>
       r === rIdx ? Array(colCount).fill('') : [...row]
     );
-    updateRows(next, undefined, undefined, true);
+    updateRows(next, undefined, undefined, undefined, undefined, true);
   };
 
   // 删除指定列
@@ -628,10 +922,25 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     const next = rows.map((r) => r.filter((_, idx) => idx !== cIdx));
     const nextWidths = localWidths.filter((_, idx) => idx !== cIdx);
     const nextAlignments = localAlignments.filter((_, idx) => idx !== cIdx);
+    const nextVAlignments = localVAlignments.filter((_, idx) => idx !== cIdx);
+
+    const updatedShading: Record<string, string> = {};
+    Object.entries(cellShading).forEach(([key, color]) => {
+      const [rStr, cStr] = key.split('-');
+      const r = parseInt(rStr, 10);
+      const c = parseInt(cStr, 10);
+      if (c === cIdx) return; // 移除被删除列
+      if (c > cIdx) {
+        updatedShading[`${r}-${c - 1}`] = color;
+      } else {
+        updatedShading[key] = color;
+      }
+    });
 
     setLocalWidths(nextWidths);
     setLocalAlignments(nextAlignments);
-    updateRows(next, nextWidths, nextAlignments, true);
+    setLocalVAlignments(nextVAlignments);
+    updateRows(next, nextWidths, nextAlignments, nextVAlignments, updatedShading, true);
   };
 
   // 清空指定列
@@ -639,31 +948,92 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     const next = rows.map((row, r) =>
       row.map((cell, c) => (c === cIdx ? (r === 0 && hasHeaderRow ? cell : '') : cell))
     );
-    updateRows(next, undefined, undefined, true);
+    updateRows(next, undefined, undefined, undefined, undefined, true);
   };
 
-  // 设定指定列对齐方式
-  const handleSetColAlignment = (cIdx: number, align: TableColAlign) => {
-    const updated = [...localAlignments];
-    updated[cIdx] = align;
-    setLocalAlignments(updated);
-    updateRows(rows, localWidths, updated, true);
+  // 设定 Word 9 宫格对齐方式 (支持当前格、整列或选区批量)
+  const handleSetNineGridAlign = (
+    hAlign: TableColAlign,
+    vAlign: TableVAlign,
+    targetCell?: CellCoord
+  ) => {
+    if (isRangeActive && normalizedRange) {
+      const { minC, maxC } = normalizedRange;
+      const nextH = [...localAlignments];
+      const nextV = [...localVAlignments];
+      for (let c = minC; c <= maxC; c++) {
+        nextH[c] = hAlign;
+        nextV[c] = vAlign;
+      }
+      setLocalAlignments(nextH);
+      setLocalVAlignments(nextV);
+      updateRows(rows, localWidths, nextH, nextV, undefined, true);
+    } else {
+      const cell = targetCell || activeCell;
+      if (cell) {
+        const nextH = [...localAlignments];
+        const nextV = [...localVAlignments];
+        nextH[cell.cIdx] = hAlign;
+        nextV[cell.cIdx] = vAlign;
+        setLocalAlignments(nextH);
+        setLocalVAlignments(nextV);
+        updateRows(rows, localWidths, nextH, nextV, undefined, true);
+      }
+    }
   };
 
-  // 5. 跨选批量清空选区内所有单元格
+  // 设定底纹背景色 (支持当前格或选区批量)
+  const handleSetShading = (color: string, targetCell?: CellCoord) => {
+    const nextShading = { ...cellShading };
+    if (isRangeActive && normalizedRange) {
+      const { minR, maxR, minC, maxC } = normalizedRange;
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          const key = `${r}-${c}`;
+          if (!color) {
+            delete nextShading[key];
+          } else {
+            nextShading[key] = color;
+          }
+        }
+      }
+    } else {
+      const cell = targetCell || activeCell;
+      if (cell) {
+        const key = `${cell.rIdx}-${cell.cIdx}`;
+        if (!color) {
+          delete nextShading[key];
+        } else {
+          nextShading[key] = color;
+        }
+      }
+    }
+    updateRows(rows, undefined, undefined, undefined, nextShading, true);
+  };
+
+  // 跨选批量清空选区内所有单元格
   const handleClearRange = () => {
-    if (!normalizedRange) return;
+    if (!normalizedRange) {
+      if (activeCell) {
+        const next = rows.map((row, r) =>
+          r === activeCell.rIdx ? row.map((cell, c) => (c === activeCell.cIdx ? '' : cell)) : [...row]
+        );
+        updateRows(next, undefined, undefined, undefined, undefined, true);
+      }
+      return;
+    }
     const { minR, maxR, minC, maxC } = normalizedRange;
     const next = rows.map((row, r) =>
       row.map((cell, c) => (r >= minR && r <= maxR && c >= minC && c <= maxC ? '' : cell))
     );
-    updateRows(next, undefined, undefined, true);
+    updateRows(next, undefined, undefined, undefined, undefined, true);
   };
 
-  // 6. 跨选批量复制 (TSV 格式，兼容 Excel 与纯文本)
+  // 跨选批量复制 (TSV 格式，兼容 Excel 与纯文本)
   const handleCopySelectedRange = () => {
-    if (!normalizedRange) return;
-    const { minR, maxR, minC, maxC } = normalizedRange;
+    const range = normalizedRange || (activeCell ? { minR: activeCell.rIdx, maxR: activeCell.rIdx, minC: activeCell.cIdx, maxC: activeCell.cIdx } : null);
+    if (!range) return;
+    const { minR, maxR, minC, maxC } = range;
     const tsvLines: string[] = [];
     for (let r = minR; r <= maxR; r++) {
       const slice = rows[r].slice(minC, maxC + 1);
@@ -675,10 +1045,20 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     setTimeout(() => setCopied(false), 1800);
   };
 
-  // 7. 跨选批量格式化应用
-  const handleBatchFormat = (format: 'bold' | 'italic' | 'underline' | 'clear') => {
-    if (!normalizedRange) return;
-    const { minR, maxR, minC, maxC } = normalizedRange;
+  // 平均分布各列 (等宽)
+  const handleDistributeCols = () => {
+    const totalW = localWidths.reduce((sum, w) => sum + w, 0);
+    const avgW = Math.max(70, Math.floor(totalW / colCount));
+    const nextWidths = Array(colCount).fill(avgW);
+    setLocalWidths(nextWidths);
+    updateRows(rows, nextWidths, undefined, undefined, undefined, true);
+  };
+
+  // 跨选批量格式化应用
+  const handleBatchFormat = (format: 'bold' | 'italic' | 'underline' | 'strike' | 'clear') => {
+    const range = normalizedRange || (activeCell ? { minR: activeCell.rIdx, maxR: activeCell.rIdx, minC: activeCell.cIdx, maxC: activeCell.cIdx } : null);
+    if (!range) return;
+    const { minR, maxR, minC, maxC } = range;
     const next = rows.map((row, r) =>
       row.map((cell, c) => {
         if (r >= minR && r <= maxR && c >= minC && c <= maxC) {
@@ -695,6 +1075,10 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             return cell.includes('<u>')
               ? cell.replace(/<\/?u>/gi, '')
               : `<u>${cell}</u>`;
+          } else if (format === 'strike') {
+            return cell.includes('<del>') || cell.includes('<s>')
+              ? cell.replace(/<\/?(del|s)>/gi, '')
+              : `<del>${cell}</del>`;
           } else if (format === 'clear') {
             return cell.replace(/<[^>]+>/g, '');
           }
@@ -702,10 +1086,10 @@ export const TableBlock: React.FC<TableBlockProps> = ({
         return cell;
       })
     );
-    updateRows(next, undefined, undefined, true);
+    updateRows(next, undefined, undefined, undefined, undefined, true);
   };
 
-  // 8. 文本划选检测与浮动工具条联动
+  // 文本划选检测与浮动工具条联动
   const checkTextSelection = (rIdx: number, cIdx: number) => {
     if (isRangeActive) {
       setFloatingToolbarPos(null);
@@ -738,12 +1122,12 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     });
   };
 
-  // 9. 应用富文本格式至单元格选中文本
+  // 应用富文本格式至单元格选中文本
   const handleApplyTextFormat = (
     format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear'
   ) => {
     if (isRangeActive) {
-      if (format === 'bold' || format === 'italic' || format === 'underline' || format === 'clear') {
+      if (format === 'bold' || format === 'italic' || format === 'underline' || format === 'strike' || format === 'clear') {
         handleBatchFormat(format);
       }
       setFloatingToolbarPos(null);
@@ -858,7 +1242,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     }
   };
 
-  // 10. 矩阵式粘贴处理
+  // 矩阵式粘贴处理
   const handleCellPaste = (
     e: React.ClipboardEvent,
     startR: number,
@@ -905,10 +1289,15 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       while (nextAlignments.length < requiredCols) {
         nextAlignments.push('left');
       }
+      let nextVAlignments = [...localVAlignments];
+      while (nextVAlignments.length < requiredCols) {
+        nextVAlignments.push('top');
+      }
 
       setLocalWidths(nextWidths);
       setLocalAlignments(nextAlignments);
-      updateRows(expandedRows, nextWidths, nextAlignments, true);
+      setLocalVAlignments(nextVAlignments);
+      updateRows(expandedRows, nextWidths, nextAlignments, nextVAlignments, undefined, true);
 
       setSelectedRange({
         start: { rIdx: startR, cIdx: startC },
@@ -961,6 +1350,8 @@ export const TableBlock: React.FC<TableBlockProps> = ({
               ...block.properties,
               columnWidths: updated,
               columnAlignments: localAlignments,
+              columnVerticalAlignments: localVAlignments,
+              cellShading,
             },
             true
           );
@@ -1026,13 +1417,19 @@ export const TableBlock: React.FC<TableBlockProps> = ({
 
   const totalTableWidth = localWidths.reduce((sum, w) => sum + w, 0);
 
+  // 当前选中单元格的水平和垂直对齐
+  const curCellCIdx = activeCell?.cIdx ?? (contextMenu?.cIdx ?? 0);
+  const curHAlign = localAlignments[curCellCIdx] || 'left';
+  const curVAlign = localVAlignments[curCellCIdx] || 'top';
+  const curShading = activeCell ? cellShading[`${activeCell.rIdx}-${activeCell.cIdx}`] : undefined;
+
   return (
     <div
       id={`block-${block.id}`}
       className="group/table relative my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden transition-all hover:border-white/[0.14]"
     >
-      {/* 顶部极简操作控制条 (Header Bar) */}
-      <div className="h-9 px-3 bg-[#161b22]/90 border-b border-white/[0.06] flex items-center justify-between select-none">
+      {/* 顶部 Word 风格分类操作控制条 (Header Ribbon Bar) */}
+      <div className="h-10 px-3 bg-[#161b22]/90 border-b border-white/[0.06] flex items-center justify-between select-none">
         {/* 左侧表格元数据与规格指示 */}
         <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-indigo-400 font-medium">
@@ -1055,47 +1452,99 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           ) : null}
         </div>
 
-        {/* 右侧极简操作区 */}
+        {/* 右侧 Word 式分类功能组 */}
         <div className="flex items-center gap-1.5 text-[11px]">
-          {/* 跨选批量快捷工具 */}
-          {isRangeActive && (
-            <div className="flex items-center gap-1 mr-1 bg-sky-500/10 border border-sky-500/25 px-1.5 py-0.5 rounded-lg">
-              <button
-                type="button"
-                onClick={() => handleBatchFormat('bold')}
-                className="p-1 rounded hover:bg-white/10 text-sky-300 hover:text-white transition-colors cursor-pointer"
-                title="批量加粗 (Ctrl+B)"
-              >
-                <Bold size={11} />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleBatchFormat('italic')}
-                className="p-1 rounded hover:bg-white/10 text-sky-300 hover:text-white transition-colors cursor-pointer"
-                title="批量斜体 (Ctrl+I)"
-              >
-                <Italic size={11} />
-              </button>
-              <button
-                type="button"
-                onClick={handleClearRange}
-                className="p-1 rounded hover:bg-amber-500/20 text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
-                title="批量清空选区 (Delete)"
-              >
-                <Eraser size={11} />
-              </button>
-              <button
-                type="button"
-                onClick={handleCopySelectedRange}
-                className="p-1 rounded hover:bg-sky-500/20 text-slate-400 hover:text-sky-300 transition-colors cursor-pointer"
-                title="复制选区数据 (TSV / Ctrl+C)"
-              >
-                <Copy size={11} />
-              </button>
-            </div>
-          )}
+          {/* 1. 9 宫格对齐微控件入口 */}
+          <div className="relative">
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setShowTopNineGrid(!showTopNineGrid);
+                setShowTopShading(false);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                showTopNineGrid
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]'
+              }`}
+              title="Word 9宫格对齐方式 (水平×垂直)"
+            >
+              <Grid3X3 size={12} className="text-sky-400" />
+              <span>对齐</span>
+            </button>
+            {showTopNineGrid && (
+              <div className="absolute right-0 top-full mt-1.5 z-50">
+                <TableNineGridAlignment
+                  currentH={curHAlign}
+                  currentV={curVAlign}
+                  onSelect={(h, v) => {
+                    handleSetNineGridAlign(h, v);
+                    setShowTopNineGrid(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
-          {/* 首行表头切换 */}
+          {/* 2. 底纹颜色卡微控件入口 */}
+          <div className="relative">
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setShowTopShading(!showTopShading);
+                setShowTopNineGrid(false);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                showTopShading
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]'
+              }`}
+              title="单元格底色 / 底纹"
+            >
+              <PaintBucket size={12} className="text-amber-400" />
+              <span>底纹</span>
+            </button>
+            {showTopShading && (
+              <div className="absolute right-0 top-full mt-1.5 z-50">
+                <TableShadingPicker
+                  currentColor={curShading}
+                  onSelect={(color) => {
+                    handleSetShading(color);
+                    setShowTopShading(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="w-[1px] h-3.5 bg-white/10 mx-0.5" />
+
+          {/* 3. 隔行斑马纹切换 */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() =>
+              onUpdate(
+                block.content,
+                'table',
+                { ...block.properties, hasBandedRows: !hasBandedRows },
+                true
+              )
+            }
+            className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+              hasBandedRows
+                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border-white/[0.08]'
+            }`}
+            title={hasBandedRows ? '关闭隔行斑马纹' : '开启隔行斑马纹 (Word 经典样式)'}
+          >
+            {hasBandedRows ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+            <span>斑马纹</span>
+          </button>
+
+          {/* 4. 首行表头切换 */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
@@ -1114,11 +1563,11 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             }`}
             title={hasHeaderRow ? '关闭首行表头高亮' : '开启首行表头高亮'}
           >
-            {hasHeaderRow ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-            <span>首行表头</span>
+            {hasHeaderRow ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+            <span>表头</span>
           </button>
 
-          {/* 复制 Markdown 表格 */}
+          {/* 5. 复制 Markdown 表格 */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
@@ -1139,11 +1588,11 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             )}
           </button>
 
-          {/* 删除整表 */}
+          {/* 6. 删除整表 */}
           <button
             type="button"
             onClick={onDelete}
-            className="p-1 rounded-md hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer ml-1"
+            className="p-1 rounded-md hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer ml-0.5"
             title="删除整个表格"
           >
             <Trash2 size={12} />
@@ -1171,17 +1620,24 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             <tbody>
               {rows.map((row, rIdx) => {
                 const isHeader = rIdx === 0 && hasHeaderRow;
+                const isBanded = hasBandedRows && !isHeader && rIdx % 2 === 1;
+
                 return (
                   <tr
                     key={rIdx}
-                    className={`group/row transition-colors ${
+                    className={`group/row transition-colors relative ${
                       isHeader
                         ? 'bg-[#161b22] font-semibold text-slate-100'
+                        : isBanded
+                        ? 'bg-white/[0.025] hover:bg-white/[0.04]'
                         : 'hover:bg-white/[0.02]'
                     }`}
                   >
                     {row.map((cell, cIdx) => {
                       const colAlign = localAlignments[cIdx] || 'left';
+                      const colVAlign = localVAlignments[cIdx] || 'top';
+                      const customShading = cellShading[`${rIdx}-${cIdx}`];
+
                       const alignClass =
                         colAlign === 'center'
                           ? 'text-center'
@@ -1189,13 +1645,25 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                           ? 'text-right'
                           : 'text-left';
 
+                      const vAlignClass =
+                        colVAlign === 'middle'
+                          ? 'align-middle'
+                          : colVAlign === 'bottom'
+                          ? 'align-bottom'
+                          : 'align-top';
+
                       const isSelected = isInRange(rIdx, cIdx);
 
                       return (
                         <td
                           key={cIdx}
-                          style={{ width: `${localWidths[cIdx] || defaultColWidth}px` }}
-                          className={`px-3 py-2 align-top border border-white/[0.08] relative group/cell transition-colors ${
+                          style={{
+                            width: `${localWidths[cIdx] || defaultColWidth}px`,
+                            backgroundColor: isSelected
+                              ? undefined
+                              : customShading || undefined,
+                          }}
+                          className={`px-3 py-2 border border-white/[0.08] relative group/cell transition-colors ${vAlignClass} ${
                             isSelected
                               ? 'bg-sky-500/20 ring-1 ring-inset ring-sky-400/60'
                               : isHeader
@@ -1244,6 +1712,56 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             });
                           }}
                         >
+                          {/* Notion 风格整列选择与操作微把手 (表头悬停微胶囊) */}
+                          {rIdx === 0 && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setSelectedRange({
+                                  start: { rIdx: 0, cIdx },
+                                  end: { rIdx: rowCount - 1, cIdx },
+                                });
+                                setActiveCell({ rIdx: 0, cIdx });
+                                setActiveColMenu({ cIdx, x: rect.left, y: rect.bottom + 4 });
+                              }}
+                              className="absolute top-1 left-1.5 p-0.5 rounded opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 text-slate-400 hover:text-sky-300 hover:bg-sky-500/20 transition-all select-none cursor-pointer z-10"
+                              title="点击选中整列并打开列设置"
+                            >
+                              <MoreHorizontal size={11} />
+                            </button>
+                          )}
+
+                          {/* Notion 风格整行选择与操作微把手 (首列左边缘悬停) */}
+                          {cIdx === 0 && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setSelectedRange({
+                                  start: { rIdx, cIdx: 0 },
+                                  end: { rIdx, cIdx: colCount - 1 },
+                                });
+                                setActiveCell({ rIdx, cIdx: 0 });
+                                setActiveRowMenu({ rIdx, x: rect.left, y: rect.bottom + 4 });
+                              }}
+                              className="absolute top-1/2 -translate-y-1/2 left-0.5 p-0.5 rounded opacity-0 group-hover/row:opacity-60 hover:!opacity-100 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/20 transition-all select-none cursor-pointer z-10"
+                              title="点击选中整行并打开行设置"
+                            >
+                              <GripVertical size={11} />
+                            </button>
+                          )}
+
                           {/* 列分割线吸附微手柄 */}
                           {rIdx === 0 && (
                             <div
@@ -1336,28 +1854,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </div>
                           )}
 
-                          {/* 表头右上角微型操作指示点 */}
-                          {rIdx === 0 && (
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setContextMenu({
-                                  x: rect.left,
-                                  y: rect.bottom + 4,
-                                  rIdx,
-                                  cIdx,
-                                });
-                              }}
-                              className="absolute top-1 right-1.5 p-0.5 rounded opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-all select-none cursor-pointer z-10"
-                              title="列选项与对齐菜单"
-                            >
-                              <MoreHorizontal size={12} />
-                            </button>
-                          )}
-
                           {/* 列宽调整交互手柄 */}
                           {rIdx === 0 && (
                             <div
@@ -1385,11 +1881,13 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             onKeyUp={() => checkTextSelection(rIdx, cIdx)}
                             onPaste={(e) => handleCellPaste(e, rIdx, cIdx)}
                             onKeyDown={(e) => {
-                              // 1. Esc: 取消多选
+                              // 1. Esc: 取消多选与弹窗
                               if (e.key === 'Escape') {
                                 e.preventDefault();
                                 setSelectedRange(null);
                                 setFloatingToolbarPos(null);
+                                setShowTopNineGrid(false);
+                                setShowTopShading(false);
                                 return;
                               }
 
@@ -1498,14 +1996,146 @@ export const TableBlock: React.FC<TableBlockProps> = ({
               <span>新增列</span>
             </button>
             <span className="text-slate-600">·</span>
+            <button
+              type="button"
+              onClick={handleDistributeCols}
+              className="flex items-center gap-1 hover:text-sky-400 transition-colors cursor-pointer py-0.5"
+              title="按表格总宽度将所有列设为等宽"
+            >
+              <Layers size={11} />
+              <span>平均分布各列</span>
+            </button>
+            <span className="text-slate-600">·</span>
             <span className="text-slate-500 text-[10px]">
-              支持 Shift+点击/拖拽跨行跨列多选 · 选中文本即刻弹出富文本格式浮条 · 支持 Ctrl+B/I/U
+              Word 9宫格对齐 · 莫兰迪底纹 · 右键 Mini Toolbar · Shift+点击/拖拽跨行跨列多选
             </span>
           </div>
         </div>
       </div>
 
-      {/* 沉浸式暗黑毛玻璃右键上下文菜单 (带选区联动) */}
+      {/* Notion 风格整列快捷弹窗 */}
+      {activeColMenu && (
+        <div
+          style={{ left: `${activeColMenu.x}px`, top: `${activeColMenu.y}px` }}
+          className="fixed z-[999996] w-48 rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95"
+        >
+          <div className="px-2 py-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
+            第 {activeColMenu.cIdx + 1} 列快速设置
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              handleInsertCol(activeColMenu.cIdx, 'left');
+              setActiveColMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 text-left cursor-pointer"
+          >
+            <ArrowLeft size={12} className="text-sky-400" />
+            <span>在左侧插入列</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleInsertCol(activeColMenu.cIdx, 'right');
+              setActiveColMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 text-left cursor-pointer"
+          >
+            <ArrowRight size={12} className="text-sky-400" />
+            <span>在右侧插入列</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleClearCol(activeColMenu.cIdx);
+              setActiveColMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 text-left cursor-pointer"
+          >
+            <Eraser size={12} className="text-amber-400" />
+            <span>清空整列内容</span>
+          </button>
+          <button
+            type="button"
+            disabled={colCount <= 1}
+            onClick={() => {
+              handleDeleteCol(activeColMenu.cIdx);
+              setActiveColMenu(null);
+            }}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left ${
+              colCount <= 1
+                ? 'opacity-30 cursor-not-allowed text-slate-500'
+                : 'hover:bg-rose-500/20 text-rose-300 cursor-pointer'
+            }`}
+          >
+            <Trash2 size={12} />
+            <span>删除整列</span>
+          </button>
+        </div>
+      )}
+
+      {/* Notion 风格整行快捷弹窗 */}
+      {activeRowMenu && (
+        <div
+          style={{ left: `${activeRowMenu.x}px`, top: `${activeRowMenu.y}px` }}
+          className="fixed z-[999996] w-48 rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95"
+        >
+          <div className="px-2 py-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
+            第 {activeRowMenu.rIdx + 1} 行快速设置
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              handleInsertRow(activeRowMenu.rIdx, 'above');
+              setActiveRowMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 text-left cursor-pointer"
+          >
+            <ArrowUp size={12} className="text-emerald-400" />
+            <span>在上方插入行</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleInsertRow(activeRowMenu.rIdx, 'below');
+              setActiveRowMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 text-left cursor-pointer"
+          >
+            <ArrowDown size={12} className="text-emerald-400" />
+            <span>在下方插入行</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleClearRow(activeRowMenu.rIdx);
+              setActiveRowMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 text-left cursor-pointer"
+          >
+            <Eraser size={12} className="text-amber-400" />
+            <span>清空整行内容</span>
+          </button>
+          <button
+            type="button"
+            disabled={rowCount <= 1}
+            onClick={() => {
+              handleDeleteRow(activeRowMenu.rIdx);
+              setActiveRowMenu(null);
+            }}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left ${
+              rowCount <= 1
+                ? 'opacity-30 cursor-not-allowed text-slate-500'
+                : 'hover:bg-rose-500/20 text-rose-300 cursor-pointer'
+            }`}
+          >
+            <Trash2 size={12} />
+            <span>删除整行</span>
+          </button>
+        </div>
+      )}
+
+      {/* 沉浸式暗黑毛玻璃右键上下文菜单 (Word 式 Mini Toolbar + 正交分组) */}
       {contextMenu && (
         <TableContextMenu
           x={contextMenu.x}
@@ -1514,22 +2144,13 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           cIdx={contextMenu.cIdx}
           rowCount={rowCount}
           colCount={colCount}
-          currentAlign={localAlignments[contextMenu.cIdx] || 'left'}
+          currentHAlign={localAlignments[contextMenu.cIdx] || 'left'}
+          currentVAlign={localVAlignments[contextMenu.cIdx] || 'top'}
+          currentShading={cellShading[`${contextMenu.rIdx}-${contextMenu.cIdx}`]}
           isRangeActive={isRangeActive}
           selectedCellCount={selectedCellCount}
-          onAlignChange={(align) => {
-            if (isRangeActive && normalizedRange) {
-              const { minC, maxC } = normalizedRange;
-              const updated = [...localAlignments];
-              for (let c = minC; c <= maxC; c++) {
-                updated[c] = align;
-              }
-              setLocalAlignments(updated);
-              updateRows(rows, localWidths, updated, true);
-            } else {
-              handleSetColAlignment(contextMenu.cIdx, align);
-            }
-          }}
+          onNineGridAlignChange={(h, v) => handleSetNineGridAlign(h, v, { rIdx: contextMenu.rIdx, cIdx: contextMenu.cIdx })}
+          onShadingChange={(color) => handleSetShading(color, { rIdx: contextMenu.rIdx, cIdx: contextMenu.cIdx })}
           onInsertRowAbove={() => handleInsertRow(contextMenu.rIdx, 'above')}
           onInsertRowBelow={() => handleInsertRow(contextMenu.rIdx, 'below')}
           onInsertColLeft={() => handleInsertCol(contextMenu.cIdx, 'left')}
@@ -1540,6 +2161,8 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           onDeleteCol={() => handleDeleteCol(contextMenu.cIdx)}
           onClearRange={handleClearRange}
           onBatchFormat={handleBatchFormat}
+          onDistributeCols={handleDistributeCols}
+          onDistributeRows={() => {}}
           onCopyMarkdown={handleCopyMarkdown}
           onCopySelectedRange={handleCopySelectedRange}
           onDeleteTable={onDelete}

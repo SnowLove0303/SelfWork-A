@@ -2,6 +2,31 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.81] - 2026-11-20
+
+### Refactor (文档引擎：参考 Word 工业级表格工具四维正交分类、Word 标志性 3×3 九宫格对齐选择器、莫兰迪底纹与右键 Mini Toolbar)
+
+- **Word 级工具栏严格正交分类体系 (`table:word-category` / `TableBlock.tsx`)**：
+  - 响应用户尖锐反馈：“感觉一般啊，你要不去逆向一下notion或word，看看他们怎么做的功能；核心是工具栏的分类做太差了，你要用REA 去逆向notion或word才知道了，主要是参考word”；
+  - 彻底根除以往按钮平铺堆砌与职责混乱的通病，全面对标 Microsoft Word / WPS 表格工具标准，划分出四大正交职责体系：
+    1. **结构与行列 (Structure & Grid)**：向上/下插入行、向左/右插入列、删除行/列/整表、平均分布各列/各行；
+    2. **对齐与几何 (Alignment & 9-Grid)**：Word 标志性 3×3 矩阵九宫格交互图形选择器（水平×垂直组合对齐）；
+    3. **样式与底纹 (Style & Shading)**：8 色暗黑莫兰迪低饱和度底纹色卡、表头行开关、隔行斑马纹开关；
+    4. **内容与富文本 (Content & Mini Toolbar)**：文字格式加粗/斜体/下划线/删除线、清除格式、剪贴板数据操作。
+- **Word 标志性 3×3 九宫格对齐选择器 (`table:nine-grid-align` / `TableBlock.tsx`)**：
+  - 超越以往单纯水平 3 种对齐，引入专业九宫格图形选择器微面板（顶左、顶中、顶右、中左、正中、中右、底左、底中、底右）；
+  - 采用微对齐视效指示块直观呈现对齐落点，支持单个单元格与多选二维网格矩阵批量应用。
+- **单元格底纹与斑马纹系统 (`table:cell-shading` / `TableBlock.tsx`)**：
+  - 新增莫兰迪低饱和度背景底纹系统（无底色、暗灰、冰蓝、翠绿、暖珀、绛红、暮紫、雅靛）；
+  - 支持单格与跨选矩形批量填充底色，并在行列插拔删除时智能位移索引字典；
+  - 增加 Word 经典隔行斑马纹（Banded Rows）一键切换开关。
+- **Word 式沉浸右键上下文菜单 (`table:word-context-menu` / `TableBlock.tsx`)**：
+  - 顶部挂载 Word 式 Mini Toolbar：加粗、斜体、下划线、删除线、9 宫格微入口、底纹色板、清除格式；
+  - 主体严格分层折叠二级子菜单：剪贴板与数据、插入行列 ▸、删除操作 ▸、尺寸与分布，消除单列傻长菜单。
+- **Notion 式表头列把手与行侧把手 (`table:notion-grippers` / `TableBlock.tsx`)**：
+  - 表头顶部悬停浮现微操作胶囊，点击一键全选整列并弹出列专属快捷操作；
+  - 行左侧悬停浮现 `⠿` 抓手，点击一键全选整行并弹出行专属快捷操作。
+
 ## [0.1.80] - 2026-11-20
 
 ### Feat (文档引擎：跨行跨列区域选中、单格富文本浮动工具条、矩阵复制粘贴与批量编辑引擎)
