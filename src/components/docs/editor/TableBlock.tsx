@@ -17,10 +17,24 @@ import {
   ArrowLeft,
   ArrowRight,
   MoreHorizontal,
+  Bold,
+  Italic,
+  Underline,
 } from 'lucide-react';
 import { healTableRows } from '../../../services/docHealingService.ts';
+import { FloatingFormatToolbar } from './FloatingFormatToolbar.tsx';
 
 export type TableColAlign = 'left' | 'center' | 'right';
+
+interface CellCoord {
+  rIdx: number;
+  cIdx: number;
+}
+
+interface CellRange {
+  start: CellCoord;
+  end: CellCoord;
+}
 
 interface TableContextMenuProps {
   x: number;
@@ -30,6 +44,8 @@ interface TableContextMenuProps {
   rowCount: number;
   colCount: number;
   currentAlign: TableColAlign;
+  isRangeActive: boolean;
+  selectedCellCount: number;
   onAlignChange: (align: TableColAlign) => void;
   onInsertRowAbove: () => void;
   onInsertRowBelow: () => void;
@@ -39,7 +55,10 @@ interface TableContextMenuProps {
   onClearCol: () => void;
   onDeleteRow: () => void;
   onDeleteCol: () => void;
+  onClearRange: () => void;
+  onBatchFormat: (format: 'bold' | 'italic' | 'underline' | 'clear') => void;
   onCopyMarkdown: () => void;
+  onCopySelectedRange: () => void;
   onDeleteTable: () => void;
   onClose: () => void;
 }
@@ -52,6 +71,8 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   rowCount,
   colCount,
   currentAlign,
+  isRangeActive,
+  selectedCellCount,
   onAlignChange,
   onInsertRowAbove,
   onInsertRowBelow,
@@ -61,7 +82,10 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   onClearCol,
   onDeleteRow,
   onDeleteCol,
+  onClearRange,
+  onBatchFormat,
   onCopyMarkdown,
+  onCopySelectedRange,
   onDeleteTable,
   onClose,
 }) => {
@@ -86,8 +110,8 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
     };
   }, [onClose]);
 
-  const menuWidth = 200;
-  const menuHeight = 390;
+  const menuWidth = 210;
+  const menuHeight = isRangeActive ? 420 : 390;
   const clampedX = Math.min(x, window.innerWidth - menuWidth - 16);
   const clampedY = Math.min(y, window.innerHeight - menuHeight - 16);
 
@@ -95,12 +119,89 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
     <div
       ref={menuRef}
       style={{ left: `${Math.max(8, clampedX)}px`, top: `${Math.max(8, clampedY)}px` }}
-      className="fixed z-[9999] w-[200px] rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-[999995] w-[210px] rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95 duration-100"
       onMouseDown={(e) => e.stopPropagation()}
     >
+      {/* 多选范围指示器 */}
+      {isRangeActive && (
+        <div className="mb-1 px-2 py-1 rounded bg-sky-500/20 border border-sky-500/30 text-sky-300 text-[11px] font-medium flex items-center justify-between">
+          <span>已选中 {selectedCellCount} 个单元格</span>
+          <span className="text-[10px] text-sky-400/80 font-mono">范围</span>
+        </div>
+      )}
+
+      {/* 跨选批量格式化 */}
+      {isRangeActive && (
+        <div className="mb-1 pb-1 border-b border-white/[0.08]">
+          <div className="px-2 py-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+            批量格式化
+          </div>
+          <div className="grid grid-cols-3 gap-1 px-1 pt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                onBatchFormat('bold');
+                onClose();
+              }}
+              className="flex items-center justify-center gap-1 py-1 rounded border border-white/5 hover:bg-white/5 text-slate-300 hover:text-white text-[11px] cursor-pointer"
+              title="批量切换加粗"
+            >
+              <Bold size={11} />
+              <span>加粗</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onBatchFormat('italic');
+                onClose();
+              }}
+              className="flex items-center justify-center gap-1 py-1 rounded border border-white/5 hover:bg-white/5 text-slate-300 hover:text-white text-[11px] cursor-pointer"
+              title="批量切换斜体"
+            >
+              <Italic size={11} />
+              <span>斜体</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onBatchFormat('underline');
+                onClose();
+              }}
+              className="flex items-center justify-center gap-1 py-1 rounded border border-white/5 hover:bg-white/5 text-slate-300 hover:text-white text-[11px] cursor-pointer"
+              title="批量切换下划线"
+            >
+              <Underline size={11} />
+              <span>下划</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onClearRange();
+              onClose();
+            }}
+            className="w-full mt-1 flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
+          >
+            <Eraser size={13} className="text-amber-400" />
+            <span>清空所选 {selectedCellCount} 个单元格</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onCopySelectedRange();
+              onClose();
+            }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-white transition-colors text-left cursor-pointer"
+          >
+            <Copy size={13} className="text-sky-400" />
+            <span>复制所选单元格 (TSV)</span>
+          </button>
+        </div>
+      )}
+
       {/* 文本对齐方式 */}
       <div className="px-2 py-1 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-        文本对齐 (第 {cIdx + 1} 列)
+        文本对齐 ({isRangeActive ? '所选范围' : `第 ${cIdx + 1} 列`})
       </div>
       <div className="grid grid-cols-3 gap-1 px-1 pb-1.5">
         <button
@@ -181,17 +282,19 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
         <ArrowDown size={13} className="text-emerald-400" />
         <span>在下方插入行</span>
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          onClearRow();
-          onClose();
-        }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
-      >
-        <Eraser size={13} className="text-amber-400" />
-        <span>清空此行内容</span>
-      </button>
+      {!isRangeActive && (
+        <button
+          type="button"
+          onClick={() => {
+            onClearRow();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
+        >
+          <Eraser size={13} className="text-amber-400" />
+          <span>清空此行内容</span>
+        </button>
+      )}
       <button
         type="button"
         disabled={rowCount <= 1}
@@ -237,17 +340,19 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
         <ArrowRight size={13} className="text-sky-400" />
         <span>在右侧插入列</span>
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          onClearCol();
-          onClose();
-        }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
-      >
-        <Eraser size={13} className="text-amber-400" />
-        <span>清空此列内容</span>
-      </button>
+      {!isRangeActive && (
+        <button
+          type="button"
+          onClick={() => {
+            onClearCol();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
+        >
+          <Eraser size={13} className="text-amber-400" />
+          <span>清空此列内容</span>
+        </button>
+      )}
       <button
         type="button"
         disabled={colCount <= 1}
@@ -277,7 +382,7 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-slate-100 transition-colors text-left cursor-pointer"
       >
         <Copy size={13} className="text-slate-400" />
-        <span>复制 Markdown 表格</span>
+        <span>复制整表为 Markdown</span>
       </button>
       <button
         type="button"
@@ -311,7 +416,11 @@ export const TableBlock: React.FC<TableBlockProps> = ({
   onDelete,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [activeCell, setActiveCell] = useState<{ rIdx: number; cIdx: number } | null>(null);
+  const [activeCell, setActiveCell] = useState<CellCoord | null>(null);
+  const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
+  const [isDraggingRange, setIsDraggingRange] = useState(false);
+  const dragStartRef = useRef<CellCoord | null>(null);
+
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -319,7 +428,15 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     cIdx: number;
   } | null>(null);
 
-  // 解析并运行运行时自愈规范化二维数据（自动消除克隆列与转义字符切裂）
+  // 划选富文本浮动工具条状态
+  const [floatingToolbarPos, setFloatingToolbarPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const activeEditingCellRef = useRef<CellCoord | null>(null);
+
+  // 解析并运行运行时自愈规范化二维数据
   const rawRows = (block.properties?.rows as string[][]) || [];
   const healedRows = useMemo(() => healTableRows(rawRows), [rawRows]);
   const rows: string[][] =
@@ -367,12 +484,53 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     );
   }, [block.properties?.columnAlignments, colCount]);
 
+  // 全局鼠标拖拽选区结束监听
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDraggingRange(false);
+      dragStartRef.current = null;
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
+
   // 拖拽手柄状态引用
   const resizingColRef = useRef<{
     colIndex: number;
     startX: number;
     startWidth: number;
   } | null>(null);
+
+  // 规范化选区矩形区域
+  const normalizedRange = useMemo(() => {
+    if (!selectedRange) return null;
+    const minR = Math.min(selectedRange.start.rIdx, selectedRange.end.rIdx);
+    const maxR = Math.max(selectedRange.start.rIdx, selectedRange.end.rIdx);
+    const minC = Math.min(selectedRange.start.cIdx, selectedRange.end.cIdx);
+    const maxC = Math.max(selectedRange.start.cIdx, selectedRange.end.cIdx);
+    return { minR, maxR, minC, maxC };
+  }, [selectedRange]);
+
+  const isInRange = (r: number, c: number) => {
+    if (!normalizedRange) return false;
+    return (
+      r >= normalizedRange.minR &&
+      r <= normalizedRange.maxR &&
+      c >= normalizedRange.minC &&
+      c <= normalizedRange.maxC
+    );
+  };
+
+  const isRangeActive = Boolean(
+    normalizedRange &&
+      (normalizedRange.minR !== normalizedRange.maxR ||
+        normalizedRange.minC !== normalizedRange.maxC)
+  );
+
+  const selectedCellCount = normalizedRange
+    ? (normalizedRange.maxR - normalizedRange.minR + 1) *
+      (normalizedRange.maxC - normalizedRange.minC + 1)
+    : 0;
 
   // 更新二维数组及属性并同步
   const updateRows = (
@@ -492,6 +650,276 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     updateRows(rows, localWidths, updated, true);
   };
 
+  // 5. 跨选批量清空选区内所有单元格
+  const handleClearRange = () => {
+    if (!normalizedRange) return;
+    const { minR, maxR, minC, maxC } = normalizedRange;
+    const next = rows.map((row, r) =>
+      row.map((cell, c) => (r >= minR && r <= maxR && c >= minC && c <= maxC ? '' : cell))
+    );
+    updateRows(next, undefined, undefined, true);
+  };
+
+  // 6. 跨选批量复制 (TSV 格式，兼容 Excel 与纯文本)
+  const handleCopySelectedRange = () => {
+    if (!normalizedRange) return;
+    const { minR, maxR, minC, maxC } = normalizedRange;
+    const tsvLines: string[] = [];
+    for (let r = minR; r <= maxR; r++) {
+      const slice = rows[r].slice(minC, maxC + 1);
+      const cleanSlice = slice.map((c) => c.replace(/<[^>]+>/g, '').trim());
+      tsvLines.push(cleanSlice.join('\t'));
+    }
+    navigator.clipboard.writeText(tsvLines.join('\n'));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  // 7. 跨选批量格式化应用
+  const handleBatchFormat = (format: 'bold' | 'italic' | 'underline' | 'clear') => {
+    if (!normalizedRange) return;
+    const { minR, maxR, minC, maxC } = normalizedRange;
+    const next = rows.map((row, r) =>
+      row.map((cell, c) => {
+        if (r >= minR && r <= maxR && c >= minC && c <= maxC) {
+          if (!cell.trim()) return cell;
+          if (format === 'bold') {
+            return cell.includes('<strong>') || cell.includes('<b>')
+              ? cell.replace(/<\/?(strong|b)>/gi, '')
+              : `<strong>${cell}</strong>`;
+          } else if (format === 'italic') {
+            return cell.includes('<em>') || cell.includes('<i>')
+              ? cell.replace(/<\/?(em|i)>/gi, '')
+              : `<em>${cell}</em>`;
+          } else if (format === 'underline') {
+            return cell.includes('<u>')
+              ? cell.replace(/<\/?u>/gi, '')
+              : `<u>${cell}</u>`;
+          } else if (format === 'clear') {
+            return cell.replace(/<[^>]+>/g, '');
+          }
+        }
+        return cell;
+      })
+    );
+    updateRows(next, undefined, undefined, true);
+  };
+
+  // 8. 文本划选检测与浮动工具条联动
+  const checkTextSelection = (rIdx: number, cIdx: number) => {
+    if (isRangeActive) {
+      setFloatingToolbarPos(null);
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      setFloatingToolbarPos(null);
+      return;
+    }
+    const text = sel.toString().trim();
+    if (!text) {
+      setFloatingToolbarPos(null);
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    savedRangeRef.current = range.cloneRange();
+    activeEditingCellRef.current = { rIdx, cIdx };
+
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      setFloatingToolbarPos(null);
+      return;
+    }
+
+    setFloatingToolbarPos({
+      top: rect.top - 46,
+      left: rect.left + rect.width / 2 - 140,
+    });
+  };
+
+  // 9. 应用富文本格式至单元格选中文本
+  const handleApplyTextFormat = (
+    format: 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'clear'
+  ) => {
+    if (isRangeActive) {
+      if (format === 'bold' || format === 'italic' || format === 'underline' || format === 'clear') {
+        handleBatchFormat(format);
+      }
+      setFloatingToolbarPos(null);
+      return;
+    }
+
+    const targetCell = activeEditingCellRef.current || activeCell;
+    if (!targetCell) return;
+
+    if (savedRangeRef.current) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      }
+    }
+
+    if (format === 'bold') {
+      document.execCommand('bold', false);
+    } else if (format === 'italic') {
+      document.execCommand('italic', false);
+    } else if (format === 'underline') {
+      document.execCommand('underline', false);
+    } else if (format === 'strike') {
+      document.execCommand('strikeThrough', false);
+    } else if (format === 'clear') {
+      document.execCommand('removeFormat', false);
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const cellEl = document.querySelector(
+          `[id="block-${block.id}"] [data-cell-pos="${targetCell.rIdx}-${targetCell.cIdx}"]`
+        );
+        if (cellEl) {
+          const styledElements = cellEl.querySelectorAll(
+            'code, del, strike, span, a, mark, b, strong, i, em, u'
+          );
+          styledElements.forEach((el) => {
+            if (sel.containsNode(el, true)) {
+              const textNode = document.createTextNode(el.textContent || '');
+              el.parentNode?.replaceChild(textNode, el);
+            }
+          });
+        }
+      }
+    } else if (format === 'code') {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const range = sel.getRangeAt(0);
+        const parentCode = range.commonAncestorContainer.parentElement?.closest('code');
+        if (parentCode) {
+          const textNode = document.createTextNode(parentCode.textContent || '');
+          parentCode.parentNode?.replaceChild(textNode, parentCode);
+        } else {
+          const codeEl = document.createElement('code');
+          codeEl.className =
+            'px-1.5 py-0.5 mx-0.5 rounded bg-white/[0.08] text-amber-200/90 font-mono text-[12px] border border-white/[0.06]';
+          const frag = range.extractContents();
+          codeEl.appendChild(frag);
+          range.insertNode(codeEl);
+          sel.removeAllRanges();
+        }
+      }
+    }
+
+    const cellEl = document.querySelector(
+      `[id="block-${block.id}"] [data-cell-pos="${targetCell.rIdx}-${targetCell.cIdx}"]`
+    );
+    if (cellEl) {
+      handleCellBlur(targetCell.rIdx, targetCell.cIdx, cellEl.innerHTML);
+    }
+  };
+
+  const handleApplyHighlight = (color: string) => {
+    const targetCell = activeEditingCellRef.current || activeCell;
+    if (!targetCell) return;
+    if (savedRangeRef.current) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      }
+    }
+    if (color) {
+      document.execCommand('hiliteColor', false, color);
+    } else {
+      document.execCommand('removeFormat', false);
+    }
+    const cellEl = document.querySelector(
+      `[id="block-${block.id}"] [data-cell-pos="${targetCell.rIdx}-${targetCell.cIdx}"]`
+    );
+    if (cellEl) {
+      handleCellBlur(targetCell.rIdx, targetCell.cIdx, cellEl.innerHTML);
+    }
+  };
+
+  const handleApplyLink = (url: string) => {
+    const targetCell = activeEditingCellRef.current || activeCell;
+    if (!targetCell) return;
+    if (savedRangeRef.current) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      }
+    }
+    document.execCommand('createLink', false, url);
+    const cellEl = document.querySelector(
+      `[id="block-${block.id}"] [data-cell-pos="${targetCell.rIdx}-${targetCell.cIdx}"]`
+    );
+    if (cellEl) {
+      handleCellBlur(targetCell.rIdx, targetCell.cIdx, cellEl.innerHTML);
+    }
+  };
+
+  // 10. 矩阵式粘贴处理
+  const handleCellPaste = (
+    e: React.ClipboardEvent,
+    startR: number,
+    startC: number
+  ) => {
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+
+    if (text.includes('\t') || text.includes('\n')) {
+      e.preventDefault();
+      const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
+      const matrix = lines.map((line) => line.split('\t'));
+
+      const requiredRows = Math.max(rowCount, startR + matrix.length);
+      const pasteColsCount = Math.max(...matrix.map((m) => m.length));
+      const requiredCols = Math.max(colCount, startC + pasteColsCount);
+
+      let expandedRows = rows.map((r) => [...r]);
+      while (expandedRows.length < requiredRows) {
+        expandedRows.push(Array(colCount).fill(''));
+      }
+      expandedRows = expandedRows.map((r) => {
+        if (r.length < requiredCols) {
+          return [...r, ...Array(requiredCols - r.length).fill('')];
+        }
+        return r;
+      });
+
+      matrix.forEach((mRow, rOffset) => {
+        mRow.forEach((cellVal, cOffset) => {
+          const targetR = startR + rOffset;
+          const targetC = startC + cOffset;
+          if (targetR < expandedRows.length && targetC < expandedRows[targetR].length) {
+            expandedRows[targetR][targetC] = cellVal.trim();
+          }
+        });
+      });
+
+      let nextWidths = [...localWidths];
+      while (nextWidths.length < requiredCols) {
+        nextWidths.push(defaultColWidth);
+      }
+      let nextAlignments = [...localAlignments];
+      while (nextAlignments.length < requiredCols) {
+        nextAlignments.push('left');
+      }
+
+      setLocalWidths(nextWidths);
+      setLocalAlignments(nextAlignments);
+      updateRows(expandedRows, nextWidths, nextAlignments, true);
+
+      setSelectedRange({
+        start: { rIdx: startR, cIdx: startC },
+        end: {
+          rIdx: startR + matrix.length - 1,
+          cIdx: startC + pasteColsCount - 1,
+        },
+      });
+    }
+  };
+
   // 拖拽调整列宽手柄事件流
   const handleResizeStart = (e: React.MouseEvent, cIdx: number) => {
     e.preventDefault();
@@ -552,7 +980,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // 一键复制为标准 Markdown 表格 (支持 GFM :---, :---:, ---: 对齐标记)
+  // 一键复制为标准 Markdown 表格
   const handleCopyMarkdown = () => {
     const mdLines: string[] = [];
     rows.forEach((r, idx) => {
@@ -565,7 +993,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       mdLines.push(`| ${cleanRow.join(' | ')} |`);
 
       if (idx === 0) {
-        // 生成对齐标记行
         const alignMarkers = Array.from({ length: colCount }, (_, c) => {
           const align = localAlignments[c] || 'left';
           if (align === 'center') return ':---:';
@@ -588,7 +1015,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       ) as HTMLElement | null;
       if (target) {
         target.focus();
-        // 光标移至末尾
         const sel = window.getSelection();
         if (sel) {
           sel.selectAllChildren(target);
@@ -598,7 +1024,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     }, 50);
   };
 
-  // 计算表格总有效宽度 (纯数据列宽度和，无多余占位列)
   const totalTableWidth = localWidths.reduce((sum, w) => sum + w, 0);
 
   return (
@@ -617,15 +1042,59 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           <span className="text-slate-500 text-[10px]">
             {colCount} 列 × {rowCount} 行
           </span>
-          {activeCell && (
+          {isRangeActive ? (
+            <span className="text-sky-400 text-[10px] bg-sky-500/15 px-2 py-0.5 rounded-md border border-sky-500/30 font-medium animate-pulse">
+              选区: {selectedCellCount} 个单元格 ({normalizedRange!.minR + 1},
+              {normalizedRange!.minC + 1}) → ({normalizedRange!.maxR + 1},
+              {normalizedRange!.maxC + 1})
+            </span>
+          ) : activeCell ? (
             <span className="text-sky-400/80 text-[10px] bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
               第 {activeCell.rIdx + 1} 行 · 第 {activeCell.cIdx + 1} 列
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* 右侧极简操作区 */}
         <div className="flex items-center gap-1.5 text-[11px]">
+          {/* 跨选批量快捷工具 */}
+          {isRangeActive && (
+            <div className="flex items-center gap-1 mr-1 bg-sky-500/10 border border-sky-500/25 px-1.5 py-0.5 rounded-lg">
+              <button
+                type="button"
+                onClick={() => handleBatchFormat('bold')}
+                className="p-1 rounded hover:bg-white/10 text-sky-300 hover:text-white transition-colors cursor-pointer"
+                title="批量加粗 (Ctrl+B)"
+              >
+                <Bold size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBatchFormat('italic')}
+                className="p-1 rounded hover:bg-white/10 text-sky-300 hover:text-white transition-colors cursor-pointer"
+                title="批量斜体 (Ctrl+I)"
+              >
+                <Italic size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={handleClearRange}
+                className="p-1 rounded hover:bg-amber-500/20 text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+                title="批量清空选区 (Delete)"
+              >
+                <Eraser size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={handleCopySelectedRange}
+                className="p-1 rounded hover:bg-sky-500/20 text-slate-400 hover:text-sky-300 transition-colors cursor-pointer"
+                title="复制选区数据 (TSV / Ctrl+C)"
+              >
+                <Copy size={11} />
+              </button>
+            </div>
+          )}
+
           {/* 首行表头切换 */}
           <button
             type="button"
@@ -682,7 +1151,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
         </div>
       </div>
 
-      {/* 表格二维呈现网格 Canvas (彻底闭合网格，消除任何断点与不对齐) */}
+      {/* 表格二维呈现网格 Canvas */}
       <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 scrollbar-track-transparent select-text p-2.5">
         <div className="relative inline-block min-w-full">
           <table
@@ -693,7 +1162,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
               minWidth: '100%',
             }}
           >
-            {/* 列宽锁定 colgroup (纯数据列，绝无多余操作假列) */}
             <colgroup>
               {localWidths.map((w, idx) => (
                 <col key={idx} style={{ width: `${w}px` }} />
@@ -721,16 +1189,53 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                           ? 'text-right'
                           : 'text-left';
 
+                      const isSelected = isInRange(rIdx, cIdx);
+
                       return (
                         <td
                           key={cIdx}
                           style={{ width: `${localWidths[cIdx] || defaultColWidth}px` }}
-                          className={`px-3 py-2 align-top border border-white/[0.08] relative group/cell ${
-                            isHeader ? 'text-slate-200' : 'text-slate-300'
+                          className={`px-3 py-2 align-top border border-white/[0.08] relative group/cell transition-colors ${
+                            isSelected
+                              ? 'bg-sky-500/20 ring-1 ring-inset ring-sky-400/60'
+                              : isHeader
+                              ? 'text-slate-200'
+                              : 'text-slate-300'
                           } ${alignClass}`}
+                          onMouseDown={(e) => {
+                            // Shift + 点击：框选至当前单元格
+                            if (e.shiftKey) {
+                              e.preventDefault();
+                              const start = activeCell || { rIdx: 0, cIdx: 0 };
+                              setSelectedRange({
+                                start,
+                                end: { rIdx, cIdx },
+                              });
+                              setActiveCell({ rIdx, cIdx });
+                              return;
+                            }
+
+                            // 普通点击：启动拖拽选区
+                            dragStartRef.current = { rIdx, cIdx };
+                            setIsDraggingRange(true);
+                          }}
+                          onMouseEnter={() => {
+                            // 拖拽多选滑动
+                            if (isDraggingRange && dragStartRef.current) {
+                              setSelectedRange({
+                                start: dragStartRef.current,
+                                end: { rIdx, cIdx },
+                              });
+                            }
+                          }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            // 若右键单元格不在当前多选区内，重置多选为该单格
+                            if (!isInRange(rIdx, cIdx)) {
+                              setSelectedRange(null);
+                              setActiveCell({ rIdx, cIdx });
+                            }
                             setContextMenu({
                               x: e.clientX,
                               y: e.clientY,
@@ -739,7 +1244,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             });
                           }}
                         >
-                          {/* Notion/飞书式 列分割线吸附插入微手柄 (首行悬停浮现) */}
+                          {/* 列分割线吸附微手柄 */}
                           {rIdx === 0 && (
                             <div
                               className="absolute -top-2.5 right-[-8px] z-30 opacity-0 group-hover/cell:opacity-100 transition-opacity select-none"
@@ -762,7 +1267,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </div>
                           )}
 
-                          {/* 首列左边缘插入手柄 (向左插入列) */}
+                          {/* 首列左边缘插入手柄 */}
                           {rIdx === 0 && cIdx === 0 && (
                             <div
                               className="absolute -top-2.5 left-[-8px] z-30 opacity-0 group-hover/cell:opacity-100 transition-opacity select-none"
@@ -785,7 +1290,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </div>
                           )}
 
-                          {/* Notion/飞书式 行分割线吸附插入微手柄 (首列悬停浮现) */}
+                          {/* 行分割线吸附微手柄 */}
                           {cIdx === 0 && (
                             <div
                               className="absolute -bottom-2 -left-2.5 z-30 opacity-0 group-hover/row:opacity-100 transition-opacity select-none"
@@ -808,7 +1313,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </div>
                           )}
 
-                          {/* 首行上方插入手柄 (向上插入行) */}
+                          {/* 首行上方插入手柄 */}
                           {rIdx === 0 && cIdx === 0 && (
                             <div
                               className="absolute -top-2 -left-2.5 z-30 opacity-0 group-hover/row:opacity-100 transition-opacity select-none"
@@ -831,7 +1336,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </div>
                           )}
 
-                          {/* 表头右上角微型操作指示点 (··· 右键或点击呼出上下文菜单) */}
+                          {/* 表头右上角微型操作指示点 */}
                           {rIdx === 0 && (
                             <button
                               type="button"
@@ -853,7 +1358,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </button>
                           )}
 
-                          {/* 列宽调整交互手柄 (仅第 0 行，绝对定位垂直分割线) */}
+                          {/* 列宽调整交互手柄 */}
                           {rIdx === 0 && (
                             <div
                               onMouseDown={(e) => handleResizeStart(e, cIdx)}
@@ -864,48 +1369,97 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             </div>
                           )}
 
-                          {/* 单元格内容编辑器 (Word 键盘流) */}
+                          {/* 单元格内容编辑器 (双轨键盘流与富文本快捷键) */}
                           <div
                             data-cell-pos={`${rIdx}-${cIdx}`}
                             contentEditable={true}
                             suppressContentEditableWarning={true}
                             dangerouslySetInnerHTML={{ __html: cell }}
-                            onFocus={() => setActiveCell({ rIdx, cIdx })}
+                            onFocus={() => {
+                              setActiveCell({ rIdx, cIdx });
+                            }}
                             onBlur={(e) => {
                               handleCellBlur(rIdx, cIdx, e.currentTarget.innerHTML);
                             }}
+                            onMouseUp={() => checkTextSelection(rIdx, cIdx)}
+                            onKeyUp={() => checkTextSelection(rIdx, cIdx)}
+                            onPaste={(e) => handleCellPaste(e, rIdx, cIdx)}
                             onKeyDown={(e) => {
-                              // 1. Enter: 跳转下一行同列 (未按 Shift)
+                              // 1. Esc: 取消多选
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setSelectedRange(null);
+                                setFloatingToolbarPos(null);
+                                return;
+                              }
+
+                              // 2. Delete / Backspace: 多选态下批量清空
+                              if (
+                                (e.key === 'Delete' || e.key === 'Backspace') &&
+                                isRangeActive
+                              ) {
+                                e.preventDefault();
+                                handleClearRange();
+                                return;
+                              }
+
+                              // 3. Ctrl+C: 多选态下矩阵复制 TSV
+                              if (
+                                (e.ctrlKey || e.metaKey) &&
+                                e.key.toLowerCase() === 'c' &&
+                                isRangeActive
+                              ) {
+                                e.preventDefault();
+                                handleCopySelectedRange();
+                                return;
+                              }
+
+                              // 4. 富文本快捷键 (Ctrl+B, Ctrl+I, Ctrl+U)
+                              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                                e.preventDefault();
+                                handleApplyTextFormat('bold');
+                                return;
+                              }
+                              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+                                e.preventDefault();
+                                handleApplyTextFormat('italic');
+                                return;
+                              }
+                              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+                                e.preventDefault();
+                                handleApplyTextFormat('underline');
+                                return;
+                              }
+
+                              // 5. Enter: 跳转下一行同列 (未按 Shift)
                               if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault();
+                                setSelectedRange(null);
                                 if (rIdx < rowCount - 1) {
                                   focusCell(rIdx + 1, cIdx);
                                 } else {
-                                  // 最后一行回车：自动追加新行并聚焦
                                   handleInsertRow(rIdx, 'below');
                                   focusCell(rIdx + 1, cIdx);
                                 }
                                 return;
                               }
 
-                              // 2. Tab: 顺序跳格
+                              // 6. Tab: 顺序跳格
                               if (e.key === 'Tab') {
                                 e.preventDefault();
+                                setSelectedRange(null);
                                 if (e.shiftKey) {
-                                  // 向上一个单元格跳
                                   if (cIdx > 0) {
                                     focusCell(rIdx, cIdx - 1);
                                   } else if (rIdx > 0) {
                                     focusCell(rIdx - 1, colCount - 1);
                                   }
                                 } else {
-                                  // 向下一个单元格跳
                                   if (cIdx < colCount - 1) {
                                     focusCell(rIdx, cIdx + 1);
                                   } else if (rIdx < rowCount - 1) {
                                     focusCell(rIdx + 1, 0);
                                   } else {
-                                    // 表格最后一格 Tab：自动加行
                                     handleInsertRow(rIdx, 'below');
                                     focusCell(rIdx + 1, 0);
                                   }
@@ -925,7 +1479,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             </tbody>
           </table>
 
-          {/* 表格底部极简辅助扩展栏 (Notion 风格微触发) */}
+          {/* 表格底部极简辅助扩展栏 */}
           <div className="flex items-center gap-3 mt-1.5 px-1 text-[11px] text-slate-500 select-none">
             <button
               type="button"
@@ -944,14 +1498,14 @@ export const TableBlock: React.FC<TableBlockProps> = ({
               <span>新增列</span>
             </button>
             <span className="text-slate-600">·</span>
-            <span className="text-slate-600 text-[10px]">
-              右键单元格或表头呼出完整编辑菜单
+            <span className="text-slate-500 text-[10px]">
+              支持 Shift+点击/拖拽跨行跨列多选 · 选中文本即刻弹出富文本格式浮条 · 支持 Ctrl+B/I/U
             </span>
           </div>
         </div>
       </div>
 
-      {/* 沉浸式暗黑毛玻璃右键上下文菜单 */}
+      {/* 沉浸式暗黑毛玻璃右键上下文菜单 (带选区联动) */}
       {contextMenu && (
         <TableContextMenu
           x={contextMenu.x}
@@ -961,7 +1515,21 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           rowCount={rowCount}
           colCount={colCount}
           currentAlign={localAlignments[contextMenu.cIdx] || 'left'}
-          onAlignChange={(align) => handleSetColAlignment(contextMenu.cIdx, align)}
+          isRangeActive={isRangeActive}
+          selectedCellCount={selectedCellCount}
+          onAlignChange={(align) => {
+            if (isRangeActive && normalizedRange) {
+              const { minC, maxC } = normalizedRange;
+              const updated = [...localAlignments];
+              for (let c = minC; c <= maxC; c++) {
+                updated[c] = align;
+              }
+              setLocalAlignments(updated);
+              updateRows(rows, localWidths, updated, true);
+            } else {
+              handleSetColAlignment(contextMenu.cIdx, align);
+            }
+          }}
           onInsertRowAbove={() => handleInsertRow(contextMenu.rIdx, 'above')}
           onInsertRowBelow={() => handleInsertRow(contextMenu.rIdx, 'below')}
           onInsertColLeft={() => handleInsertCol(contextMenu.cIdx, 'left')}
@@ -970,9 +1538,23 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           onClearCol={() => handleClearCol(contextMenu.cIdx)}
           onDeleteRow={() => handleDeleteRow(contextMenu.rIdx)}
           onDeleteCol={() => handleDeleteCol(contextMenu.cIdx)}
+          onClearRange={handleClearRange}
+          onBatchFormat={handleBatchFormat}
           onCopyMarkdown={handleCopyMarkdown}
+          onCopySelectedRange={handleCopySelectedRange}
           onDeleteTable={onDelete}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* 划选文字即时浮动富文本工具条 */}
+      {floatingToolbarPos && (
+        <FloatingFormatToolbar
+          position={floatingToolbarPos}
+          onApplyFormat={handleApplyTextFormat}
+          onApplyLink={handleApplyLink}
+          onApplyHighlight={handleApplyHighlight}
+          onClose={() => setFloatingToolbarPos(null)}
         />
       )}
     </div>
