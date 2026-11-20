@@ -114,6 +114,87 @@ pub fn get_db_path() -> PathBuf {
     dir.join("selfwork.db")
 }
 
+/// 获取文档物理镜像工作目录（%APPDATA%\SelfWork\documents）
+pub fn get_documents_dir() -> PathBuf {
+    let db_path = get_db_path();
+    let docs_dir = db_path
+        .parent()
+        .map(|p| p.join("documents"))
+        .unwrap_or_else(|| PathBuf::from("documents"));
+    if let Err(e) = std::fs::create_dir_all(&docs_dir) {
+        eprintln!("[SelfWork Docs] 创建文档目录失败 ({}): {}", docs_dir.display(), e);
+    }
+    docs_dir
+}
+
+/// 清洗 Windows 文件名，将非法字符替换为下划线并防止溢出
+pub fn sanitize_filename(name: &str) -> String {
+    let invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
+    let cleaned: String = name
+        .chars()
+        .map(|c| if invalid_chars.contains(&c) || c.is_control() { '_' } else { c })
+        .collect();
+
+    let trimmed = cleaned.trim().trim_matches('.');
+    if trimmed.is_empty() {
+        "untitled_doc".to_string()
+    } else {
+        let truncated: String = trimmed.chars().take(80).collect();
+        truncated.trim().to_string()
+    }
+}
+
+/// 同步文档 Markdown 物理镜像落盘，返回 Windows 绝对物理路径
+pub fn sync_doc_markdown_file(page_id: &str, title: &str, content: &str) -> Result<String, String> {
+    let docs_dir = get_documents_dir();
+    let safe_title = sanitize_filename(title);
+    let filename = if safe_title.is_empty() || safe_title == "untitled_doc" {
+        format!("{}.md", page_id)
+    } else {
+        format!("{}.md", safe_title)
+    };
+    let file_path = docs_dir.join(filename);
+
+    std::fs::write(&file_path, content.as_bytes())
+        .map_err(|e| format!("写入物理 Markdown 文件失败 ({}): {}", file_path.display(), e))?;
+
+    let abs_path = std::fs::canonicalize(&file_path).unwrap_or(file_path);
+
+    let path_str = abs_path.to_string_lossy().to_string();
+    let clean_path = if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+        stripped.to_string()
+    } else {
+        path_str
+    };
+
+    Ok(clean_path)
+}
+
+/// 获取文档对应的预期本地绝对物理路径
+pub fn get_doc_local_path(page_id: &str, title: &str) -> Result<String, String> {
+    let docs_dir = get_documents_dir();
+    let safe_title = sanitize_filename(title);
+    let filename = if safe_title.is_empty() || safe_title == "untitled_doc" {
+        format!("{}.md", page_id)
+    } else {
+        format!("{}.md", safe_title)
+    };
+    let file_path = docs_dir.join(filename);
+
+    if file_path.exists() {
+        let abs_path = std::fs::canonicalize(&file_path).unwrap_or(file_path);
+        let path_str = abs_path.to_string_lossy().to_string();
+        let clean_path = if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+            stripped.to_string()
+        } else {
+            path_str
+        };
+        Ok(clean_path)
+    } else {
+        Ok(file_path.to_string_lossy().to_string())
+    }
+}
+
 /// 初始化 SQLite 表结构与 WAL 日志模式
 pub fn init_db_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
@@ -836,6 +917,28 @@ pub async fn db_delete_collection_row(id: String) -> Result<(), String> {
     .map_err(|e| format!("执行异步任务失败: {}", e))?
 }
 
+#[tauri::command]
+pub async fn db_sync_doc_markdown_file(
+    page_id: String,
+    title: String,
+    content: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        sync_doc_markdown_file(&page_id, &title, &content)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn db_get_doc_local_path(page_id: String, title: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        get_doc_local_path(&page_id, &title)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 // ==================== 单元测试验证 ====================
 
 #[cfg(test)]
@@ -1094,5 +1197,28 @@ mod tests {
             query_setting(&conn, "tasks_initialized").expect("query"),
             Some("true".to_string())
         );
+    }
+
+    #[test]
+    fn test_doc_markdown_file_sync_contract() {
+        let test_title = "02.3-02.5 集合类型、映射类型/与其他内置类型*?<>";
+        let cleaned = sanitize_filename(test_title);
+        assert!(!cleaned.contains('/'), "非法斜杠必须被清洗");
+        assert!(!cleaned.contains('*'), "非法星号必须被清洗");
+        assert!(!cleaned.contains('?'), "非法问号必须被清洗");
+
+        let test_content = "# Python 集合与字典实战\n\n- 测试内容第一行\n- 测试内容第二行";
+        let local_path = sync_doc_markdown_file("test_page_123", test_title, test_content)
+            .expect("sync markdown file failed");
+
+        assert!(std::path::Path::new(&local_path).exists(), "物理落盘文件必须真实存在于磁盘");
+        assert!(!local_path.starts_with(r"\\?\"), "路径不得包含 UNC 前缀");
+
+        let read_back = std::fs::read_to_string(&local_path).expect("read back file failed");
+        assert_eq!(read_back, test_content, "读取的内容必须与写入内容 100% 保持一致");
+
+        let calc_path = get_doc_local_path("test_page_123", test_title)
+            .expect("calc path failed");
+        assert_eq!(calc_path, local_path, "查询路径与落盘路径必须严格一致");
     }
 }

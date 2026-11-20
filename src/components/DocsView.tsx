@@ -16,6 +16,7 @@ import { BlockEditor } from './docs/editor/BlockEditor.tsx';
 import { TableDatabaseView } from './docs/database/TableDatabaseView.tsx';
 import { DocGlobalSearchModal } from './docs/DocGlobalSearchModal.tsx';
 import { DocTrashDrawer } from './docs/DocTrashDrawer.tsx';
+import { copyDocumentResourcePath } from '../services/docPathService.ts';
 import { DocBatchManager } from './docs/DocBatchManager.tsx';
 import { DocBatchImporter } from './docs/DocBatchImporter.tsx';
 import { softDeleteDocPage } from '../services/docTrash.ts';
@@ -451,22 +452,36 @@ export const DocsView: React.FC = () => {
     return `私人 / ${hierarchyNames.join(' / ')} / ${title}`;
   };
 
-  // 通用复制路径动作
-  const handleCopyPath = (path: string, itemId?: string) => {
-    if (!path) return;
-    navigator.clipboard.writeText(path);
-    if (itemId) {
-      setCopiedItemId(itemId);
-      setTimeout(() => setCopiedItemId(null), 1800);
-    } else {
-      setCopiedTopPath(true);
-      setTimeout(() => setCopiedTopPath(false), 1800);
-    }
+  // 复制文档物理路径或上线 URL (面向 MCP+AI)
+  const handleCopyDocumentResource = async (
+    item: { id: string; title?: string; name?: string; icon?: string }
+  ) => {
+    try {
+      const title = item.title || item.name || '未命名文档';
+      const res = await copyDocumentResourcePath({
+        pageId: item.id,
+        title,
+        icon: item.icon,
+      });
 
-    setToastMessage(`已复制路径: ${path}`);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev?.includes(path) ? null : prev));
-    }, 2200);
+      if (item.id === activeId) {
+        setCopiedTopPath(true);
+        setTimeout(() => setCopiedTopPath(false), 1800);
+      }
+      setCopiedItemId(item.id);
+      setTimeout(() => setCopiedItemId(null), 1800);
+
+      if (res.mode === 'local') {
+        setToastMessage(`已复制本地物理路径: ${res.path}`);
+      } else {
+        setToastMessage(`已复制在线文档链接: ${res.path}`);
+      }
+      setTimeout(() => {
+        setToastMessage((prev) => (prev?.includes(res.path) ? null : prev));
+      }, 3000);
+    } catch (err) {
+      console.error('[DocsView] 复制路径失败', err);
+    }
   };
 
   // 面包屑
@@ -743,10 +758,10 @@ export const DocsView: React.FC = () => {
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleCopyPath(getItemHierarchyPath(c, 'collection'), c.id);
+                                        handleCopyDocumentResource(c);
                                       }}
                                       className={`p-0.5 rounded transition-colors ${copiedItemId === c.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
-                                      title="复制数据库路径"
+                                      title="复制本地路径 (面向 MCP+AI)"
                                     >
                                       {copiedItemId === c.id ? <Check size={10} /> : <Copy size={10} />}
                                     </button>
@@ -806,10 +821,10 @@ export const DocsView: React.FC = () => {
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleCopyPath(getItemHierarchyPath(p, 'page'), p.id);
+                                        handleCopyDocumentResource(p);
                                       }}
                                       className={`p-0.5 rounded transition-colors ${copiedItemId === p.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
-                                      title="复制文档路径"
+                                      title="复制本地路径 (面向 MCP+AI)"
                                     >
                                       {copiedItemId === p.id ? <Check size={10} /> : <Copy size={10} />}
                                     </button>
@@ -861,7 +876,7 @@ export const DocsView: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleCopyPath(getItemHierarchyPath(c, 'collection'), c.id);
+                                handleCopyDocumentResource(c);
                               }}
                               className={`p-0.5 rounded transition-colors ${copiedItemId === c.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
                               title="复制数据库路径"
@@ -930,7 +945,7 @@ export const DocsView: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleCopyPath(getItemHierarchyPath(p, 'page'), p.id);
+                                handleCopyDocumentResource(p);
                               }}
                               className={`p-0.5 rounded transition-colors ${copiedItemId === p.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
                               title="复制文档路径"
@@ -1120,7 +1135,13 @@ export const DocsView: React.FC = () => {
             {breadcrumbPath && (
               <button
                 type="button"
-                onClick={() => handleCopyPath(breadcrumbPath)}
+                onClick={() => {
+                  if (activeType === 'page' && selectedPage) {
+                    handleCopyDocumentResource(selectedPage);
+                  } else if (activeType === 'collection' && selectedCollection) {
+                    handleCopyDocumentResource(selectedCollection);
+                  }
+                }}
                 className="group/breadcrumb flex items-center gap-1.5 px-2 py-1 -ml-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer text-left"
                 title="点击一键复制完整文档路径"
               >
@@ -1137,7 +1158,13 @@ export const DocsView: React.FC = () => {
             {activeId && breadcrumbPath && (
               <button
                 type="button"
-                onClick={() => handleCopyPath(breadcrumbPath)}
+                onClick={() => {
+                  if (activeType === 'page' && selectedPage) {
+                    handleCopyDocumentResource(selectedPage);
+                  } else if (activeType === 'collection' && selectedCollection) {
+                    handleCopyDocumentResource(selectedCollection);
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-all cursor-pointer ${
                   copiedTopPath
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'

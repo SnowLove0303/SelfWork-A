@@ -1062,7 +1062,9 @@ pub fn run() {
             db::db_delete_collection,
             db::db_get_collection_rows,
             db::db_save_collection_row,
-            db::db_delete_collection_row
+            db::db_delete_collection_row,
+            db::db_sync_doc_markdown_file,
+            db::db_get_doc_local_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running SelfWork desktop core");

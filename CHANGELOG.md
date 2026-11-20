@@ -2,6 +2,25 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.76] - 2026-11-20
+
+### Feat (文档引擎：面向 MCP+AI 的真实物理绝对路径落盘与上线 URL 自适应切换)
+
+- **废除分类面包屑文本作为路径输出**：
+  - 响应用户核心纠正指示：“我要的不是这个路径：私人 / 02.3-02.5 集合类型...，我要的是本地路径，如果上线的话那就是URL路径了，因为到时候会涉及MCP+AI”；
+  - 彻底解耦“视觉导航面包屑”与“可寻址资源定位符”，点击复制不再输出分类描述字符串。
+- **本地物理文档镜像与原子落盘机制 (`src-tauri/src/db.rs` / `src-tauri/src/lib.rs`)**：
+  - 在 Rust 后端新增 `get_documents_dir`（落盘至 `%APPDATA%\SelfWork\documents\`）与 Windows 保留字符合法化清洗函数 `sanitize_filename`；
+  - 新增 Tauri Commands `db_sync_doc_markdown_file` 与 `db_get_doc_local_path`，在文档保存或复制时原子落盘标准 Markdown 文件，并返回规范 Windows 绝对路径（消除 `\\?\` 前缀）；
+  - 单元测试套件新增 `test_doc_markdown_file_sync_contract`，15/15 单元测试全绿通过。
+- **通用文档路径与模式自适应服务 (`src/services/docPathService.ts`)**：
+  - 封装统一的路径解析服务 `resolveDocumentResourcePath` 与 `copyDocumentResourcePath`；
+  - 本地模式（默认）：自动将当前文档最新 Blocks 转换为标准 Markdown 并原子同步至本地物理文件，返回可供操作系统、外部 VS Code、本地 MCP（如 Filesystem MCP）及 AI Agent 直接执行 `read_file` 的绝对路径；
+  - 上线/Web模式：自适应切换输出符合 Web 标准的 URL 路径（`${BASE_URL}/docs/${pageId}`）。
+- **DocsView 交互与 Toast 升级 (`src/components/DocsView.tsx`)**：
+  - 顶部工具栏“复制路径”按钮、面包屑栏快捷按钮及侧边栏各层级悬停微复制按钮，统一接入 `docPathService`；
+  - Toast 明确呈现复制的完整 Windows 路径，且带有“可由 MCP+AI 直接读取”的高质感知。
+
 ## [0.1.75] - 2026-11-20
 
 ### Feat (文档引擎：文档完整层级路径解析与多场景一键复制功能)
