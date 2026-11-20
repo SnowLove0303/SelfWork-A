@@ -16,10 +16,283 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  MoreHorizontal,
 } from 'lucide-react';
 import { healTableRows } from '../../../services/docHealingService.ts';
 
 export type TableColAlign = 'left' | 'center' | 'right';
+
+interface TableContextMenuProps {
+  x: number;
+  y: number;
+  rIdx: number;
+  cIdx: number;
+  rowCount: number;
+  colCount: number;
+  currentAlign: TableColAlign;
+  onAlignChange: (align: TableColAlign) => void;
+  onInsertRowAbove: () => void;
+  onInsertRowBelow: () => void;
+  onInsertColLeft: () => void;
+  onInsertColRight: () => void;
+  onClearRow: () => void;
+  onClearCol: () => void;
+  onDeleteRow: () => void;
+  onDeleteCol: () => void;
+  onCopyMarkdown: () => void;
+  onDeleteTable: () => void;
+  onClose: () => void;
+}
+
+const TableContextMenu: React.FC<TableContextMenuProps> = ({
+  x,
+  y,
+  rIdx,
+  cIdx,
+  rowCount,
+  colCount,
+  currentAlign,
+  onAlignChange,
+  onInsertRowAbove,
+  onInsertRowBelow,
+  onInsertColLeft,
+  onInsertColRight,
+  onClearRow,
+  onClearCol,
+  onDeleteRow,
+  onDeleteCol,
+  onCopyMarkdown,
+  onDeleteTable,
+  onClose,
+}) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  const menuWidth = 200;
+  const menuHeight = 390;
+  const clampedX = Math.min(x, window.innerWidth - menuWidth - 16);
+  const clampedY = Math.min(y, window.innerHeight - menuHeight - 16);
+
+  return (
+    <div
+      ref={menuRef}
+      style={{ left: `${Math.max(8, clampedX)}px`, top: `${Math.max(8, clampedY)}px` }}
+      className="fixed z-[9999] w-[200px] rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95 duration-100"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* 文本对齐方式 */}
+      <div className="px-2 py-1 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+        文本对齐 (第 {cIdx + 1} 列)
+      </div>
+      <div className="grid grid-cols-3 gap-1 px-1 pb-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            onAlignChange('left');
+            onClose();
+          }}
+          className={`flex items-center justify-center gap-1 py-1 rounded border text-[11px] transition-colors cursor-pointer ${
+            currentAlign === 'left'
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-medium'
+              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
+          }`}
+          title="居左对齐"
+        >
+          <AlignLeft size={12} />
+          <span>左</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onAlignChange('center');
+            onClose();
+          }}
+          className={`flex items-center justify-center gap-1 py-1 rounded border text-[11px] transition-colors cursor-pointer ${
+            currentAlign === 'center'
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-medium'
+              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
+          }`}
+          title="居中对齐"
+        >
+          <AlignCenter size={12} />
+          <span>中</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onAlignChange('right');
+            onClose();
+          }}
+          className={`flex items-center justify-center gap-1 py-1 rounded border text-[11px] transition-colors cursor-pointer ${
+            currentAlign === 'right'
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-medium'
+              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
+          }`}
+          title="居右对齐"
+        >
+          <AlignRight size={12} />
+          <span>右</span>
+        </button>
+      </div>
+
+      <div className="my-1 border-t border-white/[0.08]" />
+
+      {/* 行操作 */}
+      <div className="px-2 py-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+        行操作 (第 {rIdx + 1} 行)
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          onInsertRowAbove();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 transition-colors text-left cursor-pointer"
+      >
+        <ArrowUp size={13} className="text-emerald-400" />
+        <span>在上方插入行</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onInsertRowBelow();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-emerald-300 transition-colors text-left cursor-pointer"
+      >
+        <ArrowDown size={13} className="text-emerald-400" />
+        <span>在下方插入行</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onClearRow();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
+      >
+        <Eraser size={13} className="text-amber-400" />
+        <span>清空此行内容</span>
+      </button>
+      <button
+        type="button"
+        disabled={rowCount <= 1}
+        onClick={() => {
+          onDeleteRow();
+          onClose();
+        }}
+        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left ${
+          rowCount <= 1
+            ? 'opacity-30 cursor-not-allowed text-slate-500'
+            : 'hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 cursor-pointer'
+        }`}
+      >
+        <Trash2 size={13} />
+        <span>删除当前行</span>
+      </button>
+
+      <div className="my-1 border-t border-white/[0.08]" />
+
+      {/* 列操作 */}
+      <div className="px-2 py-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+        列操作 (第 {cIdx + 1} 列)
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          onInsertColLeft();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 transition-colors text-left cursor-pointer"
+      >
+        <ArrowLeft size={13} className="text-sky-400" />
+        <span>在左侧插入列</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onInsertColRight();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-sky-300 transition-colors text-left cursor-pointer"
+      >
+        <ArrowRight size={13} className="text-sky-400" />
+        <span>在右侧插入列</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onClearCol();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-amber-300 transition-colors text-left cursor-pointer"
+      >
+        <Eraser size={13} className="text-amber-400" />
+        <span>清空此列内容</span>
+      </button>
+      <button
+        type="button"
+        disabled={colCount <= 1}
+        onClick={() => {
+          onDeleteCol();
+          onClose();
+        }}
+        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left ${
+          colCount <= 1
+            ? 'opacity-30 cursor-not-allowed text-slate-500'
+            : 'hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 cursor-pointer'
+        }`}
+      >
+        <Trash2 size={13} />
+        <span>删除当前列</span>
+      </button>
+
+      <div className="my-1 border-t border-white/[0.08]" />
+
+      {/* 快捷与整表 */}
+      <button
+        type="button"
+        onClick={() => {
+          onCopyMarkdown();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-300 hover:text-slate-100 transition-colors text-left cursor-pointer"
+      >
+        <Copy size={13} className="text-slate-400" />
+        <span>复制 Markdown 表格</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onDeleteTable();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors text-left cursor-pointer"
+      >
+        <Trash2 size={13} />
+        <span>删除整个表格</span>
+      </button>
+    </div>
+  );
+};
 
 interface TableBlockProps {
   block: DocBlock;
@@ -39,6 +312,12 @@ export const TableBlock: React.FC<TableBlockProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [activeCell, setActiveCell] = useState<{ rIdx: number; cIdx: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    rIdx: number;
+    cIdx: number;
+  } | null>(null);
 
   // 解析并运行运行时自愈规范化二维数据（自动消除克隆列与转义字符切裂）
   const rawRows = (block.properties?.rows as string[][]) || [];
@@ -205,17 +484,10 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     updateRows(next, undefined, undefined, true);
   };
 
-  // 切换指定列对齐方式 (left -> center -> right -> left)
-  const handleToggleColAlignment = (cIdx: number) => {
-    const current = localAlignments[cIdx] || 'left';
-    const nextMap: Record<TableColAlign, TableColAlign> = {
-      left: 'center',
-      center: 'right',
-      right: 'left',
-    };
-    const nextAlign = nextMap[current] || 'left';
+  // 设定指定列对齐方式
+  const handleSetColAlignment = (cIdx: number, align: TableColAlign) => {
     const updated = [...localAlignments];
-    updated[cIdx] = nextAlign;
+    updated[cIdx] = align;
     setLocalAlignments(updated);
     updateRows(rows, localWidths, updated, true);
   };
@@ -326,9 +598,8 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     }, 50);
   };
 
-  // 计算表格总有效宽度
-  const totalTableWidth =
-    localWidths.reduce((sum, w) => sum + w, 0) + (rowCount > 1 ? 52 : 0);
+  // 计算表格总有效宽度 (纯数据列宽度和，无多余占位列)
+  const totalTableWidth = localWidths.reduce((sum, w) => sum + w, 0);
 
   return (
     <div
@@ -353,7 +624,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           )}
         </div>
 
-        {/* 右侧操作胶囊栏 */}
+        {/* 右侧极简操作区 */}
         <div className="flex items-center gap-1.5 text-[11px]">
           {/* 首行表头切换 */}
           <button
@@ -399,286 +670,311 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             )}
           </button>
 
-          {/* 右侧追加新列 */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={handleAddCol}
-            className="flex items-center gap-0.5 px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-sky-300 transition-colors cursor-pointer"
-            title="在最右侧追加新列"
-          >
-            <Plus size={11} />
-            <span>加列</span>
-          </button>
-
-          {/* 底部追加新行 */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={handleAddRow}
-            className="flex items-center gap-0.5 px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-emerald-300 transition-colors cursor-pointer"
-            title="在最底部追加新行"
-          >
-            <Plus size={11} />
-            <span>加行</span>
-          </button>
-
           {/* 删除整表 */}
           <button
             type="button"
             onClick={onDelete}
             className="p-1 rounded-md hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer ml-1"
-            title="删除整个表格块"
+            title="删除整个表格"
           >
             <Trash2 size={12} />
           </button>
         </div>
       </div>
 
-      {/* 表格二维呈现网格 Canvas */}
-      <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 scrollbar-track-transparent select-text">
-        <table
-          className="border-collapse text-left font-sans text-[13px]"
-          style={{
-            tableLayout: 'fixed',
-            width: `${Math.max(totalTableWidth, 100)}px`,
-            minWidth: '100%',
-          }}
-        >
-          {/* 列宽锁定 colgroup */}
-          <colgroup>
-            {localWidths.map((w, idx) => (
-              <col key={idx} style={{ width: `${w}px` }} />
-            ))}
-            {rowCount > 1 && <col style={{ width: '52px' }} />}
-          </colgroup>
+      {/* 表格二维呈现网格 Canvas (彻底闭合网格，消除任何断点与不对齐) */}
+      <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 scrollbar-track-transparent select-text p-2.5">
+        <div className="relative inline-block min-w-full">
+          <table
+            className="border-collapse text-left font-sans text-[13px] border border-white/[0.12] bg-[#0d1117]"
+            style={{
+              tableLayout: 'fixed',
+              width: `${Math.max(totalTableWidth, 100)}px`,
+              minWidth: '100%',
+            }}
+          >
+            {/* 列宽锁定 colgroup (纯数据列，绝无多余操作假列) */}
+            <colgroup>
+              {localWidths.map((w, idx) => (
+                <col key={idx} style={{ width: `${w}px` }} />
+              ))}
+            </colgroup>
 
-          <tbody>
-            {rows.map((row, rIdx) => {
-              const isHeader = rIdx === 0 && hasHeaderRow;
-              return (
-                <tr
-                  key={rIdx}
-                  className={`group/row transition-colors ${
-                    isHeader
-                      ? 'bg-[#161b22] font-semibold text-slate-100 border-b border-white/[0.08]'
-                      : 'border-b border-white/[0.05] hover:bg-white/[0.02]'
-                  }`}
-                >
-                  {row.map((cell, cIdx) => {
-                    const colAlign = localAlignments[cIdx] || 'left';
-                    const alignClass =
-                      colAlign === 'center'
-                        ? 'text-center'
-                        : colAlign === 'right'
-                        ? 'text-right'
-                        : 'text-left';
+            <tbody>
+              {rows.map((row, rIdx) => {
+                const isHeader = rIdx === 0 && hasHeaderRow;
+                return (
+                  <tr
+                    key={rIdx}
+                    className={`group/row transition-colors ${
+                      isHeader
+                        ? 'bg-[#161b22] font-semibold text-slate-100'
+                        : 'hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    {row.map((cell, cIdx) => {
+                      const colAlign = localAlignments[cIdx] || 'left';
+                      const alignClass =
+                        colAlign === 'center'
+                          ? 'text-center'
+                          : colAlign === 'right'
+                          ? 'text-right'
+                          : 'text-left';
 
-                    return (
-                      <td
-                        key={cIdx}
-                        style={{ width: `${localWidths[cIdx] || defaultColWidth}px` }}
-                        className={`px-3 py-2 align-top border-r border-white/[0.05] last:border-r-0 relative group/cell ${
-                          isHeader ? 'text-slate-200' : 'text-slate-300'
-                        } ${alignClass}`}
-                      >
-                        {/* 表头快捷操作栏 (仅首行悬停展示：对齐切换、左/右插入列、清空列、删除列) */}
-                        {rIdx === 0 && (
-                          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 opacity-0 group-hover/cell:opacity-100 flex items-center gap-0.5 px-1 py-0.5 rounded-md bg-[#1c2128] border border-white/10 shadow-xl z-30 transition-all select-none">
-                            {/* 向左插入列 */}
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleInsertCol(cIdx, 'left')}
-                              className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-sky-300 transition-colors cursor-pointer"
-                              title="在左侧插入新列"
+                      return (
+                        <td
+                          key={cIdx}
+                          style={{ width: `${localWidths[cIdx] || defaultColWidth}px` }}
+                          className={`px-3 py-2 align-top border border-white/[0.08] relative group/cell ${
+                            isHeader ? 'text-slate-200' : 'text-slate-300'
+                          } ${alignClass}`}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              rIdx,
+                              cIdx,
+                            });
+                          }}
+                        >
+                          {/* Notion/飞书式 列分割线吸附插入微手柄 (首行悬停浮现) */}
+                          {rIdx === 0 && (
+                            <div
+                              className="absolute -top-2.5 right-[-8px] z-30 opacity-0 group-hover/cell:opacity-100 transition-opacity select-none"
+                              title="在此列右侧插入新列"
                             >
-                              <ArrowLeft size={10} />
-                            </button>
-
-                            {/* 对齐方式切换 */}
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleToggleColAlignment(cIdx)}
-                              className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
-                              title={`当前对齐: ${
-                                colAlign === 'center'
-                                  ? '居中'
-                                  : colAlign === 'right'
-                                  ? '右对齐'
-                                  : '左对齐'
-                              } (点击切换)`}
-                            >
-                              {colAlign === 'center' ? (
-                                <AlignCenter size={10} />
-                              ) : colAlign === 'right' ? (
-                                <AlignRight size={10} />
-                              ) : (
-                                <AlignLeft size={10} />
-                              )}
-                            </button>
-
-                            {/* 向右插入列 */}
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleInsertCol(cIdx, 'right')}
-                              className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-sky-300 transition-colors cursor-pointer"
-                              title="在右侧插入新列"
-                            >
-                              <ArrowRight size={10} />
-                            </button>
-
-                            {/* 清空列内容 */}
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleClearCol(cIdx)}
-                              className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-orange-300 transition-colors cursor-pointer"
-                              title="清空此列内容"
-                            >
-                              <Eraser size={10} />
-                            </button>
-
-                            {/* 删除列 */}
-                            {colCount > 1 && (
                               <button
                                 type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => handleDeleteCol(cIdx)}
-                                className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                                title="删除此列"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInsertCol(cIdx, 'right');
+                                }}
+                                className="w-4 h-4 rounded-full bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center shadow-lg hover:scale-125 active:scale-95 transition-all cursor-pointer"
                               >
-                                <Trash2 size={10} />
+                                <Plus size={10} strokeWidth={3} />
                               </button>
-                            )}
-                          </div>
-                        )}
+                            </div>
+                          )}
 
-                        {/* 列宽调整交互手柄 (仅第 0 行) */}
-                        {rIdx === 0 && (
-                          <div
-                            onMouseDown={(e) => handleResizeStart(e, cIdx)}
-                            className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-sky-500/40 active:bg-sky-500 z-10 flex items-center justify-center select-none group/resize"
-                            title="左右拖动调整列宽"
-                          >
-                            <div className="w-[1.5px] h-full bg-white/[0.06] group-hover/resize:bg-sky-400 group-active/resize:bg-sky-400 transition-colors" />
-                          </div>
-                        )}
+                          {/* 首列左边缘插入手柄 (向左插入列) */}
+                          {rIdx === 0 && cIdx === 0 && (
+                            <div
+                              className="absolute -top-2.5 left-[-8px] z-30 opacity-0 group-hover/cell:opacity-100 transition-opacity select-none"
+                              title="在最左侧插入新列"
+                            >
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInsertCol(0, 'left');
+                                }}
+                                className="w-4 h-4 rounded-full bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center shadow-lg hover:scale-125 active:scale-95 transition-all cursor-pointer"
+                              >
+                                <Plus size={10} strokeWidth={3} />
+                              </button>
+                            </div>
+                          )}
 
-                        {/* 单元格内容编辑器 */}
-                        <div
-                          data-cell-pos={`${rIdx}-${cIdx}`}
-                          contentEditable={true}
-                          suppressContentEditableWarning={true}
-                          dangerouslySetInnerHTML={{ __html: cell }}
-                          onFocus={() => setActiveCell({ rIdx, cIdx })}
-                          onBlur={(e) => {
-                            handleCellBlur(rIdx, cIdx, e.currentTarget.innerHTML);
-                          }}
-                          onKeyDown={(e) => {
-                            // 1. Enter: 跳转下一行同列 (未按 Shift)
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              if (rIdx < rowCount - 1) {
-                                focusCell(rIdx + 1, cIdx);
-                              } else {
-                                // 最后一行回车：自动追加新行并聚焦
-                                handleInsertRow(rIdx, 'below');
-                                focusCell(rIdx + 1, cIdx);
-                              }
-                              return;
-                            }
-
-                            // 2. Tab: 顺序跳格
-                            if (e.key === 'Tab') {
-                              e.preventDefault();
-                              if (e.shiftKey) {
-                                // 向上一个单元格跳
-                                if (cIdx > 0) {
-                                  focusCell(rIdx, cIdx - 1);
-                                } else if (rIdx > 0) {
-                                  focusCell(rIdx - 1, colCount - 1);
-                                }
-                              } else {
-                                // 向下一个单元格跳
-                                if (cIdx < colCount - 1) {
-                                  focusCell(rIdx, cIdx + 1);
-                                } else if (rIdx < rowCount - 1) {
-                                  focusCell(rIdx + 1, 0);
-                                } else {
-                                  // 表格最后一格 Tab：自动加行
+                          {/* Notion/飞书式 行分割线吸附插入微手柄 (首列悬停浮现) */}
+                          {cIdx === 0 && (
+                            <div
+                              className="absolute -bottom-2 -left-2.5 z-30 opacity-0 group-hover/row:opacity-100 transition-opacity select-none"
+                              title="在此行下方插入新行"
+                            >
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleInsertRow(rIdx, 'below');
-                                  focusCell(rIdx + 1, 0);
+                                }}
+                                className="w-4 h-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg hover:scale-125 active:scale-95 transition-all cursor-pointer"
+                              >
+                                <Plus size={10} strokeWidth={3} />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 首行上方插入手柄 (向上插入行) */}
+                          {rIdx === 0 && cIdx === 0 && (
+                            <div
+                              className="absolute -top-2 -left-2.5 z-30 opacity-0 group-hover/row:opacity-100 transition-opacity select-none"
+                              title="在最上方插入新行"
+                            >
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInsertRow(0, 'above');
+                                }}
+                                className="w-4 h-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg hover:scale-125 active:scale-95 transition-all cursor-pointer"
+                              >
+                                <Plus size={10} strokeWidth={3} />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 表头右上角微型操作指示点 (··· 右键或点击呼出上下文菜单) */}
+                          {rIdx === 0 && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setContextMenu({
+                                  x: rect.left,
+                                  y: rect.bottom + 4,
+                                  rIdx,
+                                  cIdx,
+                                });
+                              }}
+                              className="absolute top-1 right-1.5 p-0.5 rounded opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-all select-none cursor-pointer z-10"
+                              title="列选项与对齐菜单"
+                            >
+                              <MoreHorizontal size={12} />
+                            </button>
+                          )}
+
+                          {/* 列宽调整交互手柄 (仅第 0 行，绝对定位垂直分割线) */}
+                          {rIdx === 0 && (
+                            <div
+                              onMouseDown={(e) => handleResizeStart(e, cIdx)}
+                              className="absolute top-0 right-[-3px] bottom-0 w-[6px] cursor-col-resize hover:bg-sky-500/40 active:bg-sky-500 z-20 select-none group/resize"
+                              title="左右拖动调整列宽"
+                            >
+                              <div className="w-[1px] h-full mx-auto bg-transparent group-hover/resize:bg-sky-400 group-active/resize:bg-sky-400 transition-colors" />
+                            </div>
+                          )}
+
+                          {/* 单元格内容编辑器 (Word 键盘流) */}
+                          <div
+                            data-cell-pos={`${rIdx}-${cIdx}`}
+                            contentEditable={true}
+                            suppressContentEditableWarning={true}
+                            dangerouslySetInnerHTML={{ __html: cell }}
+                            onFocus={() => setActiveCell({ rIdx, cIdx })}
+                            onBlur={(e) => {
+                              handleCellBlur(rIdx, cIdx, e.currentTarget.innerHTML);
+                            }}
+                            onKeyDown={(e) => {
+                              // 1. Enter: 跳转下一行同列 (未按 Shift)
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (rIdx < rowCount - 1) {
+                                  focusCell(rIdx + 1, cIdx);
+                                } else {
+                                  // 最后一行回车：自动追加新行并聚焦
+                                  handleInsertRow(rIdx, 'below');
+                                  focusCell(rIdx + 1, cIdx);
+                                }
+                                return;
+                              }
+
+                              // 2. Tab: 顺序跳格
+                              if (e.key === 'Tab') {
+                                e.preventDefault();
+                                if (e.shiftKey) {
+                                  // 向上一个单元格跳
+                                  if (cIdx > 0) {
+                                    focusCell(rIdx, cIdx - 1);
+                                  } else if (rIdx > 0) {
+                                    focusCell(rIdx - 1, colCount - 1);
+                                  }
+                                } else {
+                                  // 向下一个单元格跳
+                                  if (cIdx < colCount - 1) {
+                                    focusCell(rIdx, cIdx + 1);
+                                  } else if (rIdx < rowCount - 1) {
+                                    focusCell(rIdx + 1, 0);
+                                  } else {
+                                    // 表格最后一格 Tab：自动加行
+                                    handleInsertRow(rIdx, 'below');
+                                    focusCell(rIdx + 1, 0);
+                                  }
                                 }
                               }
-                            }
-                          }}
-                          className={`outline-none focus:outline-none min-h-[1.35rem] leading-[20px] cursor-text select-text break-words rounded px-1 py-0.5 focus:bg-white/[0.04] focus:ring-1 focus:ring-sky-500/40 transition-all ${
-                            isHeader ? 'font-medium' : 'font-normal'
-                          }`}
-                        />
-                      </td>
-                    );
-                  })}
+                            }}
+                            className={`outline-none focus:outline-none min-h-[1.35rem] leading-[20px] cursor-text select-text break-words rounded px-1 py-0.5 focus:bg-white/[0.04] focus:ring-1 focus:ring-sky-500/40 transition-all ${
+                              isHeader ? 'font-medium' : 'font-normal'
+                            }`}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
-                  {/* 行操作侧栏：上下插入行、清空行、删除行 */}
-                  {rowCount > 1 && (
-                    <td className="w-13 px-1 text-center border-b border-transparent select-none">
-                      <div className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center gap-0.5 transition-opacity">
-                        {/* 上方插入行 */}
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertRow(rIdx, 'above')}
-                          className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-emerald-300 transition-colors cursor-pointer"
-                          title="在上方插入新行"
-                        >
-                          <ArrowUp size={10} />
-                        </button>
-
-                        {/* 下方插入行 */}
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertRow(rIdx, 'below')}
-                          className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-emerald-300 transition-colors cursor-pointer"
-                          title="在下方插入新行"
-                        >
-                          <ArrowDown size={10} />
-                        </button>
-
-                        {/* 清空行 */}
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleClearRow(rIdx)}
-                          className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-orange-300 transition-colors cursor-pointer"
-                          title="清空此行内容"
-                        >
-                          <Eraser size={10} />
-                        </button>
-
-                        {/* 删除行 */}
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleDeleteRow(rIdx)}
-                          className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                          title="删除此行"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+          {/* 表格底部极简辅助扩展栏 (Notion 风格微触发) */}
+          <div className="flex items-center gap-3 mt-1.5 px-1 text-[11px] text-slate-500 select-none">
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="flex items-center gap-1 hover:text-emerald-400 transition-colors cursor-pointer py-0.5"
+            >
+              <Plus size={11} />
+              <span>新增行</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleAddCol}
+              className="flex items-center gap-1 hover:text-sky-400 transition-colors cursor-pointer py-0.5"
+            >
+              <Plus size={11} />
+              <span>新增列</span>
+            </button>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-600 text-[10px]">
+              右键单元格或表头呼出完整编辑菜单
+            </span>
+          </div>
+        </div>
       </div>
+
+      {/* 沉浸式暗黑毛玻璃右键上下文菜单 */}
+      {contextMenu && (
+        <TableContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          rIdx={contextMenu.rIdx}
+          cIdx={contextMenu.cIdx}
+          rowCount={rowCount}
+          colCount={colCount}
+          currentAlign={localAlignments[contextMenu.cIdx] || 'left'}
+          onAlignChange={(align) => handleSetColAlignment(contextMenu.cIdx, align)}
+          onInsertRowAbove={() => handleInsertRow(contextMenu.rIdx, 'above')}
+          onInsertRowBelow={() => handleInsertRow(contextMenu.rIdx, 'below')}
+          onInsertColLeft={() => handleInsertCol(contextMenu.cIdx, 'left')}
+          onInsertColRight={() => handleInsertCol(contextMenu.cIdx, 'right')}
+          onClearRow={() => handleClearRow(contextMenu.rIdx)}
+          onClearCol={() => handleClearCol(contextMenu.cIdx)}
+          onDeleteRow={() => handleDeleteRow(contextMenu.rIdx)}
+          onDeleteCol={() => handleDeleteCol(contextMenu.cIdx)}
+          onCopyMarkdown={handleCopyMarkdown}
+          onDeleteTable={onDelete}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };
