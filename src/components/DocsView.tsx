@@ -36,6 +36,7 @@ import {
   X,
   CheckSquare,
   Upload,
+  Copy,
 } from 'lucide-react';
 
 export const DocsView: React.FC = () => {
@@ -410,27 +411,74 @@ export const DocsView: React.FC = () => {
     return [...pItems, ...cItems].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [pages, collections]);
 
-  // 面包屑
-  const breadcrumbPath = useMemo(() => {
-    if (!selectedPage && !selectedCollection) {
-      return '';
-    }
-    const currentPartId =
-      activeType === 'collection' ? selectedCollection?.partitionId : selectedPage?.partitionId;
-    const title =
-      activeType === 'collection'
-        ? selectedCollection?.name || '笔记数据库'
-        : selectedPage?.title || '笔记';
+  // 复制反馈状态
+  const [copiedTopPath, setCopiedTopPath] = useState(false);
+  const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-    if (!currentPartId || currentPartId === 'part_private') {
+  // 递归计算任意文档或数据库的完整层级路径
+  const getItemHierarchyPath = (
+    item: { title?: string; name?: string; partitionId?: string | null },
+    type: 'page' | 'collection' = 'page'
+  ): string => {
+    const title =
+      type === 'collection'
+        ? item.name || '笔记数据库'
+        : item.title || '未命名笔记';
+    const partId = item.partitionId;
+
+    if (!partId || partId === 'part_private') {
       return `私人 / ${title}`;
     }
-    const sub = subPartitions.find((p) => p.id === currentPartId);
-    if (sub) {
-      return `私人 / ${sub.name} / ${title}`;
+
+    const partMap = new Map(partitions.map((p) => [p.id, p]));
+    const hierarchyNames: string[] = [];
+    let curr = partMap.get(partId);
+    const visited = new Set<string>();
+
+    while (curr && !visited.has(curr.id)) {
+      visited.add(curr.id);
+      hierarchyNames.unshift(curr.name);
+      if (!curr.parentId || curr.parentId === 'part_private') {
+        break;
+      }
+      curr = partMap.get(curr.parentId);
     }
-    return `私人 / ${title}`;
-  }, [activeType, selectedPage, selectedCollection, subPartitions]);
+
+    if (hierarchyNames.length === 0) {
+      return `私人 / ${title}`;
+    }
+    return `私人 / ${hierarchyNames.join(' / ')} / ${title}`;
+  };
+
+  // 通用复制路径动作
+  const handleCopyPath = (path: string, itemId?: string) => {
+    if (!path) return;
+    navigator.clipboard.writeText(path);
+    if (itemId) {
+      setCopiedItemId(itemId);
+      setTimeout(() => setCopiedItemId(null), 1800);
+    } else {
+      setCopiedTopPath(true);
+      setTimeout(() => setCopiedTopPath(false), 1800);
+    }
+
+    setToastMessage(`已复制路径: ${path}`);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev?.includes(path) ? null : prev));
+    }, 2200);
+  };
+
+  // 面包屑
+  const breadcrumbPath = useMemo(() => {
+    if (activeType === 'page' && selectedPage) {
+      return getItemHierarchyPath(selectedPage, 'page');
+    }
+    if (activeType === 'collection' && selectedCollection) {
+      return getItemHierarchyPath(selectedCollection, 'collection');
+    }
+    return '';
+  }, [activeType, selectedPage, selectedCollection, partitions]);
 
   return (
     <div className="flex-1 flex h-full w-full bg-[#080b11] text-slate-100 overflow-hidden select-none">
@@ -693,6 +741,16 @@ export const DocsView: React.FC = () => {
                                   </div>
                                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyPath(getItemHierarchyPath(c, 'collection'), c.id);
+                                      }}
+                                      className={`p-0.5 rounded transition-colors ${copiedItemId === c.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
+                                      title="复制数据库路径"
+                                    >
+                                      {copiedItemId === c.id ? <Check size={10} /> : <Copy size={10} />}
+                                    </button>
+                                    <button
                                       onClick={(e) => handleToggleItemFavorite(e, 'collection', c.id)}
                                       className={`p-0.5 ${c.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
                                     >
@@ -746,6 +804,16 @@ export const DocsView: React.FC = () => {
                                   </div>
                                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyPath(getItemHierarchyPath(p, 'page'), p.id);
+                                      }}
+                                      className={`p-0.5 rounded transition-colors ${copiedItemId === p.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
+                                      title="复制文档路径"
+                                    >
+                                      {copiedItemId === p.id ? <Check size={10} /> : <Copy size={10} />}
+                                    </button>
+                                    <button
                                       onClick={(e) => handleToggleItemFavorite(e, 'page', p.id)}
                                       className={`p-0.5 ${p.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
                                     >
@@ -790,6 +858,16 @@ export const DocsView: React.FC = () => {
                             <span className="truncate">{c.name}</span>
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyPath(getItemHierarchyPath(c, 'collection'), c.id);
+                              }}
+                              className={`p-0.5 rounded transition-colors ${copiedItemId === c.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
+                              title="复制数据库路径"
+                            >
+                              {copiedItemId === c.id ? <Check size={11} /> : <Copy size={11} />}
+                            </button>
                             <button
                               onClick={(e) => handleToggleItemFavorite(e, 'collection', c.id)}
                               className={`p-0.5 ${c.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
@@ -849,6 +927,16 @@ export const DocsView: React.FC = () => {
                             <span className="truncate">{p.title || '未命名笔记'}</span>
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyPath(getItemHierarchyPath(p, 'page'), p.id);
+                              }}
+                              className={`p-0.5 rounded transition-colors ${copiedItemId === p.id ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
+                              title="复制文档路径"
+                            >
+                              {copiedItemId === p.id ? <Check size={11} /> : <Copy size={11} />}
+                            </button>
                             <button
                               onClick={(e) => handleToggleItemFavorite(e, 'page', p.id)}
                               className={`p-0.5 ${p.isFavorite ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
@@ -1030,13 +1118,47 @@ export const DocsView: React.FC = () => {
         <div className="h-[49px] border-b border-white/5 px-6 flex items-center justify-between bg-black/25 shrink-0 select-none">
           <div className="flex items-center gap-2 text-xs text-slate-300">
             {breadcrumbPath && (
-              <span className="font-medium text-slate-200 truncate max-w-md">
-                {breadcrumbPath}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleCopyPath(breadcrumbPath)}
+                className="group/breadcrumb flex items-center gap-1.5 px-2 py-1 -ml-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer text-left"
+                title="点击一键复制完整文档路径"
+              >
+                <span className="font-medium text-slate-200 group-hover/breadcrumb:text-sky-300 truncate max-w-md transition-colors">
+                  {breadcrumbPath}
+                </span>
+                <Copy size={11} className="text-slate-500 group-hover/breadcrumb:text-sky-400 transition-colors shrink-0" />
+              </button>
             )}
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-400">
+            {/* 一键复制路径快捷胶囊按钮 */}
+            {activeId && breadcrumbPath && (
+              <button
+                type="button"
+                onClick={() => handleCopyPath(breadcrumbPath)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-all cursor-pointer ${
+                  copiedTopPath
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]'
+                }`}
+                title="复制文档路径到剪贴板"
+              >
+                {copiedTopPath ? (
+                  <>
+                    <Check size={12} className="text-emerald-400" />
+                    <span className="text-emerald-400 font-medium">已复制路径</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={12} className="text-slate-400" />
+                    <span>复制路径</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {activeId && (
               <button
                 onClick={handleToggleCurrentFavorite}
@@ -1126,6 +1248,18 @@ export const DocsView: React.FC = () => {
         currentPartitionId={selectedPage?.partitionId}
         onImportSuccess={handleImportSuccess}
       />
+      {/* 复制路径轻量级浮动 Toast 提示 */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150 pointer-events-none select-none">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-white/10 shadow-2xl backdrop-blur-md text-xs text-slate-200">
+            <Check size={13} className="text-emerald-400 shrink-0" />
+            <span className="font-medium text-emerald-400 shrink-0">已复制路径</span>
+            <span className="text-slate-400 border-l border-white/10 pl-2 max-w-xs truncate">
+              {toastMessage.replace(/^已复制路径:\s*/, '')}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
