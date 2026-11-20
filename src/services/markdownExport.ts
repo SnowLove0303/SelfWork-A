@@ -91,12 +91,19 @@ export function exportBlocksToMarkdown(
         break;
       case 'table': {
         const rows = (block.properties?.rows as string[][]) || [];
+        const alignments = (block.properties?.columnAlignments as string[]) || [];
         if (rows.length > 0) {
           rows.forEach((r, idx) => {
             const cleanRow = r.map((c) => htmlToMarkdown(c).replace(/\|/g, '\\|'));
             lines.push(`| ${cleanRow.join(' | ')} |`);
             if (idx === 0) {
-              lines.push(`| ${Array(r.length).fill('---').join(' | ')} |`);
+              const alignMarkers = Array.from({ length: r.length }, (_, c) => {
+                const a = alignments[c];
+                if (a === 'center') return ':---:';
+                if (a === 'right') return '---:';
+                return ':---';
+              });
+              lines.push(`| ${alignMarkers.join(' | ')} |`);
             }
           });
           lines.push('');

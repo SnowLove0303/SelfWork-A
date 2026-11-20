@@ -2,6 +2,25 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.78] - 2026-11-20
+
+### Feat (文档引擎：高级表格编辑系统、任意位置插入行列、整列对齐与键盘流深度增强)
+
+- **任意位置插入行与插入列 (`table:insert-anywhere` / `TableBlock.tsx`)**：
+  - 响应用户核心功能诉求：“开发下表格的各项编辑功能”；
+  - 彻底打破以往只能在最末尾“追加”的限制，实现 `handleInsertRow(targetIdx, 'above' | 'below')` 与 `handleInsertCol(targetIdx, 'left' | 'right')`；
+  - 表头各单元格与行侧栏提供直观、精准的插入与清空悬停微控制浮条，列宽数组与对齐数组自动顺延。
+- **整列独立对齐调节与 GFM Markdown 输出 (`table:column-alignments` / `TableBlock.tsx` & `markdownExport.ts`)**：
+  - 扩展表格数据属性 `columnAlignments`（支持 `'left'`、`'center'`、`'right'`）；
+  - 表头各列提供一键循环切换对齐胶囊（`左对齐 -> 居中 -> 右对齐 -> 左对齐`），单元格文本即时响应对齐；
+  - 升级复制 MD 与物理导出服务，按每列对齐属性自动输出合法的 GFM `:---`、`:---:`、`---:` 语法标记。
+- **单元格键盘流人机工程深度优化 (`table:ergonomic-keyboard`)**：
+  - `Enter` 键：同列快速下移并聚焦下一行单元格；若在最后一行回车，自动追加新行并无缝聚焦，实现类似 Excel/Notion 的双手不离键盘高速录入；
+  - `Shift + Enter`：在单元格内部换行；
+  - `Tab` / `Shift + Tab`：流畅正向与逆向跳格。
+- **行列清空辅助功能 (`table:clear-actions`)**：
+  - 表头与行侧栏增设清空按钮（`Eraser`），支持一键清空整行或整列文本，同时保留表格几何结构。
+
 ## [0.1.77] - 2026-11-20
 
 ### Fix (文档引擎：Notion 扁平汇总残屑段落物理剔除、表格双倍克隆与竖线切裂深度自愈)
