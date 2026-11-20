@@ -1242,9 +1242,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             onContextMenu={handleContextMenu}
             data-placeholder={getPlaceholder()}
             style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
-            className={`flex-1 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-base leading-relaxed break-words ${
-              isCrossSelected ? 'bg-sky-500/20 text-slate-100 rounded-sm px-1 -mx-1 transition-colors duration-75' : ''
-            }`}
+            className="flex-1 outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text text-base leading-relaxed break-words"
           />
         </div>
 
@@ -2084,10 +2082,6 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                 style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
                 className={`w-full outline-none focus:outline-none min-h-[1.5rem] cursor-text select-text ${getBlockStyle()} break-words ${
                   isChecked && block.blockType === 'todo' ? 'line-through text-slate-500' : ''
-                } ${
-                  isCrossSelected
-                    ? 'bg-sky-500/20 text-slate-100 rounded-sm px-1 -mx-1 transition-colors duration-75'
-                    : ''
                 }`}
               />
             )}

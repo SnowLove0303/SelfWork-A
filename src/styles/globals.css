@@ -364,3 +364,11 @@ body {
   background-color: rgba(56, 189, 248, 0.28) !important;
   color: #f8fafc !important;
 }
+
+/* ==========================================================================
+   W3C 标准 CSS Custom Highlight 跨段字符级高亮规则 (零延迟硬件加速)
+   ========================================================================== */
+::highlight(word-selection) {
+  background-color: rgba(56, 189, 248, 0.28) !important;
+  color: #f8fafc !important;
+}

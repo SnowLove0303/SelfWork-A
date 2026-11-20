@@ -119,6 +119,24 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const dragAnchorBlockIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // W3C 标准 CSS Custom Highlight 字符级零延迟跨段选区引用
+  const activeSelectionRangeRef = useRef<Range | null>(null);
+  const anchorCaretRef = useRef<{ node: Node; offset: number; blockId: string } | null>(null);
+  const isDraggingSelectionRef = useRef(false);
+
+  // 彻底清除字符级选区与高亮
+  const clearWordSelection = useCallback(() => {
+    activeSelectionRangeRef.current = null;
+    anchorCaretRef.current = null;
+    isDraggingSelectionRef.current = false;
+    isMouseDownRef.current = false;
+    dragAnchorBlockIdRef.current = null;
+    if (typeof CSS !== 'undefined' && (CSS as any).highlights) {
+      (CSS as any).highlights.delete('word-selection');
+    }
+    setCrossSelectedBlockIds((prev) => (prev.size > 0 ? new Set() : prev));
+  }, []);
+
   // 模板库与版本历史状态
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
@@ -464,47 +482,101 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     return visible;
   }, [outlineHeadingsWithMeta, collapsedHeadingIds]);
 
-  // 3.1 跨块连续拖选鼠标手势协同器
+  // 3.1 W3C CSS Custom Highlight 字符级高精零延迟划选引擎 (硬件加速，零 React 重绘)
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!isMouseDownRef.current || !dragAnchorBlockIdRef.current) return;
+      if (!isMouseDownRef.current || !isDraggingSelectionRef.current || !anchorCaretRef.current) return;
       if ((e.buttons & 1) === 0) {
         isMouseDownRef.current = false;
-        dragAnchorBlockIdRef.current = null;
+        isDraggingSelectionRef.current = false;
         return;
       }
 
-      const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-      if (!target) return;
-      const blockEl = target.closest('[id^="block-"]') as HTMLElement | null;
-      if (!blockEl) return;
-      const currentBlockId = blockEl.id.replace('block-', '');
-      const anchorId = dragAnchorBlockIdRef.current;
+      // 获取当前鼠标指针命中的精准字符节点与偏移量 (毫秒级硬件拾取)
+      let focusNode: Node | null = null;
+      let focusOffset = 0;
+      if (document.caretRangeFromPoint) {
+        const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+        if (r) {
+          focusNode = r.startContainer;
+          focusOffset = r.startOffset;
+        }
+      } else if ((document as any).caretPositionFromPoint) {
+        const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          focusNode = pos.offsetNode;
+          focusOffset = pos.offset;
+        }
+      }
 
-      if (currentBlockId === anchorId) {
-        if (crossSelectedBlockIds.size > 1) {
-          setCrossSelectedBlockIds(new Set());
+      if (!focusNode) return;
+
+      const anchor = anchorCaretRef.current;
+      const anchorBlockEl = (anchor.node instanceof HTMLElement ? anchor.node : anchor.node.parentElement)?.closest('[id^="block-"]');
+      const currentBlockEl = (focusNode instanceof HTMLElement ? focusNode : focusNode.parentElement)?.closest('[id^="block-"]');
+
+      // 同一单块内：允许原生 selection 自由工作，撤销跨块自定义高亮
+      if (anchorBlockEl && currentBlockEl && anchorBlockEl === currentBlockEl) {
+        if (activeSelectionRangeRef.current) {
+          activeSelectionRangeRef.current = null;
+          if (typeof CSS !== 'undefined' && (CSS as any).highlights) {
+            (CSS as any).highlights.delete('word-selection');
+          }
         }
         return;
       }
 
-      const anchorIndex = blocks.findIndex((b) => b.id === anchorId);
-      const currentIndex = blocks.findIndex((b) => b.id === currentBlockId);
-      if (anchorIndex === -1 || currentIndex === -1) return;
-
-      const start = Math.min(anchorIndex, currentIndex);
-      const end = Math.max(anchorIndex, currentIndex);
-
-      const selectedIds = new Set<string>();
-      for (let i = start; i <= end; i++) {
-        selectedIds.add(blocks[i].id);
+      // 跨块划选：构建真实字符级精准 DOM Range
+      const range = new Range();
+      const pos = anchor.node.compareDocumentPosition(focusNode);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING || (anchor.node === focusNode && anchor.offset <= focusOffset)) {
+        // 正向 (从上到下)：从 anchor 到 focus
+        range.setStart(anchor.node, anchor.offset);
+        range.setEnd(focusNode, focusOffset);
+      } else {
+        // 反向 (从下到上)：从 focus 到 anchor
+        range.setStart(focusNode, focusOffset);
+        range.setEnd(anchor.node, anchor.offset);
       }
-      setCrossSelectedBlockIds(selectedIds);
+
+      activeSelectionRangeRef.current = range;
+
+      // 零延迟硬件加速着色：直接操作 CSS.highlights，完全不触发 React 重绘与 DOM 变更！
+      if (typeof CSS !== 'undefined' && (CSS as any).highlights) {
+        const HighlightCtor = (window as any).Highlight || (globalThis as any).Highlight;
+        if (HighlightCtor) {
+          (CSS as any).highlights.set('word-selection', new HighlightCtor(range));
+        }
+      }
     };
 
     const handleGlobalMouseUp = () => {
       isMouseDownRef.current = false;
-      dragAnchorBlockIdRef.current = null;
+      isDraggingSelectionRef.current = false;
+
+      // 松开鼠标时，若存在跨块 Range，仅单次提取块 ID 集合用于后续 Backspace 批量删除
+      if (activeSelectionRangeRef.current && !activeSelectionRangeRef.current.collapsed) {
+        const range = activeSelectionRangeRef.current;
+        const startBlock = (range.startContainer instanceof HTMLElement ? range.startContainer : range.startContainer.parentElement)?.closest('[id^="block-"]');
+        const endBlock = (range.endContainer instanceof HTMLElement ? range.endContainer : range.endContainer.parentElement)?.closest('[id^="block-"]');
+
+        if (startBlock && endBlock && startBlock !== endBlock) {
+          const startId = startBlock.id.replace('block-', '');
+          const endId = endBlock.id.replace('block-', '');
+          const startIdx = blocks.findIndex((b) => b.id === startId);
+          const endIdx = blocks.findIndex((b) => b.id === endId);
+          if (startIdx !== -1 && endIdx !== -1) {
+            const minIdx = Math.min(startIdx, endIdx);
+            const maxIdx = Math.max(startIdx, endIdx);
+            const ids = new Set<string>();
+            for (let i = minIdx; i <= maxIdx; i++) {
+              ids.add(blocks[i].id);
+            }
+            setCrossSelectedBlockIds(ids);
+            return;
+          }
+        }
+      }
     };
 
     window.addEventListener('mousemove', handleGlobalMouseMove);
@@ -513,11 +585,21 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [blocks, crossSelectedBlockIds.size]);
+  }, [blocks]);
 
-  // 3.2 跨块批量复制接管 (Ctrl+C / Cmd+C)
+  // 3.2 跨块批量复制接管 (Ctrl+C / Cmd+C) - 字符级所见即所得
   useEffect(() => {
     const handleCopy = (e: ClipboardEvent) => {
+      // 优先从活跃的字符级精确 Range 中提取文本 (所见即所得，绝不复制多余字符)
+      if (activeSelectionRangeRef.current && !activeSelectionRangeRef.current.collapsed) {
+        const text = activeSelectionRangeRef.current.toString();
+        if (text) {
+          e.preventDefault();
+          e.clipboardData?.setData('text/plain', text);
+          return;
+        }
+      }
+
       if (crossSelectedBlockIds.size <= 1) return;
       const selectedBlocks = blocks.filter((b) => crossSelectedBlockIds.has(b.id));
       if (selectedBlocks.length === 0) return;
@@ -572,7 +654,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         setCrossSelectedBlockIds(new Set());
         setFocusedBlockId(newBlock.id);
       } else if (e.key === 'Escape') {
-        setCrossSelectedBlockIds(new Set());
+        clearWordSelection();
       }
     };
 
@@ -1250,9 +1332,40 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 const blockEl = target.closest('[id^="block-"]') as HTMLElement | null;
                 if (blockEl) {
                   isMouseDownRef.current = true;
-                  dragAnchorBlockIdRef.current = blockEl.id.replace('block-', '');
-                } else if (crossSelectedBlockIds.size > 0) {
-                  setCrossSelectedBlockIds(new Set());
+                  const bId = blockEl.id.replace('block-', '');
+                  dragAnchorBlockIdRef.current = bId;
+
+                  // 捕获精确字符节点与偏移量 (caretRangeFromPoint)
+                  let caretNode: Node | null = null;
+                  let caretOffset = 0;
+                  if (document.caretRangeFromPoint) {
+                    const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+                    if (r) {
+                      caretNode = r.startContainer;
+                      caretOffset = r.startOffset;
+                    }
+                  } else if ((document as any).caretPositionFromPoint) {
+                    const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
+                    if (pos) {
+                      caretNode = pos.offsetNode;
+                      caretOffset = pos.offset;
+                    }
+                  }
+
+                  if (caretNode) {
+                    anchorCaretRef.current = { node: caretNode, offset: caretOffset, blockId: bId };
+                  } else {
+                    anchorCaretRef.current = null;
+                  }
+                  isDraggingSelectionRef.current = true;
+
+                  // 清除旧的跨段高亮
+                  if (typeof CSS !== 'undefined' && (CSS as any).highlights) {
+                    (CSS as any).highlights.delete('word-selection');
+                  }
+                  activeSelectionRangeRef.current = null;
+                } else {
+                  clearWordSelection();
                 }
               }}
             >
