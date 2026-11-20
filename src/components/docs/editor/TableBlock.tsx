@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DocBlock } from '../../../types/docs.ts';
 import { Table, Plus, Trash2, Check, Copy, ToggleLeft, ToggleRight } from 'lucide-react';
 
@@ -35,9 +35,47 @@ export const TableBlock: React.FC<TableBlockProps> = ({
   const colCount = rows[0]?.length || 1;
   const rowCount = rows.length;
 
+  // 1. 每列像素宽度状态治理 (默认基准 160px)
+  const defaultColWidth = 160;
+  const savedWidths = (block.properties?.columnWidths as number[]) || [];
+  const initialWidths = Array.from(
+    { length: colCount },
+    (_, idx) => savedWidths[idx] || defaultColWidth
+  );
+
+  const [localWidths, setLocalWidths] = useState<number[]>(initialWidths);
+
+  // 同步外部 properties.columnWidths 变更
+  useEffect(() => {
+    const nextSaved = (block.properties?.columnWidths as number[]) || [];
+    setLocalWidths(
+      Array.from({ length: colCount }, (_, idx) => nextSaved[idx] || defaultColWidth)
+    );
+  }, [block.properties?.columnWidths, colCount]);
+
+  // 拖拽手柄状态引用
+  const resizingColRef = useRef<{
+    colIndex: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
   // 更新二维数组并同步
-  const updateRows = (nextRows: string[][], saveHistory = true) => {
-    onUpdate(block.content || '', 'table', { ...block.properties, rows: nextRows }, saveHistory);
+  const updateRows = (
+    nextRows: string[][],
+    nextWidths?: number[],
+    saveHistory = true
+  ) => {
+    onUpdate(
+      block.content || '',
+      'table',
+      {
+        ...block.properties,
+        rows: nextRows,
+        columnWidths: nextWidths || localWidths,
+      },
+      saveHistory
+    );
   };
 
   // 修改单个单元格
@@ -46,40 +84,111 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     const next = rows.map((row, r) =>
       r === rIdx ? row.map((cell, c) => (c === cIdx ? html : cell)) : [...row]
     );
-    updateRows(next, false);
+    updateRows(next, undefined, false);
   };
 
   // 增加新行
   const handleAddRow = () => {
     const newRow = Array(colCount).fill('');
-    updateRows([...rows, newRow], true);
+    updateRows([...rows, newRow], undefined, true);
   };
 
   // 增加新列
   const handleAddCol = () => {
-    const next = rows.map((r, idx) => [...r, idx === 0 && hasHeaderRow ? `列 ${colCount + 1}` : '']);
-    updateRows(next, true);
+    const next = rows.map((r, idx) => [
+      ...r,
+      idx === 0 && hasHeaderRow ? `列 ${colCount + 1}` : '',
+    ]);
+    const nextWidths = [...localWidths, defaultColWidth];
+    setLocalWidths(nextWidths);
+    updateRows(next, nextWidths, true);
   };
 
   // 删除指定行
   const handleDeleteRow = (rIdx: number) => {
     if (rowCount <= 1) return;
     const next = rows.filter((_, idx) => idx !== rIdx);
-    updateRows(next, true);
+    updateRows(next, undefined, true);
   };
 
   // 删除指定列
   const handleDeleteCol = (cIdx: number) => {
     if (colCount <= 1) return;
     const next = rows.map((r) => r.filter((_, idx) => idx !== cIdx));
-    updateRows(next, true);
+    const nextWidths = localWidths.filter((_, idx) => idx !== cIdx);
+    setLocalWidths(nextWidths);
+    updateRows(next, nextWidths, true);
+  };
+
+  // 2. 拖拽调整列宽手柄事件流
+  const handleResizeStart = (e: React.MouseEvent, cIdx: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startWidth = localWidths[cIdx] || defaultColWidth;
+    resizingColRef.current = { colIndex: cIdx, startX, startWidth };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingColRef.current) return;
+      const { colIndex, startX: sX, startWidth: sW } = resizingColRef.current;
+      const delta = moveEvent.clientX - sX;
+      const newWidth = Math.max(60, sW + delta);
+
+      setLocalWidths((prev) => {
+        const updated = [...prev];
+        updated[colIndex] = newWidth;
+        return updated;
+      });
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      if (resizingColRef.current) {
+        const { colIndex, startX: sX, startWidth: sW } = resizingColRef.current;
+        const delta = upEvent.clientX - sX;
+        const finalWidth = Math.max(60, sW + delta);
+
+        setLocalWidths((prev) => {
+          const updated = [...prev];
+          updated[colIndex] = finalWidth;
+          onUpdate(
+            block.content || '',
+            'table',
+            {
+              ...block.properties,
+              columnWidths: updated,
+            },
+            true
+          );
+          return updated;
+        });
+
+        resizingColRef.current = null;
+      }
+
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   // 一键复制为标准 Markdown 表格
   const handleCopyMarkdown = () => {
     const mdLines: string[] = [];
     rows.forEach((r, idx) => {
-      const cleanRow = r.map((cell) => cell.replace(/<[^>]+>/g, '').replace(/\|/g, '\\|').trim());
+      const cleanRow = r.map((cell) =>
+        cell
+          .replace(/<[^>]+>/g, '')
+          .replace(/\|/g, '\\|')
+          .trim()
+      );
       mdLines.push(`| ${cleanRow.join(' | ')} |`);
       if (idx === 0) {
         mdLines.push(`| ${Array(colCount).fill('---').join(' | ')} |`);
@@ -89,6 +198,10 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
+
+  // 计算表格总有效宽度
+  const totalTableWidth =
+    localWidths.reduce((sum, w) => sum + w, 0) + (rowCount > 1 ? 36 : 0);
 
   return (
     <div
@@ -190,9 +303,24 @@ export const TableBlock: React.FC<TableBlockProps> = ({
         </div>
       </div>
 
-      {/* 表格二维呈现网格 Canvas */}
-      <div className="overflow-x-auto no-scrollbar">
-        <table className="w-full border-collapse text-left font-sans text-[13px]">
+      {/* 表格二维呈现网格 Canvas（支持平滑水平拖动与滚动） */}
+      <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 scrollbar-track-transparent select-text">
+        <table
+          className="border-collapse text-left font-sans text-[13px]"
+          style={{
+            tableLayout: 'fixed',
+            width: `${Math.max(totalTableWidth, 100)}px`,
+            minWidth: '100%',
+          }}
+        >
+          {/* 列宽锁定 colgroup */}
+          <colgroup>
+            {localWidths.map((w, idx) => (
+              <col key={idx} style={{ width: `${w}px` }} />
+            ))}
+            {rowCount > 1 && <col style={{ width: '36px' }} />}
+          </colgroup>
+
           <tbody>
             {rows.map((row, rIdx) => {
               const isHeader = rIdx === 0 && hasHeaderRow;
@@ -208,17 +336,29 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                   {row.map((cell, cIdx) => (
                     <td
                       key={cIdx}
-                      className={`px-3.5 py-2.5 min-w-[120px] align-top border-r border-white/[0.05] last:border-r-0 relative group/cell ${
+                      style={{ width: `${localWidths[cIdx] || defaultColWidth}px` }}
+                      className={`px-3 py-2 align-top border-r border-white/[0.05] last:border-r-0 relative group/cell ${
                         isHeader ? 'text-slate-200' : 'text-slate-300'
                       }`}
                     >
-                      {/* 单元格微型行列删除浮钮（仅悬停且行列数 > 1 时显示） */}
+                      {/* 列宽调整交互手柄 (仅在表头或第0行渲染) */}
+                      {rIdx === 0 && (
+                        <div
+                          onMouseDown={(e) => handleResizeStart(e, cIdx)}
+                          className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-sky-500/40 active:bg-sky-500 z-10 flex items-center justify-center select-none group/resize"
+                          title="左右拖动调整列宽"
+                        >
+                          <div className="w-[1.5px] h-full bg-white/[0.06] group-hover/resize:bg-sky-400 group-active/resize:bg-sky-400 transition-colors" />
+                        </div>
+                      )}
+
+                      {/* 单元格微型行列删除浮钮（仅悬停且列数 > 1 时显示） */}
                       {rIdx === 0 && colCount > 1 && (
                         <button
                           type="button"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleDeleteCol(cIdx)}
-                          className="absolute -top-1.5 right-1.5 opacity-0 group-hover/cell:opacity-100 p-0.5 rounded bg-slate-800 text-slate-500 hover:text-rose-400 border border-white/10 text-[9px] transition-all cursor-pointer shadow-md"
+                          className="absolute -top-1.5 right-2 opacity-0 group-hover/cell:opacity-100 p-0.5 rounded bg-slate-800 text-slate-500 hover:text-rose-400 border border-white/10 text-[9px] transition-all cursor-pointer shadow-md z-20"
                           title="删除此列"
                         >
                           <Trash2 size={9} />
@@ -229,13 +369,17 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                         contentEditable={true}
                         suppressContentEditableWarning={true}
                         dangerouslySetInnerHTML={{ __html: cell }}
-                        onBlur={(e) => handleCellBlur(rIdx, cIdx, e.currentTarget.innerHTML)}
+                        onBlur={(e) =>
+                          handleCellBlur(rIdx, cIdx, e.currentTarget.innerHTML)
+                        }
                         onKeyDown={(e) => {
                           if (e.key === 'Tab') {
                             e.preventDefault();
                             // Tab 键智能跳至下一格
                             const inputs = Array.from(
-                              document.querySelectorAll(`[id="block-${block.id}"] [contenteditable="true"]`)
+                              document.querySelectorAll(
+                                `[id="block-${block.id}"] [contenteditable="true"]`
+                              )
                             ) as HTMLElement[];
                             const currentIndex = inputs.indexOf(e.currentTarget);
                             if (e.shiftKey) {
@@ -248,7 +392,9 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                                 handleAddRow();
                                 setTimeout(() => {
                                   const refreshed = Array.from(
-                                    document.querySelectorAll(`[id="block-${block.id}"] [contenteditable="true"]`)
+                                    document.querySelectorAll(
+                                      `[id="block-${block.id}"] [contenteditable="true"]`
+                                    )
                                   ) as HTMLElement[];
                                   refreshed[currentIndex + 1]?.focus();
                                 }, 50);
@@ -256,7 +402,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             }
                           }
                         }}
-                        className={`outline-none focus:outline-none min-h-[1.35rem] leading-[20px] cursor-text select-text break-words rounded px-1.5 py-0.5 focus:bg-white/[0.04] focus:ring-1 focus:ring-sky-500/40 transition-all ${
+                        className={`outline-none focus:outline-none min-h-[1.35rem] leading-[20px] cursor-text select-text break-words rounded px-1 py-0.5 focus:bg-white/[0.04] focus:ring-1 focus:ring-sky-500/40 transition-all ${
                           isHeader ? 'font-medium' : 'font-normal'
                         }`}
                       />
@@ -264,7 +410,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                   ))}
                   {/* 行删除微按钮 */}
                   {rowCount > 1 && (
-                    <td className="w-8 px-1 text-center border-b border-transparent">
+                    <td className="w-9 px-1 text-center border-b border-transparent">
                       <button
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}

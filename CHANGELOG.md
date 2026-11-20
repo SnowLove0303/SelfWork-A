@@ -2,6 +2,37 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.74] - 2026-11-20
+
+### Feat (文档引擎：外部输入语义净化、Notion 网页噪点剥离与纯净多块分裂解析)
+
+- **前置语义净化器与 Notion 平台外壳剥离 (`parser:sanitize-import` / `markdownImport.ts`)**：
+  - 响应用户关于外部导入/复制时混入“废纸篓私人 / 02.3-02.5...”、“·1399 个块”、“目录大纲(190)”、“添加封面”等平台噪点的核心反馈；
+  - 引入 `sanitizeImportText` 前置语义净化器，自动剥离 Notion 顶栏、元数据、面包屑及操作按钮；
+  - 自动提取并识别页面图标（如 `🐍`）与纯净标题，避免重复拼接（`TitleTitle`）；
+  - 深度清洗代码块头部复合按钮与连续行号伪文本（`Python不换行行号复制123456# ...`），提取纯净语言标签并还原代码首行；
+  - 清除代码输出后紧随的行号残屑（`\n3注意` -> `\n注意`），并自动将粘连的输出代码与中文解释分离为独立代码块与段落。
+
+### Feat (文档引擎：表格转义安全切分与克隆表头去重)
+
+- **表格负向后行断言切分与防畸变 (`table:safe-split-and-dedup` / `markdownImport.ts`)**：
+  - 采用负向后行断言正则表达式 `/(?<!\\)\|/` 安全切分单元格，保护内联代码与转义竖线（`\|`）；
+  - 引入 `normalizeTableRows` 表格列数自适应对齐与奇偶克隆表头去重算法，彻底终结 `| 运算 | 运算 | Python 写法 | Python 写法 |` 的列数爆炸与表头递归克隆畸变。
+
+### Feat (文档引擎：表格自由拖拽调整列宽与自适应横向平滑滚动)
+
+- **现代化表格列宽拖拽交互与持久化 (`table:column-resizing` / `TableBlock.tsx`)**：
+  - 在 `TableBlock.tsx` 中支持 `columnWidths: number[]` 状态管理与持久化（默认列宽基准 160px，下限 60px）；
+  - 采用 `<colgroup>` 与 `table-layout: fixed` 严格锁定列宽，添加加列/删列时的列宽自动联动；
+  - 表头单元格右侧边缘渲染交互把手（`cursor-col-resize`），绑定全局鼠标拖拽事件流，实现零卡顿自由拉伸；
+  - 表格容器启用自适应平滑横向滚动条（`custom-scrollbar`），长表与多列表格支持流畅横向拖动查阅。
+
+### Feat (文档引擎：编辑器智能粘贴接管与 Notion Block 规范对齐)
+
+- **智能多块分裂注入与纯文本防污染 (`editor:smart-paste-split` / `BlockItem.tsx` & `BlockEditor.tsx`)**：
+  - 在 `BlockItem.tsx` 与 `BlockEditor.tsx` 中打通多块结构化粘贴链路；
+  - 用户在普通块中粘贴包含多段落、代码块或表格的外部文本时，自动拦截原生杂乱 HTML 注入，通过净化解析器转化为独立 DocBlocks 并顺次注入下方；单行文本保持纯文本注入，防止外部脏样式污染。
+
 ## [0.1.73] - 2026-11-20
 
 ### Feat (文档引擎：选区单一权威归一化与消除双重高亮叠加)

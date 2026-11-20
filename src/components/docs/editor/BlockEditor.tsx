@@ -776,6 +776,31 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     await saveDocBlocks(page.id, nextBlocks);
   };
 
+  // 5.1 在指定块下方批量插入一组新块（智能粘贴或多块导入）
+  const handleInsertBlocks = async (currentBlockId: string, newBlocks: DocBlock[]) => {
+    if (newBlocks.length === 0) return;
+    pushUndo(blocksRef.current);
+    const idx = blocksRef.current.findIndex((b) => b.id === currentBlockId);
+    const insertIdx = idx !== -1 ? idx + 1 : blocksRef.current.length;
+
+    const nextBlocks = [...blocksRef.current];
+    nextBlocks.splice(insertIdx, 0, ...newBlocks);
+
+    // 重新规整序号
+    nextBlocks.forEach((b, i) => {
+      b.sortOrder = i + 1;
+    });
+
+    setBlocks(nextBlocks);
+    blocksRef.current = nextBlocks;
+    const lastInsertedId = newBlocks[newBlocks.length - 1]?.id;
+    if (lastInsertedId) {
+      setFocusedBlockId(lastInsertedId);
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    await saveDocBlocks(page.id, nextBlocks);
+  };
+
   // 6. 删除块
   const handleDeleteBlock = async (blockId: string) => {
     pushUndo(blocksRef.current);
@@ -1401,6 +1426,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     }
                     onDelete={() => handleDeleteBlock(block.id)}
                     onInsertBelow={(bType) => handleInsertBelow(block.id, bType)}
+                    onInsertBlocks={(newBlocks) => handleInsertBlocks(block.id, newBlocks)}
                     onFocusPrev={() => handleFocusPrev(block.id)}
                     onFocusNext={() => handleFocusNext(block.id)}
                     pages={pages}

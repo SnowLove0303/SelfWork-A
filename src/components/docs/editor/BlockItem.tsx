@@ -38,6 +38,7 @@ import { TableOfContentsBlock } from './TableOfContentsBlock.tsx';
 import { BlockToggle } from './BlockToggle.tsx';
 import { MediaEmbedBlock } from './MediaEmbedBlock.tsx';
 import { SyncedBlock } from './SyncedBlock.tsx';
+import { parseMarkdownToBlocks } from '../../../services/markdownImport.ts';
 
 export const SUPPORTED_CODE_LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -68,6 +69,8 @@ interface BlockItemProps {
   ) => void;
   onDelete: () => void;
   onInsertBelow: (blockType?: BlockType) => void;
+  /** 批量注入新块回调（智能粘贴多行结构化块时使用） */
+  onInsertBlocks?: (newBlocks: DocBlock[]) => void;
   onFocusPrev: () => void;
   onFocusNext: () => void;
   autoFocus?: boolean;
@@ -152,6 +155,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
   onUpdate,
   onDelete,
   onInsertBelow,
+  onInsertBlocks,
   onFocusPrev,
   onFocusNext,
   autoFocus,
@@ -414,7 +418,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
     onUpdate(rawText);
   };
 
-  // 代码块粘贴拦截：防止外部脏 HTML 污染，实现纯文本平滑注入与无损染色
+  // 智能粘贴拦截：代码块纯文本防污染染色，普通块支持 Markdown 与 Notion 结构化多块分裂注入
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     if (block.blockType === 'code') {
       e.preventDefault();
@@ -434,7 +438,58 @@ export const BlockItem: React.FC<BlockItemProps> = ({
       const lines = Math.max(1, newText.split('\n').length);
       setLineCount(lines);
       onUpdate(newText);
+      return;
     }
+
+    const rawText = e.clipboardData.getData('text/plain');
+    if (!rawText) return;
+
+    // 判断粘贴内容是否具有结构化特征（含换行、代码块、标题、表格、列表等）
+    const hasStructure =
+      rawText.includes('\n') ||
+      rawText.startsWith('#') ||
+      rawText.startsWith('```') ||
+      rawText.startsWith('|') ||
+      rawText.startsWith('>') ||
+      rawText.startsWith('- ') ||
+      rawText.startsWith('* ') ||
+      rawText.startsWith('1. ') ||
+      /^(?:废纸篓|私人|工作区)/.test(rawText) ||
+      /数据表格\s*\d+\s*列/.test(rawText) ||
+      /(?:[a-zA-Z0-9_#+]+)?(?:不换行|换行)?(?:行号)?复制\d+/.test(rawText);
+
+    if (hasStructure && onInsertBlocks) {
+      e.preventDefault();
+      const parsed = parseMarkdownToBlocks(rawText, block.pageId, '粘贴内容');
+      if (parsed.blocks.length > 0) {
+        const [firstBlock, ...restBlocks] = parsed.blocks;
+        const currentContent = editorRef.current?.innerText?.trim() || '';
+        if (!currentContent) {
+          // 当前块为空，直接用 firstBlock 替换当前块
+          onUpdate(
+            firstBlock.content,
+            firstBlock.blockType,
+            firstBlock.properties,
+            true
+          );
+          if (editorRef.current) {
+            editorRef.current.innerHTML = firstBlock.content;
+          }
+        } else {
+          // 当前块已有内容，将解析的所有块顺次插入到下方
+          restBlocks.unshift(firstBlock);
+        }
+
+        if (restBlocks.length > 0) {
+          onInsertBlocks(restBlocks);
+        }
+        return;
+      }
+    }
+
+    // 单行普通文本：防止外部带样式的脏 HTML 注入，插入纯文本
+    e.preventDefault();
+    document.execCommand('insertText', false, rawText);
   };
 
   // 4. 处理文本输入与行首 Markdown 语法糖
@@ -1239,6 +1294,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             onKeyDown={handleKeyDown}
             onKeyUp={checkSelection}
             onMouseUp={handleMouseUp}
+            onPaste={handlePaste}
             onContextMenu={handleContextMenu}
             data-placeholder={getPlaceholder()}
             style={{ textAlign: (block.format?.textAlign as any) || 'left' }}
@@ -2075,6 +2131,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({
                 onKeyDown={handleKeyDown}
                 onKeyUp={checkSelection}
                 onMouseUp={handleMouseUp}
+                onPaste={handlePaste}
                 onContextMenu={handleContextMenu}
                 data-placeholder={getPlaceholder()}
                 style={{ textAlign: (block.format?.textAlign as any) || 'left' }}

@@ -76,7 +76,7 @@ export const DocBatchImporter: React.FC<DocBatchImporterProps> = ({
       const fallbackTitle = name.replace(/\.(md|markdown)$/i, '');
       const pageId = `page_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-      const { title, blocks } = parseMarkdownToBlocks(
+      const { title, icon, blocks } = parseMarkdownToBlocks(
         rawText,
         pageId,
         fallbackTitle
@@ -86,7 +86,7 @@ export const DocBatchImporter: React.FC<DocBatchImporterProps> = ({
         id: pageId,
         partitionId: targetPartitionId,
         title: title || fallbackTitle,
-        icon: '📄',
+        icon: icon || '📄',
         isFavorite: false,
         isArchived: false,
         createdAt: Date.now(),
