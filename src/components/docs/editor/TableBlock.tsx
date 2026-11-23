@@ -190,8 +190,12 @@ interface TableContextMenuProps {
   currentShading?: string;
   isRangeActive: boolean;
   selectedCellCount: number;
+  hasHeaderRow: boolean;
+  hasBandedRows: boolean;
   onNineGridAlignChange: (h: TableColAlign, v: TableVAlign, id: TableNineGridAlign) => void;
   onShadingChange: (color: string) => void;
+  onToggleHeaderRow: () => void;
+  onToggleBandedRows: () => void;
   onInsertRowAbove: () => void;
   onInsertRowBelow: () => void;
   onInsertColLeft: () => void;
@@ -225,8 +229,12 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   currentShading,
   isRangeActive,
   selectedCellCount,
+  hasHeaderRow,
+  hasBandedRows,
   onNineGridAlignChange,
   onShadingChange,
+  onToggleHeaderRow,
+  onToggleBandedRows,
   onInsertRowAbove,
   onInsertRowBelow,
   onInsertColLeft,
@@ -245,7 +253,7 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   onClose,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [activeSubmenu, setActiveSubmenu] = useState<'insert' | 'delete' | 'align' | 'shading' | null>(null);
+  const [activeSubmenu, setActiveSubmenu] = useState<'insert' | 'delete' | 'style' | 'align' | 'shading' | null>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -267,13 +275,14 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
   }, [onClose]);
 
   const menuWidth = 224;
-  const menuHeight = isRangeActive ? 430 : 380;
+  const menuHeight = isRangeActive ? 460 : 410;
   const clampedX = Math.min(x, window.innerWidth - menuWidth - 20);
   const clampedY = Math.min(y, window.innerHeight - menuHeight - 20);
 
   return (
     <div
       ref={menuRef}
+      data-table-popup="true"
       style={{ left: `${Math.max(8, clampedX)}px`, top: `${Math.max(8, clampedY)}px` }}
       className="fixed z-[999995] w-[224px] rounded-2xl bg-[#161b22]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95 duration-100"
       onMouseDown={(e) => e.stopPropagation()}
@@ -570,6 +579,56 @@ const TableContextMenu: React.FC<TableContextMenuProps> = ({
         )}
       </div>
 
+      {/* 4. 表格样式 (二级菜单) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setActiveSubmenu(activeSubmenu === 'style' ? null : 'style')}
+          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-left cursor-pointer ${
+            activeSubmenu === 'style' ? 'bg-white/10 text-indigo-300' : 'hover:bg-white/5 text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Table size={13} className="text-indigo-400" />
+            <span>表格样式</span>
+          </span>
+          <ChevronRight size={12} className="text-slate-500" />
+        </button>
+
+        {activeSubmenu === 'style' && (
+          <div className="mt-1 mb-1 pl-2.5 border-l-2 border-indigo-500/40 space-y-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                onToggleHeaderRow();
+                onClose();
+              }}
+              className="w-full flex items-center justify-between px-2 py-1 rounded-md hover:bg-white/5 text-slate-300 hover:text-indigo-300 text-left cursor-pointer text-[11px]"
+            >
+              <span className="flex items-center gap-2">
+                {hasHeaderRow ? <ToggleRight size={13} className="text-indigo-400" /> : <ToggleLeft size={13} className="text-slate-500" />}
+                <span>首行表头</span>
+              </span>
+              {hasHeaderRow && <Check size={11} className="text-emerald-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onToggleBandedRows();
+                onClose();
+              }}
+              className="w-full flex items-center justify-between px-2 py-1 rounded-md hover:bg-white/5 text-slate-300 hover:text-purple-300 text-left cursor-pointer text-[11px]"
+            >
+              <span className="flex items-center gap-2">
+                {hasBandedRows ? <ToggleRight size={13} className="text-purple-400" /> : <ToggleLeft size={13} className="text-slate-500" />}
+                <span>隔行斑马纹</span>
+              </span>
+              {hasBandedRows && <Check size={11} className="text-emerald-400" />}
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="my-1 border-t border-white/[0.08]" />
 
       {/* 4. 几何与分布 (Word 风格) */}
@@ -636,10 +695,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
   const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const dragStartRef = useRef<CellCoord | null>(null);
-
-  // 顶层微工具栏弹出状态
-  const [showTopNineGrid, setShowTopNineGrid] = useState(false);
-  const [showTopShading, setShowTopShading] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // Notion 风格列把手与行把手弹窗状态
   const [activeColMenu, setActiveColMenu] = useState<{ cIdx: number; x: number; y: number } | null>(null);
@@ -727,14 +783,47 @@ export const TableBlock: React.FC<TableBlockProps> = ({
     );
   }, [block.properties?.columnVerticalAlignments, colCount]);
 
-  // 全局鼠标拖拽选区结束监听
+  // 全局鼠标与键盘监听：拖拽结束、点击外部清空选区、Esc 退出
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       setIsDraggingRange(false);
       dragStartRef.current = null;
     };
+
+    const handleGlobalMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-table-popup]')) {
+        return;
+      }
+      if (tableContainerRef.current && !tableContainerRef.current.contains(target)) {
+        setSelectedRange(null);
+        setActiveCell(null);
+        setActiveColMenu(null);
+        setActiveRowMenu(null);
+        setContextMenu(null);
+        setFloatingToolbarPos(null);
+      }
+    };
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedRange(null);
+        setActiveColMenu(null);
+        setActiveRowMenu(null);
+        setContextMenu(null);
+        setFloatingToolbarPos(null);
+      }
+    };
+
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('mousedown', handleGlobalMouseDown);
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('mousedown', handleGlobalMouseDown);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
   }, []);
 
   // 拖拽手柄状态引用
@@ -1417,19 +1506,14 @@ export const TableBlock: React.FC<TableBlockProps> = ({
 
   const totalTableWidth = localWidths.reduce((sum, w) => sum + w, 0);
 
-  // 当前选中单元格的水平和垂直对齐
-  const curCellCIdx = activeCell?.cIdx ?? (contextMenu?.cIdx ?? 0);
-  const curHAlign = localAlignments[curCellCIdx] || 'left';
-  const curVAlign = localVAlignments[curCellCIdx] || 'top';
-  const curShading = activeCell ? cellShading[`${activeCell.rIdx}-${activeCell.cIdx}`] : undefined;
-
   return (
     <div
+      ref={tableContainerRef}
       id={`block-${block.id}`}
       className="group/table relative my-3.5 rounded-2xl bg-[#0d1117] border border-white/[0.08] shadow-2xl overflow-hidden transition-all hover:border-white/[0.14]"
     >
-      {/* 顶部 Word 风格分类操作控制条 (Header Ribbon Bar) */}
-      <div className="h-10 px-3 bg-[#161b22]/90 border-b border-white/[0.06] flex items-center justify-between select-none">
+      {/* 顶部极简指示条 (Header Bar) */}
+      <div className="h-9 px-3 bg-[#161b22]/90 border-b border-white/[0.06] flex items-center justify-between select-none">
         {/* 左侧表格元数据与规格指示 */}
         <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-indigo-400 font-medium">
@@ -1440,162 +1524,44 @@ export const TableBlock: React.FC<TableBlockProps> = ({
             {colCount} 列 × {rowCount} 行
           </span>
           {isRangeActive ? (
-            <span className="text-sky-400 text-[10px] bg-sky-500/15 px-2 py-0.5 rounded-md border border-sky-500/30 font-medium animate-pulse">
-              选区: {selectedCellCount} 个单元格 ({normalizedRange!.minR + 1},
-              {normalizedRange!.minC + 1}) → ({normalizedRange!.maxR + 1},
-              {normalizedRange!.maxC + 1})
+            <span className="text-sky-400 text-[10px] bg-sky-500/15 px-2 py-0.5 rounded-md border border-sky-500/30 font-medium">
+              已选 {selectedCellCount} 格 ({normalizedRange!.minR + 1},{normalizedRange!.minC + 1}) → ({normalizedRange!.maxR + 1},{normalizedRange!.maxC + 1})
             </span>
           ) : activeCell ? (
-            <span className="text-sky-400/80 text-[10px] bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+            <span className="text-slate-500 text-[10px]">
               第 {activeCell.rIdx + 1} 行 · 第 {activeCell.cIdx + 1} 列
             </span>
           ) : null}
         </div>
 
-        {/* 右侧 Word 式分类功能组 */}
-        <div className="flex items-center gap-1.5 text-[11px]">
-          {/* 1. 9 宫格对齐微控件入口 */}
-          <div className="relative">
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setShowTopNineGrid(!showTopNineGrid);
-                setShowTopShading(false);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
-                showTopNineGrid
-                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]'
-              }`}
-              title="Word 9宫格对齐方式 (水平×垂直)"
-            >
-              <Grid3X3 size={12} className="text-sky-400" />
-              <span>对齐</span>
-            </button>
-            {showTopNineGrid && (
-              <div className="absolute right-0 top-full mt-1.5 z-50">
-                <TableNineGridAlignment
-                  currentH={curHAlign}
-                  currentV={curVAlign}
-                  onSelect={(h, v) => {
-                    handleSetNineGridAlign(h, v);
-                    setShowTopNineGrid(false);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* 2. 底纹颜色卡微控件入口 */}
-          <div className="relative">
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setShowTopShading(!showTopShading);
-                setShowTopNineGrid(false);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
-                showTopShading
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]'
-              }`}
-              title="单元格底色 / 底纹"
-            >
-              <PaintBucket size={12} className="text-amber-400" />
-              <span>底纹</span>
-            </button>
-            {showTopShading && (
-              <div className="absolute right-0 top-full mt-1.5 z-50">
-                <TableShadingPicker
-                  currentColor={curShading}
-                  onSelect={(color) => {
-                    handleSetShading(color);
-                    setShowTopShading(false);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="w-[1px] h-3.5 bg-white/10 mx-0.5" />
-
-          {/* 3. 隔行斑马纹切换 */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() =>
-              onUpdate(
-                block.content,
-                'table',
-                { ...block.properties, hasBandedRows: !hasBandedRows },
-                true
-              )
-            }
-            className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
-              hasBandedRows
-                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border-white/[0.08]'
-            }`}
-            title={hasBandedRows ? '关闭隔行斑马纹' : '开启隔行斑马纹 (Word 经典样式)'}
-          >
-            {hasBandedRows ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
-            <span>斑马纹</span>
-          </button>
-
-          {/* 4. 首行表头切换 */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() =>
-              onUpdate(
-                block.content,
-                'table',
-                { ...block.properties, hasHeaderRow: !hasHeaderRow },
-                true
-              )
-            }
-            className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
-              hasHeaderRow
-                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border-white/[0.08]'
-            }`}
-            title={hasHeaderRow ? '关闭首行表头高亮' : '开启首行表头高亮'}
-          >
-            {hasHeaderRow ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
-            <span>表头</span>
-          </button>
-
-          {/* 5. 复制 Markdown 表格 */}
+        {/* 右侧极简辅助操作 */}
+        <div className="flex items-center gap-1 text-[11px]">
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCopyMarkdown}
-            className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-            title="复制为标准 GFM 对齐 Markdown 表格"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-slate-200 transition-colors cursor-pointer text-[10px]"
+            title="复制为标准 Markdown 表格"
           >
             {copied ? (
               <>
-                <Check size={12} className="text-emerald-400" />
+                <Check size={11} className="text-emerald-400" />
                 <span className="text-emerald-400 font-medium">已复制</span>
               </>
             ) : (
               <>
-                <Copy size={12} />
+                <Copy size={11} />
                 <span>复制 MD</span>
               </>
             )}
           </button>
-
-          {/* 6. 删除整表 */}
           <button
             type="button"
             onClick={onDelete}
-            className="p-1 rounded-md hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer ml-0.5"
+            className="p-1 rounded-md hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer"
             title="删除整个表格"
           >
-            <Trash2 size={12} />
+            <Trash2 size={11} />
           </button>
         </div>
       </div>
@@ -1683,7 +1649,9 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                               return;
                             }
 
-                            // 普通点击：启动拖拽选区
+                            // 普通单选：立即注销既有多选选区并聚焦当前单元格
+                            setSelectedRange(null);
+                            setActiveCell({ rIdx, cIdx });
                             dragStartRef.current = { rIdx, cIdx };
                             setIsDraggingRange(true);
                           }}
@@ -1873,6 +1841,12 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                             dangerouslySetInnerHTML={{ __html: cell }}
                             onFocus={() => {
                               setActiveCell({ rIdx, cIdx });
+                              setSelectedRange(null);
+                            }}
+                            onMouseDown={(e) => {
+                              if (!e.shiftKey) {
+                                setSelectedRange(null);
+                              }
                             }}
                             onBlur={(e) => {
                               handleCellBlur(rIdx, cIdx, e.currentTarget.innerHTML);
@@ -1886,8 +1860,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
                                 e.preventDefault();
                                 setSelectedRange(null);
                                 setFloatingToolbarPos(null);
-                                setShowTopNineGrid(false);
-                                setShowTopShading(false);
                                 return;
                               }
 
@@ -2005,10 +1977,6 @@ export const TableBlock: React.FC<TableBlockProps> = ({
               <Layers size={11} />
               <span>平均分布各列</span>
             </button>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-500 text-[10px]">
-              Word 9宫格对齐 · 莫兰迪底纹 · 右键 Mini Toolbar · Shift+点击/拖拽跨行跨列多选
-            </span>
           </div>
         </div>
       </div>
@@ -2016,6 +1984,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       {/* Notion 风格整列快捷弹窗 */}
       {activeColMenu && (
         <div
+          data-table-popup="true"
           style={{ left: `${activeColMenu.x}px`, top: `${activeColMenu.y}px` }}
           className="fixed z-[999996] w-48 rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95"
         >
@@ -2077,6 +2046,7 @@ export const TableBlock: React.FC<TableBlockProps> = ({
       {/* Notion 风格整行快捷弹窗 */}
       {activeRowMenu && (
         <div
+          data-table-popup="true"
           style={{ left: `${activeRowMenu.x}px`, top: `${activeRowMenu.y}px` }}
           className="fixed z-[999996] w-48 rounded-xl bg-[#161b22]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 text-[12px] text-slate-300 select-none animate-in fade-in zoom-in-95"
         >
@@ -2149,6 +2119,24 @@ export const TableBlock: React.FC<TableBlockProps> = ({
           currentShading={cellShading[`${contextMenu.rIdx}-${contextMenu.cIdx}`]}
           isRangeActive={isRangeActive}
           selectedCellCount={selectedCellCount}
+          hasHeaderRow={hasHeaderRow}
+          hasBandedRows={hasBandedRows}
+          onToggleHeaderRow={() =>
+            onUpdate(
+              block.content,
+              'table',
+              { ...block.properties, hasHeaderRow: !hasHeaderRow },
+              true
+            )
+          }
+          onToggleBandedRows={() =>
+            onUpdate(
+              block.content,
+              'table',
+              { ...block.properties, hasBandedRows: !hasBandedRows },
+              true
+            )
+          }
           onNineGridAlignChange={(h, v) => handleSetNineGridAlign(h, v, { rIdx: contextMenu.rIdx, cIdx: contextMenu.cIdx })}
           onShadingChange={(color) => handleSetShading(color, { rIdx: contextMenu.rIdx, cIdx: contextMenu.cIdx })}
           onInsertRowAbove={() => handleInsertRow(contextMenu.rIdx, 'above')}

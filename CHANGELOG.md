@@ -2,6 +2,25 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.82] - 2026-11-20
+
+### Fix & Refactor (文档引擎：表格选区即时退出与外部脱离侦测、抬头与底部界面极致去噪净化、右键折叠菜单收敛表格样式)
+
+- **选区即时坍缩与生命周期闭环 (`table:selection-dismiss` / `TableBlock.tsx`)**：
+  - 响应用户尖锐反馈：“表格一选中，就无法退出选中？另外，表格抬头不要有过多无用的功能按钮和说明，给我保持干净，相关功能移到右键”；
+  - 彻底修复选区粘滞死锁问题：
+    1. **普通单击立即坍缩**：在单元格 `onMouseDown` 与 `contentEditable` 的 `onFocus` 中，未按 Shift 键时立即清空 `selectedRange` 并激活单个单元格；
+    2. **全局外部点击脱离侦测**：在最外层容器挂载 `mousedown` 侦测器，点击表格外部或页面任意其他区域，瞬间自动注销多选选区与聚焦状态；
+    3. **全局 Escape 键盘响应**：监听 `Escape` 键，无论焦点位于单元格还是表格把手上，秒速清除多空格选区与所有浮动微面板。
+- **表格抬头与底部界面极致净化 (`table:clean-ui` / `TableBlock.tsx`)**：
+  - 彻底铲除以往平铺在表格抬头上的密集按钮群（对齐、底纹、斑马纹、表头、复制MD等）；
+  - 移除表格底部的冗长口水文本说明（`Word 9宫格对齐 · 莫兰迪底纹 · 右键 Mini Toolbar...`），彻底回归干净通透的极简画布外观；
+  - 抬头仅保留极低扰动的表格规格指示（如 `数据表格 · 3 列 × 3 行`）及极简辅助点。
+- **右键上下文菜单收敛升级 (`table:rightclick-convergence` / `TableBlock.tsx`)**：
+  - 在 `TableContextMenu` 增设“🎨 表格样式 ▸”二级折叠子菜单，收纳“首行表头开关”与“隔行斑马纹开关”，并带当前状态勾选标记；
+  - 9 宫格对齐微面板与莫兰迪底色卡在右键 Mini Toolbar 中 100% 顺畅唤出；
+  - 完美兼顾纯净视觉感知与全面高密度的 Word/Notion 级表格能力。
+
 ## [0.1.81] - 2026-11-20
 
 ### Refactor (文档引擎：参考 Word 工业级表格工具四维正交分类、Word 标志性 3×3 九宫格对齐选择器、莫兰迪底纹与右键 Mini Toolbar)
