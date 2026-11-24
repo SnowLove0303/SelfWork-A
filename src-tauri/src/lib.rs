@@ -1059,6 +1059,7 @@ pub struct LauncherProcessInfo {
     pub id: String,
     pub is_running: bool,
     pub pids: Vec<u32>,
+    pub window_handles: Vec<isize>,
     pub instance_count: usize,
 }
 
@@ -1129,25 +1130,87 @@ async fn detect_launcher_processes(
             }
         }
 
+        // 若纳入了文件夹项，查询当前打开的 Windows 资源管理器窗口路径与句柄
+        let mut folder_to_hwnds: HashMap<String, Vec<isize>> = HashMap::new();
+        let has_folders = items.iter().any(|it| it.item_type == "folder" && !it.target.trim().is_empty());
+
+        #[cfg(windows)]
+        if has_folders {
+            use std::os::windows::process::CommandExt;
+            let ps_script = r#"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+try {
+  $shell = New-Object -ComObject Shell.Application
+  foreach ($w in $shell.Windows()) {
+    try {
+      $p = $w.Document.Folder.Self.Path
+      if ($p) {
+        Write-Output ("$($w.HWND)|$p")
+      }
+    } catch {}
+  }
+} catch {}
+"#;
+            let mut cmd = std::process::Command::new("powershell.exe");
+            cmd.creation_flags(0x08000000);
+            cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_script]);
+            if let Ok(output) = cmd.output() {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    for line in stdout.lines() {
+                        if let Some((hwnd_str, path_str)) = line.split_once('|') {
+                            if let Ok(hwnd) = hwnd_str.trim().parse::<isize>() {
+                                let norm_path = path_str
+                                    .trim()
+                                    .replace('/', "\\")
+                                    .trim_end_matches('\\')
+                                    .to_lowercase();
+                                if !norm_path.is_empty() && hwnd != 0 {
+                                    folder_to_hwnds.entry(norm_path).or_default().push(hwnd);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         for item in items {
             let mut pids = Vec::new();
-            let path_obj = std::path::Path::new(item.target.trim());
-            if let Some(file_name) = path_obj.file_name().and_then(|n| n.to_str()) {
-                let lower = file_name.to_lowercase();
-                let exe_name = if lower.ends_with(".exe") {
-                    lower
-                } else if item.item_type == "app" {
-                    format!("{}.exe", lower)
-                } else {
-                    lower
-                };
-                if let Some(found_pids) = exe_to_pids.get(&exe_name) {
-                    pids = found_pids.clone();
+            let mut window_handles = Vec::new();
+            let trimmed = strip_outer_quotes(&item.target);
+
+            if item.item_type == "folder" {
+                let norm_target = trimmed
+                    .replace('/', "\\")
+                    .trim_end_matches('\\')
+                    .to_lowercase();
+                if let Some(found_hwnds) = folder_to_hwnds.get(&norm_target) {
+                    window_handles = found_hwnds.clone();
+                }
+            } else {
+                let path_obj = std::path::Path::new(trimmed);
+                if let Some(file_name) = path_obj.file_name().and_then(|n| n.to_str()) {
+                    let lower = file_name.to_lowercase();
+                    let exe_name = if lower.ends_with(".exe") {
+                        lower
+                    } else if item.item_type == "app" {
+                        format!("{}.exe", lower)
+                    } else {
+                        lower
+                    };
+                    if let Some(found_pids) = exe_to_pids.get(&exe_name) {
+                        pids = found_pids.clone();
+                    }
                 }
             }
 
-            let is_running = !pids.is_empty();
-            let instance_count = pids.len();
+            let is_running = !pids.is_empty() || !window_handles.is_empty();
+            let instance_count = if item.item_type == "folder" {
+                window_handles.len()
+            } else {
+                pids.len()
+            };
 
             result_map.insert(
                 item.id.clone(),
@@ -1155,6 +1218,7 @@ async fn detect_launcher_processes(
                     id: item.id,
                     is_running,
                     pids,
+                    window_handles,
                     instance_count,
                 },
             );
@@ -1200,6 +1264,36 @@ async fn terminate_launcher_processes(pids: Vec<u32>) -> Result<usize, String> {
     })
     .await
     .map_err(|e| format!("终止进程异常: {}", e))?
+}
+
+/// 快速启动模块专用：安全关闭指定的资源管理器文件夹窗口（绝不终止 explorer.exe 主进程）
+#[tauri::command]
+async fn close_launcher_windows(hwnds: Vec<isize>) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut closed_count = 0;
+
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, PostMessageW, WM_CLOSE};
+
+            for hwnd in hwnds {
+                if hwnd == 0 {
+                    continue;
+                }
+                unsafe {
+                    if IsWindow(hwnd as _) != 0 {
+                        if PostMessageW(hwnd as _, WM_CLOSE, 0, 0) != 0 {
+                            closed_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(closed_count)
+    })
+    .await
+    .map_err(|e| format!("关闭文件夹窗口异常: {}", e))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1250,6 +1344,7 @@ pub fn run() {
             pick_launcher_file,
             detect_launcher_processes,
             terminate_launcher_processes,
+            close_launcher_windows,
             get_system_monitors,
             arrange_combo_windows,
             db::db_get_all_tasks,

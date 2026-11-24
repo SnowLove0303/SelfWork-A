@@ -2,6 +2,17 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.87] - 2026-11-24
+
+### Feat & Refactor (快速启动：纳入文件夹打开状态检测与安全关闭、去除运行清单“进程/实例/PID”表述与多开功能)
+
+- **文件夹运行状态检测与安全关闭 (`launcher:folder-detect-close` / `src-tauri/src/lib.rs`)**：
+  - 扩展 `detect_launcher_processes` 探测已打开的 Windows 资源管理器文件夹窗口并返回 `window_handles`；
+  - 新增 `close_launcher_windows` 命令，向指定文件夹窗口发送 `WM_CLOSE` 安全关闭，绝不误杀桌面 `explorer.exe` 主进程。
+- **运行清单去技术化与极简交互 (`ui:manifest-simplify` / `ProcessManifestModal.tsx` & `LauncherDashboard.tsx`)**：
+  - 按钮与面板更名为 **运行清单**，全面移除“进程”“实例”“PID”“活跃”等技术词汇；
+  - 移除清单每行的“多开”按钮与可展开 PID 明细栏，统一纳管应用与文件夹项，仅保留图标、名称、数量及“关闭”操作。
+
 ## [0.1.86] - 2026-11-24
 
 ### Refactor (全局 UI 去噪：全面清理全进程清单、快速启动、文档表格与思维导图模块冗余说明)

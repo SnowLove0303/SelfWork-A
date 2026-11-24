@@ -233,6 +233,7 @@ interface LauncherProcessStatus {
   id: string;
   is_running: boolean;
   pids: number[];
+  window_handles?: number[];
   instance_count: number;
 }
 
@@ -638,7 +639,7 @@ interface LauncherProcessStatus {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const targets = storage.items
-        .filter((it) => it.type === 'app' && it.target.trim())
+        .filter((it) => (it.type === 'app' || it.type === 'folder') && it.target.trim())
         .map((it) => ({
           id: it.id,
           target: it.target,
@@ -680,31 +681,37 @@ interface LauncherProcessStatus {
     };
   }, [refreshProcessStatus]);
 
-  // 终止单项进程
+  // 关闭单项（应用进程或文件夹窗口）
   const handleTerminateProcess = useCallback(
     async (item: LauncherItem, e?: React.MouseEvent) => {
       if (e) {
         e.stopPropagation();
       }
       const status = processStatusMap[item.id];
-      if (!status || !status.is_running || status.pids.length === 0) {
+      const pids = status?.pids || [];
+      const hwnds = status?.window_handles || [];
+      if (!status || !status.is_running || (pids.length === 0 && hwnds.length === 0)) {
         return;
       }
 
       setTerminatingItemIds((prev) => ({ ...prev, [item.id]: true }));
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const count = await invoke<number>('terminate_launcher_processes', {
-          pids: status.pids,
-        });
-        appendLog(item.name, 'warn', `已安全终止进程 (共关闭 ${count} 个实例)`);
+        let count = 0;
+        if (pids.length > 0) {
+          count += await invoke<number>('terminate_launcher_processes', { pids });
+        }
+        if (hwnds.length > 0) {
+          count += await invoke<number>('close_launcher_windows', { hwnds });
+        }
+        appendLog(item.name, 'warn', `已关闭【${item.name}】(${count})`);
         setFeedback({
           type: 'success',
-          message: `已关闭【${item.name}】(${count} 个进程实例)`,
+          message: `已关闭【${item.name}】`,
         });
         setTimeout(refreshProcessStatus, 300);
       } catch (err: any) {
-        appendLog(item.name, 'error', `终止进程失败: ${err?.message || err}`);
+        appendLog(item.name, 'error', `关闭失败: ${err?.message || err}`);
         setFeedback({
           type: 'error',
           message: `关闭失败: ${err?.message || err}`,
@@ -716,7 +723,7 @@ interface LauncherProcessStatus {
     [processStatusMap, appendLog, refreshProcessStatus]
   );
 
-  // 终止组合套件关联的所有进程
+  // 关闭组合关联的所有运行项（应用 + 文件夹）
   const handleTerminateComboSuite = useCallback(
     async (combo: LauncherItem, e?: React.MouseEvent) => {
       if (e) {
@@ -724,31 +731,37 @@ interface LauncherProcessStatus {
       }
       const subItemIds = combo.bundleItemIds || [];
       const pidsToKill: number[] = [];
+      const hwndsToClose: number[] = [];
       for (const subId of subItemIds) {
         const st = processStatusMap[subId];
         if (st && st.is_running) {
-          pidsToKill.push(...st.pids);
+          pidsToKill.push(...(st.pids || []));
+          hwndsToClose.push(...(st.window_handles || []));
         }
       }
 
-      if (pidsToKill.length === 0) {
+      if (pidsToKill.length === 0 && hwndsToClose.length === 0) {
         return;
       }
 
       setTerminatingItemIds((prev) => ({ ...prev, [combo.id]: true }));
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const count = await invoke<number>('terminate_launcher_processes', {
-          pids: pidsToKill,
-        });
-        appendLog(combo.name, 'warn', `已批量终止组合套件关联进程 (共关闭 ${count} 个实例)`);
+        let count = 0;
+        if (pidsToKill.length > 0) {
+          count += await invoke<number>('terminate_launcher_processes', { pids: pidsToKill });
+        }
+        if (hwndsToClose.length > 0) {
+          count += await invoke<number>('close_launcher_windows', { hwnds: hwndsToClose });
+        }
+        appendLog(combo.name, 'warn', `已关闭组合【${combo.name}】(${count})`);
         setFeedback({
           type: 'success',
-          message: `已关闭组合套件【${combo.name}】涉及的 ${count} 个进程`,
+          message: `已关闭组合【${combo.name}】`,
         });
         setTimeout(refreshProcessStatus, 300);
       } catch (err: any) {
-        appendLog(combo.name, 'error', `终止组合进程失败: ${err?.message || err}`);
+        appendLog(combo.name, 'error', `关闭组合失败: ${err?.message || err}`);
         setFeedback({
           type: 'error',
           message: `关闭组合失败: ${err?.message || err}`,
@@ -760,71 +773,55 @@ interface LauncherProcessStatus {
     [processStatusMap, appendLog, refreshProcessStatus]
   );
 
-  // 一键全部关闭所有正在运行的白名单启动项进程
+  // 全部关闭所有运行中的应用与文件夹
   const handleTerminateAllProcesses = useCallback(async () => {
     const pidSet = new Set<number>();
+    const hwndSet = new Set<number>();
     for (const st of Object.values(processStatusMap)) {
       if (st?.is_running) {
-        for (const pid of st.pids) {
+        for (const pid of st.pids || []) {
           pidSet.add(pid);
+        }
+        for (const hwnd of st.window_handles || []) {
+          hwndSet.add(hwnd);
         }
       }
     }
     const allPids = Array.from(pidSet);
-    if (allPids.length === 0) return;
+    const allHwnds = Array.from(hwndSet);
+    if (allPids.length === 0 && allHwnds.length === 0) return;
 
     setIsTerminatingAll(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const count = await invoke<number>('terminate_launcher_processes', {
-        pids: allPids,
-      });
-      appendLog('进程清单', 'warn', `已执行一键全部关闭，共安全终止 ${count} 个白名单进程实例`);
+      let count = 0;
+      if (allPids.length > 0) {
+        count += await invoke<number>('terminate_launcher_processes', { pids: allPids });
+      }
+      if (allHwnds.length > 0) {
+        count += await invoke<number>('close_launcher_windows', { hwnds: allHwnds });
+      }
+      appendLog('运行清单', 'warn', `已全部关闭 (${count})`);
       setFeedback({
         type: 'success',
-        message: `已一键关闭全部快速启动进程（共终止 ${count} 个实例）`,
+        message: '已全部关闭',
       });
       setTimeout(refreshProcessStatus, 300);
     } catch (err: any) {
-      appendLog('进程清单', 'error', `一键全部关闭失败: ${err?.message || err}`);
+      appendLog('运行清单', 'error', `全部关闭失败: ${err?.message || err}`);
       setFeedback({
         type: 'error',
-        message: `一键全部关闭失败: ${err?.message || err}`,
+        message: `关闭失败: ${err?.message || err}`,
       });
     } finally {
       setIsTerminatingAll(false);
     }
   }, [processStatusMap, appendLog, refreshProcessStatus]);
 
-  // 精确终止多开应用中的单个指定 PID
-  const handleTerminateSinglePid = useCallback(
-    async (item: LauncherItem, pid: number) => {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const count = await invoke<number>('terminate_launcher_processes', {
-          pids: [pid],
-        });
-        appendLog(item.name, 'warn', `已精确终止单个实例 PID=${pid} (关闭数=${count})`);
-        setFeedback({
-          type: 'success',
-          message: `已关闭【${item.name}】实例 (PID: ${pid})`,
-        });
-        setTimeout(refreshProcessStatus, 300);
-      } catch (err: any) {
-        appendLog(item.name, 'error', `终止 PID=${pid} 失败: ${err?.message || err}`);
-        setFeedback({
-          type: 'error',
-          message: `关闭 PID ${pid} 失败: ${err?.message || err}`,
-        });
-      }
-    },
-    [appendLog, refreshProcessStatus]
-  );
-
-  // 计算全局运行中的纳入应用总数
+  // 计算全局运行中的纳入项总数（应用 + 文件夹）
   const totalRunningAppsCount = useMemo(() => {
     return storage.items.filter(
-      (it) => it.type === 'app' && processStatusMap[it.id]?.is_running
+      (it) => (it.type === 'app' || it.type === 'folder') && processStatusMap[it.id]?.is_running
     ).length;
   }, [storage.items, processStatusMap]);
 
@@ -1674,7 +1671,7 @@ interface LauncherProcessStatus {
                     refreshProcessStatus();
                     setIsManifestOpen(true);
                   }}
-                  title="查看所有纳入快速启动项的运行进程清单，支持一键全部关闭或关闭指定应用/组合"
+                  title="运行清单"
                   className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
                     totalRunningAppsCount > 0
                       ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 border-emerald-500/35 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
@@ -1687,7 +1684,7 @@ interface LauncherProcessStatus {
                       <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping opacity-75" />
                     )}
                   </span>
-                  <span>进程清单</span>
+                  <span>运行清单</span>
                   <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
                     totalRunningAppsCount > 0
                       ? 'bg-emerald-500/25 text-emerald-300'
@@ -2151,7 +2148,7 @@ interface LauncherProcessStatus {
                         {procStatus?.is_running && !isSelectMode && (
                           <div
                             onClick={(e) => handleTerminateProcess(item, e)}
-                            title={`正在运行 (${procStatus.instance_count} 个实例) - 点击终止进程`}
+                            title="点击关闭"
                             className="group/proc absolute -top-1.5 -right-1.5 z-20 cursor-pointer"
                           >
                             {/* 默认常驻态：精致祖母绿微光指示点 (多开时显示数量) */}
@@ -2220,8 +2217,6 @@ interface LauncherProcessStatus {
         onTerminateAll={handleTerminateAllProcesses}
         onTerminateItem={(item) => handleTerminateProcess(item)}
         onTerminateCombo={(combo) => handleTerminateComboSuite(combo)}
-        onTerminateSinglePid={handleTerminateSinglePid}
-        onLaunchItem={handleLaunchItem}
       />
 
       {isTelemetryOpen && (
