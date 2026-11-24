@@ -198,14 +198,6 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
             <h2 className="text-sm font-semibold text-white tracking-tight">
               运行清单
             </h2>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-slate-300">
-              {runningItems.length} 项
-            </span>
-            {runningCombos.length > 0 && (
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300">
-                {runningCombos.length} 组合
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -427,8 +419,6 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                   </div>
                   <div className="space-y-2">
                     {filteredItems.map((item) => {
-                      const st = processStatusMap[item.id];
-                      const count = st?.instance_count || 1;
                       const isKilling = !!terminatingItemIds[item.id];
                       const catName = categoryMap[item.categoryId] || '默认';
 
@@ -457,11 +447,6 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                               <span className="text-xs font-semibold text-white truncate">
                                 {item.name}
                               </span>
-                              {count > 1 && (
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
-                                  ×{count}
-                                </span>
-                              )}
                             </div>
                           </div>
 

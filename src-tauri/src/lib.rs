@@ -1130,12 +1130,24 @@ async fn detect_launcher_processes(
             }
         }
 
-        // 若纳入了文件夹项，查询当前打开的 Windows 资源管理器窗口路径与句柄
-        let mut folder_to_hwnds: HashMap<String, Vec<isize>> = HashMap::new();
-        let has_folders = items.iter().any(|it| it.item_type == "folder" && !it.target.trim().is_empty());
+        // 若纳入了文件夹项，查询当前打开的 Windows 资源管理器窗口路径与句柄（支持精确匹配与最长前缀子目录归属匹配）
+        let mut opened_folders: Vec<(isize, String)> = Vec::new();
+        let mut folder_item_targets: Vec<(String, String)> = Vec::new();
+
+        for it in &items {
+            if it.item_type == "folder" {
+                let norm = strip_outer_quotes(&it.target)
+                    .replace('/', "\\")
+                    .trim_end_matches('\\')
+                    .to_lowercase();
+                if !norm.is_empty() {
+                    folder_item_targets.push((it.id.clone(), norm));
+                }
+            }
+        }
 
         #[cfg(windows)]
-        if has_folders {
+        if !folder_item_targets.is_empty() {
             use std::os::windows::process::CommandExt;
             let ps_script = r#"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -1166,12 +1178,34 @@ try {
                                     .trim_end_matches('\\')
                                     .to_lowercase();
                                 if !norm_path.is_empty() && hwnd != 0 {
-                                    folder_to_hwnds.entry(norm_path).or_default().push(hwnd);
+                                    opened_folders.push((hwnd, norm_path));
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+
+        // 最长前缀归属映射：每个已打开的窗口路径优先归属到路径最长的配置目录项
+        let mut folder_id_to_hwnds: HashMap<String, Vec<isize>> = HashMap::new();
+        for (hwnd, open_path) in &opened_folders {
+            let mut best_match_id: Option<String> = None;
+            let mut best_len: usize = 0;
+
+            for (fid, ftarget) in &folder_item_targets {
+                let is_exact = open_path == ftarget;
+                let is_sub = open_path.len() > ftarget.len()
+                    && open_path.starts_with(ftarget.as_str())
+                    && open_path.as_bytes().get(ftarget.len()) == Some(&b'\\');
+                if (is_exact || is_sub) && ftarget.len() > best_len {
+                    best_len = ftarget.len();
+                    best_match_id = Some(fid.clone());
+                }
+            }
+
+            if let Some(fid) = best_match_id {
+                folder_id_to_hwnds.entry(fid).or_default().push(*hwnd);
             }
         }
 
@@ -1181,11 +1215,7 @@ try {
             let trimmed = strip_outer_quotes(&item.target);
 
             if item.item_type == "folder" {
-                let norm_target = trimmed
-                    .replace('/', "\\")
-                    .trim_end_matches('\\')
-                    .to_lowercase();
-                if let Some(found_hwnds) = folder_to_hwnds.get(&norm_target) {
+                if let Some(found_hwnds) = folder_id_to_hwnds.get(&item.id) {
                     window_handles = found_hwnds.clone();
                 }
             } else {

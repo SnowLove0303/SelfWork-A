@@ -2151,15 +2151,9 @@ interface LauncherProcessStatus {
                             title="点击关闭"
                             className="group/proc absolute -top-1.5 -right-1.5 z-20 cursor-pointer"
                           >
-                            {/* 默认常驻态：精致祖母绿微光指示点 (多开时显示数量) */}
-                            <div className="flex group-hover/proc:hidden items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-emerald-500 border border-[#0d1117] shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-in fade-in zoom-in-75 duration-150">
-                              {procStatus.instance_count > 1 ? (
-                                <span className="text-[9px] font-mono font-bold text-black leading-none px-0.5">
-                                  {procStatus.instance_count}
-                                </span>
-                              ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-white/90" />
-                              )}
+                            {/* 默认常驻态：纯净祖母绿微光指示点 */}
+                            <div className="flex group-hover/proc:hidden items-center justify-center w-[12px] h-[12px] rounded-full bg-emerald-500 border border-[#0d1117] shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-in fade-in zoom-in-75 duration-150">
+                              <span className="w-1 h-1 rounded-full bg-white/90" />
                             </div>
                             {/* 悬停态：高对比红色小叉号关闭按钮 */}
                             <div className="hidden group-hover/proc:flex items-center justify-center w-[16px] h-[16px] rounded-full bg-rose-500 text-white shadow-[0_0_10px_rgba(244,63,94,0.9)] hover:scale-110 active:scale-95 transition-all">

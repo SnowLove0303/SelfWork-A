@@ -2,6 +2,17 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.88] - 2026-11-24
+
+### Fix & Refactor (快速启动：修复目录子路径归属漏检、移除运行清单重复统计/行内数字与卡片数字)
+
+- **目录最长前缀子路径归属匹配 (`launcher:folder-longest-prefix` / `src-tauri/src/lib.rs`)**：
+  - 解决打开启动项目录后进入其子目录（如 `源文件材料\6-3 ...\OS-8000`）导致的漏检问题，支持精确匹配与最长前缀归属匹配。
+- **页面极简减负 (`ui:manifest-debloat` & `ui:card-debloat` / `ProcessManifestModal.tsx` & `LauncherDashboard.tsx`)**：
+  - 移除运行清单标题旁与下方 Tab 重复的 `12 项`、`2 组合` 统计徽章；
+  - 移除运行清单每行应用名称旁边的 `×14`、`×11` 等子进程数徽章；
+  - 单品卡片右上角仅保留纯净绿色微光圆点，移除子进程数字显示。
+
 ## [0.1.87] - 2026-11-24
 
 ### Feat & Refactor (快速启动：纳入文件夹打开状态检测与安全关闭、去除运行清单“进程/实例/PID”表述与多开功能)
