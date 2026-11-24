@@ -2,6 +2,14 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.90] - 2026-11-24
+
+### Feat (快速启动：运行清单顶部筛选 Tab 按已有快速启动分类文件夹动态分类)
+
+- **运行清单动态分类 Tab (`ui:manifest-cat-tabs` / `ProcessManifestModal.tsx`)**：
+  - 将顶部静态 `全部 / 组合 / 单项` Tab 替换为 `全部 (N)` + **已有快速启动分类文件夹**（如 `常用办公与开发`、`组合`、`文件夹` 等，自动隐藏无运行项分类）；
+  - 点击对应分类 Tab 过滤该分类下的所有运行项目，选中具体某分类 Tab 时自动隐藏行内重复分类标签，保持界面极简清爽。
+
 ## [0.1.89] - 2026-11-24
 
 ### Feat (快速启动：运行清单保留启动项分类标签并按分类顺序排列)

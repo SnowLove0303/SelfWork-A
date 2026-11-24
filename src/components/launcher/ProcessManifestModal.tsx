@@ -36,8 +36,6 @@ interface ProcessManifestModalProps {
   onTerminateCombo: (combo: LauncherItem) => Promise<void>;
 }
 
-type ManifestFilterTab = 'all' | 'combo' | 'item';
-
 export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
   isOpen,
   onClose,
@@ -51,7 +49,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
   onTerminateItem,
   onTerminateCombo,
 }) => {
-  const [filterTab, setFilterTab] = useState<ManifestFilterTab>('all');
+  const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmKillAll, setConfirmKillAll] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -145,27 +143,67 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
       .filter((entry) => entry.runningCount > 0);
   }, [items, itemMap, processStatusMap]);
 
-  // 搜索过滤
+  // 动态计算各已有快速启动分类文件夹的运行数（仅保留有运行项的分类）
+  const activeCategoryTabs = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const entry of runningCombos) {
+      const cid = entry.combo.categoryId;
+      counts[cid] = (counts[cid] || 0) + 1;
+    }
+    for (const item of runningItems) {
+      const cid = item.categoryId;
+      counts[cid] = (counts[cid] || 0) + 1;
+    }
+    return categories
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        count: counts[c.id] || 0,
+      }))
+      .filter((tab) => tab.count > 0);
+  }, [categories, runningCombos, runningItems]);
+
+  // 若当前选中的分类下所有项目已关闭，自动切回 'all'
+  useEffect(() => {
+    if (
+      activeCategoryId !== 'all' &&
+      !activeCategoryTabs.some((t) => t.id === activeCategoryId)
+    ) {
+      setActiveCategoryId('all');
+    }
+  }, [activeCategoryId, activeCategoryTabs]);
+
+  const totalRunningCount = runningCombos.length + runningItems.length;
+
+  // 按分类 Tab 与搜索关键字联合过滤
   const filteredCombos = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return runningCombos;
-    return runningCombos.filter(
-      (entry) =>
+    return runningCombos.filter((entry) => {
+      if (activeCategoryId !== 'all' && entry.combo.categoryId !== activeCategoryId) {
+        return false;
+      }
+      if (!q) return true;
+      return (
         entry.combo.name.toLowerCase().includes(q) ||
         entry.subItems.some((sub) => sub.name.toLowerCase().includes(q))
-    );
-  }, [runningCombos, searchQuery]);
+      );
+    });
+  }, [runningCombos, activeCategoryId, searchQuery]);
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return runningItems;
-    return runningItems.filter(
-      (item) =>
+    return runningItems.filter((item) => {
+      if (activeCategoryId !== 'all' && item.categoryId !== activeCategoryId) {
+        return false;
+      }
+      if (!q) return true;
+      return (
         item.name.toLowerCase().includes(q) ||
         item.target.toLowerCase().includes(q) ||
         (categoryMap[item.categoryId] || '').toLowerCase().includes(q)
-    );
-  }, [runningItems, searchQuery, categoryMap]);
+      );
+    });
+  }, [runningItems, activeCategoryId, searchQuery, categoryMap]);
 
   if (!isOpen) return null;
 
@@ -185,16 +223,13 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
     await onTerminateAll();
   };
 
-  const showCombos = filterTab === 'all' || filterTab === 'combo';
-  const showItems = filterTab === 'all' || filterTab === 'item';
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl max-h-[82vh] flex flex-col bg-[#0d111a]/95 border border-white/15 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.75)] overflow-hidden text-slate-200"
+        className="w-full max-w-3xl max-h-[82vh] flex flex-col bg-[#0d111a]/95 border border-white/15 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.75)] overflow-hidden text-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 顶部标题与操作栏 */}
@@ -256,45 +291,37 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
           </div>
         </div>
 
-        {/* 筛选与搜索栏 */}
+        {/* 动态快速启动分类 Tab 栏与搜索框 */}
         <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-white/[0.07] bg-black/20">
-          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
-              onClick={() => setFilterTab('all')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                filterTab === 'all'
+              onClick={() => setActiveCategoryId('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap ${
+                activeCategoryId === 'all'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                   : 'text-slate-400 hover:text-slate-200 border border-transparent'
               }`}
             >
-              全部 ({runningCombos.length + runningItems.length})
+              全部 ({totalRunningCount})
             </button>
-            <button
-              type="button"
-              onClick={() => setFilterTab('combo')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                filterTab === 'combo'
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
-              }`}
-            >
-              组合 ({runningCombos.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterTab('item')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                filterTab === 'item'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
-              }`}
-            >
-              单项 ({runningItems.length})
-            </button>
+            {activeCategoryTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveCategoryId(tab.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap ${
+                  activeCategoryId === tab.id
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+              >
+                {tab.name} ({tab.count})
+              </button>
+            ))}
           </div>
 
-          <div className="relative w-52">
+          <div className="relative w-44 shrink-0">
             <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -329,7 +356,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
           ) : (
             <>
               {/* 1. 运行中的组合 */}
-              {showCombos && filteredCombos.length > 0 && (
+              {filteredCombos.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
                     <Layers className="w-3.5 h-3.5 text-rose-400" />
@@ -362,7 +389,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                                 <span className="text-xs font-semibold text-white truncate">
                                   {combo.name}
                                 </span>
-                                {categoryMap[combo.categoryId] && (
+                                {activeCategoryId === 'all' && categoryMap[combo.categoryId] && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400 border border-white/[0.08] shrink-0">
                                     {categoryMap[combo.categoryId]}
                                   </span>
@@ -424,12 +451,14 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
               )}
 
               {/* 2. 运行中的单项（应用 + 文件夹） */}
-              {showItems && filteredItems.length > 0 && (
+              {filteredItems.length > 0 && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-                    <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>单项 ({filteredItems.length})</span>
-                  </div>
+                  {filteredCombos.length > 0 && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+                      <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>单项 ({filteredItems.length})</span>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {filteredItems.map((item) => {
                       const isKilling = !!terminatingItemIds[item.id];
@@ -460,9 +489,11 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                               <span className="text-xs font-semibold text-white truncate">
                                 {item.name}
                               </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400 border border-white/[0.08] shrink-0">
-                                {catName}
-                              </span>
+                              {activeCategoryId === 'all' && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400 border border-white/[0.08] shrink-0">
+                                  {catName}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -486,8 +517,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                 </div>
               )}
 
-              {((showCombos && filteredCombos.length === 0) &&
-                (showItems && filteredItems.length === 0)) && (
+              {filteredCombos.length === 0 && filteredItems.length === 0 && (
                 <div className="py-10 text-center text-xs text-slate-500">
                   无匹配项
                 </div>
