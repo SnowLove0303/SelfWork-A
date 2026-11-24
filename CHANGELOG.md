@@ -2,6 +2,13 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.89] - 2026-11-24
+
+### Feat (快速启动：运行清单保留启动项分类标签并按分类顺序排列)
+
+- **运行清单分类保留 (`ui:manifest-category` / `ProcessManifestModal.tsx`)**：
+  - 在单项与组合条目名称旁恢复紧凑低扰动的启动项分类徽章，并按分类顺序排列清单，便于快速辨识归属。
+
 ## [0.1.88] - 2026-11-24
 
 ### Fix & Refactor (快速启动：修复目录子路径归属漏检、移除运行清单重复统计/行内数字与卡片数字)

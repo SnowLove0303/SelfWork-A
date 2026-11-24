@@ -89,6 +89,14 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
     return map;
   }, [categories]);
 
+  const categoryOrderMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    categories.forEach((c, idx) => {
+      map[c.id] = idx;
+    });
+    return map;
+  }, [categories]);
+
   const itemMap = useMemo(() => {
     const map: Record<string, LauncherItem> = {};
     for (const it of items) {
@@ -106,11 +114,11 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
           processStatusMap[it.id]?.is_running
       )
       .sort((a, b) => {
-        const countA = processStatusMap[a.id]?.instance_count || 0;
-        const countB = processStatusMap[b.id]?.instance_count || 0;
-        return countB - countA || a.name.localeCompare(b.name, 'zh-CN');
+        const orderA = categoryOrderMap[a.categoryId] ?? 999;
+        const orderB = categoryOrderMap[b.categoryId] ?? 999;
+        return orderA - orderB || a.name.localeCompare(b.name, 'zh-CN');
       });
-  }, [items, processStatusMap]);
+  }, [items, processStatusMap, categoryOrderMap]);
 
   // 全部运行中的组合
   const runningCombos = useMemo(() => {
@@ -354,6 +362,11 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                                 <span className="text-xs font-semibold text-white truncate">
                                   {combo.name}
                                 </span>
+                                {categoryMap[combo.categoryId] && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400 border border-white/[0.08] shrink-0">
+                                    {categoryMap[combo.categoryId]}
+                                  </span>
+                                )}
                                 <span
                                   className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md border ${
                                     isAllRunning
@@ -446,6 +459,9 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] shrink-0" />
                               <span className="text-xs font-semibold text-white truncate">
                                 {item.name}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-400 border border-white/[0.08] shrink-0">
+                                {catName}
                               </span>
                             </div>
                           </div>
