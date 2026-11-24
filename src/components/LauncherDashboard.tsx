@@ -546,16 +546,27 @@ interface LauncherProcessStatus {
 
         // 2. 如果是脚本
         if (item.type === 'script') {
+          const unquotedTarget = item.target.trim().replace(/^"(.*)"$/, '$1').trim();
+          const lowerTarget = unquotedTarget.toLowerCase();
+          const isBatOrCmd = lowerTarget.endsWith('.bat') || lowerTarget.endsWith('.cmd');
+          const isPs1File = lowerTarget.endsWith('.ps1');
+          const scriptType = isBatOrCmd ? 'bat' : 'powershell';
+          const effectiveWorkingDir =
+            item.workingDir?.trim() ||
+            (isBatOrCmd || isPs1File
+              ? unquotedTarget.replace(/[\\/][^\\/]+$/, '')
+              : undefined);
+
           appendLog(
             item.name,
             'info',
-            `下发 PowerShell 脚本指令:\n${item.target}${item.workingDir ? `\n[工作目录]: ${item.workingDir}` : ''}`
+            `下发 ${isBatOrCmd ? 'CMD 批处理' : 'PowerShell'} 脚本指令:\n${unquotedTarget}${effectiveWorkingDir ? `\n[工作目录]: ${effectiveWorkingDir}` : ''}`
           );
 
           const output = await invoke<string>('execute_custom_script', {
-            scriptType: 'powershell',
-            scriptContent: item.target,
-            workingDir: item.workingDir || undefined,
+            scriptType,
+            scriptContent: unquotedTarget,
+            workingDir: effectiveWorkingDir || undefined,
           });
 
           const duration = Math.round(performance.now() - t0);
@@ -1160,8 +1171,21 @@ interface LauncherProcessStatus {
     }
 
     // 针对本地文件、可执行程序与文件夹，统一规范化路径：剥离首尾多余双引号并将正斜杠转换为 Windows 标准反斜杠
-    if (formType === 'app' || formType === 'folder') {
-      trimmedTarget = trimmedTarget.replace(/^"(.*)"$/, '$1').trim().replace(/\//g, '\\');
+    const strippedScriptCandidate = trimmedTarget.replace(/^"(.*)"$/, '$1').trim();
+    const isScriptFileTarget =
+      formType === 'script' &&
+      /\.(bat|cmd|ps1)$/i.test(strippedScriptCandidate);
+
+    if (formType === 'app' || formType === 'folder' || isScriptFileTarget) {
+      trimmedTarget = strippedScriptCandidate.replace(/\//g, '\\');
+    }
+
+    let effectiveWorkingDir = formWorkingDir.trim();
+    if (!effectiveWorkingDir && isScriptFileTarget) {
+      const parentDir = trimmedTarget.replace(/[\\/][^\\/]+$/, '');
+      if (parentDir && parentDir !== trimmedTarget) {
+        effectiveWorkingDir = parentDir;
+      }
     }
 
     if (formType === 'bundle' && formBundleItemIds.length === 0) {
@@ -1199,7 +1223,7 @@ interface LauncherProcessStatus {
                 type: formType,
                 target: formType === 'bundle' ? '捆绑启动组合' : trimmedTarget,
                 args: formArgs.trim() || undefined,
-                workingDir: formWorkingDir.trim() || undefined,
+                workingDir: effectiveWorkingDir || undefined,
                 description: formDescription.trim() || undefined,
                 categoryId: formCategoryId,
                 icon: targetIcon,
@@ -1218,7 +1242,7 @@ interface LauncherProcessStatus {
         type: formType,
         target: formType === 'bundle' ? '捆绑启动组合' : trimmedTarget,
         args: formArgs.trim() || undefined,
-        workingDir: formWorkingDir.trim() || undefined,
+        workingDir: effectiveWorkingDir || undefined,
         description: formDescription.trim() || undefined,
         icon: targetIcon,
         bundleItemIds: formType === 'bundle' ? formBundleItemIds : undefined,

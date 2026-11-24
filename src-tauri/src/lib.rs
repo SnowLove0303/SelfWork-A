@@ -55,6 +55,18 @@ fn str_to_wide_null(s: &str) -> Vec<u16> {
 /// 针对 Windows 下本地 .exe 优先通过原生 ShellExecuteW 委托桌面外壳 (explorer.exe) 独立拉起，彻底脱离父进程生命周期与作业容器限制
 /// 针对物理文件夹，通过 Windows 原生 explorer.exe /separate 毫秒级直达独立窗口唤起
 /// 针对 .lnk 快捷方式与 URL 网址，通过 Windows 原生 ShellExecuteW 秒级直达，消除 powershell 额外开销与黑框闪烁
+/// 剥离用户从资源管理器"复制文件地址"粘贴时带有的外层引号
+fn strip_outer_quotes(s: &str) -> &str {
+    let t = s.trim();
+    if t.len() >= 2
+        && ((t.starts_with('"') && t.ends_with('"')) || (t.starts_with('\'') && t.ends_with('\'')))
+    {
+        &t[1..t.len() - 1]
+    } else {
+        t
+    }
+}
+
 #[tauri::command]
 async fn launch_custom_target(
     target: String,
@@ -62,7 +74,7 @@ async fn launch_custom_target(
     working_dir: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let trimmed_target = target.trim();
+        let trimmed_target = strip_outer_quotes(&target);
         if trimmed_target.is_empty() {
             return Err("目标路径不能为空".to_string());
         }
@@ -284,41 +296,73 @@ async fn execute_custom_script(
     working_dir: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let trimmed_script = script_content.trim();
-        if trimmed_script.is_empty() {
+        let raw_script = script_content.trim();
+        if raw_script.is_empty() {
             return Err("脚本内容不能为空".to_string());
         }
 
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            let (mut cmd, args) = match script_type.to_lowercase().as_str() {
-                "cmd" | "bat" => {
-                    let c = std::process::Command::new("cmd.exe");
-                    let a = vec!["/c".to_string(), trimmed_script.to_string()];
-                    (c, a)
+            use std::path::Path;
+            use std::process::Stdio;
+
+            let unquoted = strip_outer_quotes(raw_script);
+            let unquoted_path = Path::new(unquoted);
+            let ext = unquoted_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+
+            let is_local_bat = (ext == "bat" || ext == "cmd") && unquoted_path.exists();
+            let is_local_ps1 = ext == "ps1" && unquoted_path.exists();
+
+            let mut cmd = if script_type.eq_ignore_ascii_case("cmd")
+                || script_type.eq_ignore_ascii_case("bat")
+                || is_local_bat
+            {
+                let mut c = std::process::Command::new("cmd.exe");
+                if is_local_bat {
+                    c.args(["/c", unquoted]);
+                } else {
+                    c.raw_arg(format!("/c {}", raw_script));
                 }
-                _ => {
-                    let c = std::process::Command::new("powershell.exe");
-                    let a = vec![
-                        "-NoProfile".to_string(),
-                        "-ExecutionPolicy".to_string(),
-                        "Bypass".to_string(),
-                        "-Command".to_string(),
-                        trimmed_script.to_string(),
-                    ];
-                    (c, a)
-                }
+                c
+            } else if is_local_ps1 {
+                let mut c = std::process::Command::new("powershell.exe");
+                c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", unquoted]);
+                c
+            } else {
+                let mut c = std::process::Command::new("powershell.exe");
+                c.args([
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    raw_script,
+                ]);
+                c
             };
 
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-            cmd.args(&args);
+            cmd.stdin(Stdio::null()); // 防止脚本内部 pause 等交互等待导致后台永久挂起
 
-            if let Some(dir) = working_dir {
-                let trimmed_dir = dir.trim();
-                if !trimmed_dir.is_empty() {
-                    cmd.current_dir(trimmed_dir);
-                }
+            let effective_dir = working_dir
+                .as_deref()
+                .map(strip_outer_quotes)
+                .filter(|d| !d.is_empty())
+                .map(|d| d.to_string())
+                .or_else(|| {
+                    if is_local_bat || is_local_ps1 {
+                        unquoted_path.parent().map(|p| p.display().to_string())
+                    } else {
+                        None
+                    }
+                });
+
+            if let Some(ref dir) = effective_dir {
+                cmd.current_dir(dir);
             }
 
             let output = cmd.output().map_err(|e| format!("脚本执行失败: {}", e))?;
@@ -333,6 +377,14 @@ async fn execute_custom_script(
                 }
             }
 
+            if !output.status.success() {
+                return Err(if stdout.is_empty() {
+                    format!("脚本退出码异常: {:?}", output.status.code())
+                } else {
+                    stdout
+                });
+            }
+
             if !stdout.is_empty() {
                 Ok(stdout)
             } else if !stderr.is_empty() {
@@ -345,7 +397,7 @@ async fn execute_custom_script(
         #[cfg(not(windows))]
         {
             let mut cmd = std::process::Command::new("sh");
-            cmd.args(&["-c", trimmed_script]);
+            cmd.args(&["-c", raw_script]);
             let output = cmd.output().map_err(|e| format!("执行失败: {}", e))?;
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             Ok(stdout)
@@ -1352,6 +1404,31 @@ mod tests {
             assert!(res.is_err(), "不存在的物理路径应当返回错误拦截");
             let err_msg = res.unwrap_err();
             assert!(err_msg.contains("不存在或无法访问"), "错误提示需包含明确描述: {}", err_msg);
+        }
+    }
+
+    #[test]
+    fn test_execute_quoted_bat_script_contract() {
+        #[cfg(windows)]
+        {
+            let temp_dir = std::env::temp_dir().join("selfwork bat test");
+            let _ = std::fs::create_dir_all(&temp_dir);
+            let bat_path = temp_dir.join("echo_test.bat");
+            std::fs::write(&bat_path, "@echo off\r\necho BAT_EXEC_OK_%CD%\r\n").expect("write temp bat");
+
+            let quoted_target = format!("\"{}\"", bat_path.display());
+            let res = tauri::async_runtime::block_on(execute_custom_script(
+                "powershell".to_string(),
+                quoted_target,
+                None,
+            ))
+            .expect("execute quoted bat failed");
+
+            let _ = std::fs::remove_file(&bat_path);
+            let _ = std::fs::remove_dir(&temp_dir);
+
+            assert!(res.contains("BAT_EXEC_OK_"), "应当真实执行 bat 脚本并输出内容, 实际: {}", res);
+            assert!(res.contains("selfwork bat test"), "应当自动绑定批处理所在目录为工作目录, 实际: {}", res);
         }
     }
 

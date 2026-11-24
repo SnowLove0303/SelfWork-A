@@ -2,6 +2,22 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.84] - 2026-11-24
+
+### Fix (快速启动：修复 `.bat`/`.cmd`/`.ps1` 本地批处理与带引号路径在脚本模式下不执行的阻断故障)
+
+- **根因定位与排查**：
+  - 响应用户反馈：“我刚才把 `"F:\App Location\脚本\微信双开管理\微信双开.bat"` 添加进启动项，但好像无法正常使用，你去排一下，这是一个启动微信双开的脚本”；
+  - 查明当以 `script` 类型添加带首尾双引号的 `.bat` 文件路径时，前端无条件传参 `scriptType: 'powershell'`，导致 PowerShell 将 `"F:\...\微信双开.bat"` 当作字符串字面量直接打印回显而未真正执行批处理。
+- **Rust 后端执行引擎加固 (`launcher:rust-script-exec` / `src-tauri/src/lib.rs`)**：
+  - 新增 `strip_outer_quotes` 剥离用户从资源管理器"复制文件地址"粘贴带有的外层双引号；
+  - 增强 `execute_custom_script`：自动识别本地 `.bat`/`.cmd` 文件走 `cmd.exe /c` 精准执行（并注入 `Stdio::null()` 防止脚本内 `pause` 后台永久挂起），识别 `.ps1` 文件走 `powershell -File` 执行；
+  - 未显式配置工作目录时，自动绑定脚本物理父目录为 `current_dir`，确保 `%~dp0` 等相对依赖 100% 寻址成功；
+  - 新增 `test_execute_quoted_bat_script_contract` 单元测试覆盖含空格中文与带引号 `.bat` 脚本契约。
+- **前端脚本路由与表单路径自动规范化 (`launcher:fe-script-route` / `LauncherDashboard.tsx`)**：
+  - 修复 `handleLaunchItem` 对 `type === 'script'` 的分发逻辑：自动剥离外层双引号、识别 `.bat`/`.cmd` 传参 `scriptType: 'bat'` 并自动推导父目录作为 `workingDir`，兼容已有历史数据免重新编辑即刻生效；
+  - 在 `handleSaveItem` 中对 `.bat`/`.cmd`/`.ps1` 脚本目标同步剥离外层双引号并自动补全父目录为默认工作目录。
+
 ## [0.1.83] - 2026-11-24
 
 ### Feat (快速启动：白名单专属进程检测与终止管理、卡片右上角微状态指示/一键关闭、组合套件多态聚合与右键快速终止)
