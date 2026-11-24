@@ -243,9 +243,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                仅监控并管理已纳入快速启动的白名单进程，支持一键全清或定向关闭
-              </p>
+
             </div>
           </div>
 
@@ -286,8 +284,8 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                 {isTerminatingAll
                   ? '正在关闭...'
                   : confirmKillAll
-                  ? `确认关闭全部 (${totalUniquePids})?`
-                  : '一键全部关闭'}
+                  ? `确认关闭 (${totalUniquePids})`
+                  : '全部关闭'}
               </span>
             </button>
 
@@ -368,10 +366,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                 <CheckCircle2 className="w-6 h-6 text-slate-500" />
               </div>
               <p className="text-sm font-medium text-slate-300">
-                当前暂无运行中的快速启动项进程
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                通过快速启动拉起本地应用或组合套件后，这里将实时呈现进程清单与关闭控制
+                暂无运行中进程
               </p>
             </div>
           ) : (

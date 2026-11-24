@@ -27,6 +27,8 @@
    - 任何非琐碎变更，动工前必须在 `openspec/changes/<change-name>` 下编制 `proposal.md`、`specs/`、`design.md` 与 `tasks.md`。
 2. **正向行动化准则**：
    - 规范采用封闭作用域与明确准入指标，避免模糊负向禁令。
+3. **UI 工程技能前置硬门禁 (`ui-ux-design-engineering`)**：
+   - 每次新增或修改任何 UI 界面与交互组件前，必须先加载并执行 Ps-openspec 脚手架 UI 技能（`C:\Users\Administrator\.gemini\config\skills\ui-ux-design-engineering\SKILL.md`），严格落实少字原则（Radical Text Economy）、零冗余副标题及 Anti-AI-Slop 界面工程规范。
 
 ### Layer 4: 两阶双轨深度审计 (Two-Step Dual-Scope Audit)
 1. **第一步（机械审计）**：测试套件退出码必须为真实的 0，负向异常用例占比 $\ge 30\%$；
