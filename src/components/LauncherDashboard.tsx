@@ -27,6 +27,7 @@ import {
   AppWindow,
   Square,
   Loader2,
+  Activity,
 } from 'lucide-react';
 import {
   LauncherItem,
@@ -42,6 +43,7 @@ import {
   SystemMonitorInfo,
 } from '../types/launcher.ts';
 import { TelemetryPanel } from './launcher/TelemetryPanel.tsx';
+import { ProcessManifestModal } from './launcher/ProcessManifestModal.tsx';
 import {
   loadLauncherStorage,
   saveLauncherStorage,
@@ -240,6 +242,8 @@ interface LauncherProcessStatus {
   const [runningItemIds, setRunningItemIds] = useState<Record<string, boolean>>({});
   const [processStatusMap, setProcessStatusMap] = useState<Record<string, LauncherProcessStatus>>({});
   const [terminatingItemIds, setTerminatingItemIds] = useState<Record<string, boolean>>({});
+  const [isManifestOpen, setIsManifestOpen] = useState<boolean>(false);
+  const [isTerminatingAll, setIsTerminatingAll] = useState<boolean>(false);
 
   // 执行报文终端控制台状态 (REQ-01 & REQ-02)
   const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(false);
@@ -755,6 +759,74 @@ interface LauncherProcessStatus {
     },
     [processStatusMap, appendLog, refreshProcessStatus]
   );
+
+  // 一键全部关闭所有正在运行的白名单启动项进程
+  const handleTerminateAllProcesses = useCallback(async () => {
+    const pidSet = new Set<number>();
+    for (const st of Object.values(processStatusMap)) {
+      if (st?.is_running) {
+        for (const pid of st.pids) {
+          pidSet.add(pid);
+        }
+      }
+    }
+    const allPids = Array.from(pidSet);
+    if (allPids.length === 0) return;
+
+    setIsTerminatingAll(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const count = await invoke<number>('terminate_launcher_processes', {
+        pids: allPids,
+      });
+      appendLog('进程清单', 'warn', `已执行一键全部关闭，共安全终止 ${count} 个白名单进程实例`);
+      setFeedback({
+        type: 'success',
+        message: `已一键关闭全部快速启动进程（共终止 ${count} 个实例）`,
+      });
+      setTimeout(refreshProcessStatus, 300);
+    } catch (err: any) {
+      appendLog('进程清单', 'error', `一键全部关闭失败: ${err?.message || err}`);
+      setFeedback({
+        type: 'error',
+        message: `一键全部关闭失败: ${err?.message || err}`,
+      });
+    } finally {
+      setIsTerminatingAll(false);
+    }
+  }, [processStatusMap, appendLog, refreshProcessStatus]);
+
+  // 精确终止多开应用中的单个指定 PID
+  const handleTerminateSinglePid = useCallback(
+    async (item: LauncherItem, pid: number) => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const count = await invoke<number>('terminate_launcher_processes', {
+          pids: [pid],
+        });
+        appendLog(item.name, 'warn', `已精确终止单个实例 PID=${pid} (关闭数=${count})`);
+        setFeedback({
+          type: 'success',
+          message: `已关闭【${item.name}】实例 (PID: ${pid})`,
+        });
+        setTimeout(refreshProcessStatus, 300);
+      } catch (err: any) {
+        appendLog(item.name, 'error', `终止 PID=${pid} 失败: ${err?.message || err}`);
+        setFeedback({
+          type: 'error',
+          message: `关闭 PID ${pid} 失败: ${err?.message || err}`,
+        });
+      }
+    },
+    [appendLog, refreshProcessStatus]
+  );
+
+  // 计算全局运行中的纳入应用总数
+  const totalRunningAppsCount = useMemo(() => {
+    return storage.items.filter(
+      (it) => it.type === 'app' && processStatusMap[it.id]?.is_running
+    ).length;
+  }, [storage.items, processStatusMap]);
 
   // 一键全启动 (当前分类全部项目)
   const handleBatchLaunchAll = useCallback(async () => {
@@ -1595,6 +1667,36 @@ interface LauncherProcessStatus {
                   <span>新建项</span>
                 </button>
 
+                {/* 全进程状态清单入口按钮 (Secondary Ghost 暗晶体) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    refreshProcessStatus();
+                    setIsManifestOpen(true);
+                  }}
+                  title="查看所有纳入快速启动项的运行进程清单，支持一键全部关闭或关闭指定应用/组合"
+                  className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-xs font-medium transition-all tactile-btn shrink-0 whitespace-nowrap border ${
+                    totalRunningAppsCount > 0
+                      ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 border-emerald-500/35 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                      : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <span className="relative flex items-center justify-center">
+                    <Activity className={`w-3.5 h-3.5 shrink-0 ${totalRunningAppsCount > 0 ? 'text-emerald-400' : 'text-slate-400'}`} />
+                    {totalRunningAppsCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping opacity-75" />
+                    )}
+                  </span>
+                  <span>进程清单</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
+                    totalRunningAppsCount > 0
+                      ? 'bg-emerald-500/25 text-emerald-300'
+                      : 'bg-white/[0.08] text-slate-400'
+                  }`}>
+                    {totalRunningAppsCount}
+                  </span>
+                </button>
+
                 {/* 专职执行报文控制台切换按钮 (Secondary Ghost 暗晶体) */}
                 <button
                   type="button"
@@ -2108,6 +2210,23 @@ interface LauncherProcessStatus {
       </div>
 
       {/* ================= 右侧专职执行报文并列协同面板 (REQ-TELEMETRY-NON-OVERLAY-01) ================= */}
+      {/* ==================== 全进程状态清单面板 ==================== */}
+      <ProcessManifestModal
+        isOpen={isManifestOpen}
+        onClose={() => setIsManifestOpen(false)}
+        items={storage.items}
+        categories={storage.categories}
+        processStatusMap={processStatusMap}
+        terminatingItemIds={terminatingItemIds}
+        isTerminatingAll={isTerminatingAll}
+        onRefresh={refreshProcessStatus}
+        onTerminateAll={handleTerminateAllProcesses}
+        onTerminateItem={(item) => handleTerminateProcess(item)}
+        onTerminateCombo={(combo) => handleTerminateComboSuite(combo)}
+        onTerminateSinglePid={handleTerminateSinglePid}
+        onLaunchItem={handleLaunchItem}
+      />
+
       {isTelemetryOpen && (
         <div className="w-[310px] xl:w-[370px] shrink-0 h-full flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-150">
           <TelemetryPanel
