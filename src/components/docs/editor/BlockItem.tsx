@@ -1591,7 +1591,6 @@ export const BlockItem: React.FC<BlockItemProps> = ({
             </div>
             <div>
               <div className="text-xs font-medium text-slate-200">添加图片</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">支持上传本地图片或嵌入网络图片 URL</div>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2 w-full max-w-md pt-1">

@@ -132,8 +132,7 @@ export const DocCommentDrawer: React.FC<DocCommentDrawerProps> = ({
         {filteredComments.length === 0 ? (
           <div className="py-16 text-center text-slate-500 space-y-2">
             <MessageSquare size={24} className="mx-auto opacity-30" />
-            <p className="text-xs">暂无此状态的批注</p>
-            <p className="text-[11px] text-slate-600">在正文划选任意文字即可添加行内批注</p>
+            <p className="text-xs">暂无批注</p>
           </div>
         ) : (
           filteredComments.map((comment) => {

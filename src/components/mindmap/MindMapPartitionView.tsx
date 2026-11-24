@@ -429,10 +429,7 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
             <div className="p-4 rounded-full bg-white/[0.02] border border-white/[0.06] mb-3">
               <Trash2 className="w-8 h-8 text-slate-600 opacity-60" />
             </div>
-            <span className="text-xs text-slate-400 font-medium font-mono">回收站暂无内容</span>
-            <span className="text-[10px] text-slate-600 mt-1 font-mono">
-              在分区大盘删除的思维导图将暂存于此，支持原位还原与彻底粉碎
-            </span>
+            <span className="text-xs text-slate-400 font-medium font-mono">回收站为空</span>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 min-w-0">
@@ -448,9 +445,6 @@ export const MindMapPartitionView: React.FC<MindMapPartitionViewProps> = ({
                   </div>
                   <span className="mt-2.5 text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors">
                     新建导图
-                  </span>
-                  <span className="mt-0.5 text-[10px] text-slate-500 font-mono group-hover:text-slate-400 transition-colors">
-                    创建空白导图并进入画布
                   </span>
                 </div>
               )}

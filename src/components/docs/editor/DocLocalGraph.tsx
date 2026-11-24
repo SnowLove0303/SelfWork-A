@@ -264,10 +264,7 @@ export const DocLocalGraph: React.FC<DocLocalGraphProps> = ({
         <div className="w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center mb-3 text-slate-400">
           <Compass size={18} className="animate-pulse" />
         </div>
-        <p className="text-xs font-medium text-slate-300 mb-1">独立知识节点</p>
-        <p className="text-[11px] text-slate-500 leading-relaxed max-w-[180px]">
-          在正文中引用其他文档（如输入 `#/page/`）或被其他文档引用后，此处将自动绘制网络图谱。
-        </p>
+        <p className="text-xs font-medium text-slate-300">暂无关联</p>
       </div>
     );
   }

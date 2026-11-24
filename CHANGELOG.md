@@ -2,6 +2,16 @@
 
 All notable changes and architectural invariants for SelfWork will be documented in this file.
 
+## [0.1.86] - 2026-11-24
+
+### Refactor (全局 UI 去噪：全面清理全进程清单、快速启动、文档表格与思维导图模块冗余说明)
+
+- **遵循 `ui-ux-design-engineering` 少字原则 (`RADICAL_TEXT_ECONOMY_AXIOM`)**：
+  - **全进程清单 (`ProcessManifestModal.tsx`)**：移除每行底部冗长文件路径平铺（移至悬停 `title`）、移除每行重复分类小标签，分组标题精简为 `组合` / `应用`；
+  - **快速启动 (`LauncherDashboard.tsx`)**：移除分屏套件标题旁长句说明及弹窗内冗余括号/引导提示；
+  - **文档与多维表格 (`DocTemplatePicker.tsx` / `SyncedBlock.tsx` / `BlockItem.tsx` / `DocLocalGraph.tsx` / `DocCommentDrawer.tsx` / `DocTrashDrawer.tsx` / `TableDatabaseView.tsx`)**：移除模板长句引导、同步块解释段、图片块提示，空状态统一收敛为极简短语；
+  - **思维导图 (`MindMapPartitionView.tsx`)**：移除回收站与新建卡片冗余长句说明。
+
 ## [0.1.85] - 2026-11-24
 
 ### Feat (快速启动：新增全进程状态清单面板，支持一键全部关闭及关闭指定应用/组合/单PID进程)

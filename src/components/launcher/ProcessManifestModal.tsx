@@ -376,7 +376,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                 <div className="space-y-2.5">
                   <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
                     <Layers className="w-3.5 h-3.5 text-rose-400" />
-                    <span>运行中的组合套件 ({filteredCombos.length})</span>
+                    <span>组合 ({filteredCombos.length})</span>
                   </div>
                   <div className="space-y-2">
                     {filteredCombos.map(
@@ -477,7 +477,7 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                 <div className="space-y-2.5">
                   <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
                     <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>运行中的单品应用 ({filteredApps.length})</span>
+                    <span>应用 ({filteredApps.length})</span>
                   </div>
                   <div className="space-y-2">
                     {filteredApps.map((app) => {
@@ -519,21 +519,15 @@ export const ProcessManifestModal: React.FC<ProcessManifestModalProps> = ({
                                 )}
                               </div>
 
-                              <div className="min-w-0 flex-1">
+                              <div className="min-w-0 flex-1" title={`${catName} · ${app.target}`}>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] shrink-0" />
                                   <span className="text-xs font-semibold text-white truncate">
                                     {app.name}
                                   </span>
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-400 border border-white/10">
-                                    {catName}
-                                  </span>
                                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                                     {pids.length} 实例
                                   </span>
-                                </div>
-                                <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
-                                  {app.target}
                                 </div>
                               </div>
                             </div>

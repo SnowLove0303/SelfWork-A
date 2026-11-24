@@ -1751,9 +1751,6 @@ interface LauncherProcessStatus {
                     屏幕分屏与工作流套件 ({comboSuites.length})
                   </span>
                 </div>
-                <span className="text-[11px] text-slate-500">
-                  一键顺序唤醒多窗口并自动对齐吸附指定屏幕
-                </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
@@ -2397,9 +2394,6 @@ interface LauncherProcessStatus {
                       <span className="text-xs font-semibold text-slate-200">
                         屏幕窗口分屏编排
                       </span>
-                      <span className="ml-1.5 text-[10px] text-slate-400">
-                        (启动时自动按象限铺满屏幕)
-                      </span>
                     </div>
                   </div>
                   <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -2512,7 +2506,7 @@ interface LauncherProcessStatus {
                     {/* 象限槽位与子启动项绑定列表 */}
                     <div className="space-y-1.5 bg-black/40 rounded-lg p-2.5 border border-white/5">
                       <div className="text-[11px] font-medium text-slate-400 mb-1 flex items-center justify-between">
-                        <span>象限区域指定 (绑定应用或文件夹窗口)</span>
+                        <span>象限绑定</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -2770,7 +2764,6 @@ interface LauncherProcessStatus {
                           ? '文件夹路径 *'
                           : '应用程序路径 / .lnk 快捷方式 *'}
                       </label>
-                      <span className="text-[10px] text-cyan-400/80">点击右侧按钮拉起资源管理器</span>
                     </div>
 
                     <div className="flex gap-2">
@@ -2856,7 +2849,7 @@ interface LauncherProcessStatus {
 
                     <div>
                       <label className="block text-slate-400 mb-1 font-medium">
-                        工作目录 (可选，默认自动推导为应用所在目录)
+                        工作目录 (可选)
                       </label>
                       <input
                         type="text"

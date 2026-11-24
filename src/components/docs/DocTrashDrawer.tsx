@@ -115,10 +115,10 @@ export const DocTrashDrawer: React.FC<DocTrashDrawerProps> = ({
           </div>
         </div>
 
-        {/* 提示信息：30天自动清理 */}
+        {/* 保留周期 */}
         <div className="px-4 py-2 border-b border-white/5 bg-black/20 text-[11px] text-slate-500 flex items-center gap-1.5">
           <Clock size={12} className="text-slate-500 shrink-0" />
-          <span>废纸篓中的文档保留 30 天，超时后将自动彻底清理。</span>
+          <span>保留 30 天</span>
         </div>
 
         {/* 文档列表 */}

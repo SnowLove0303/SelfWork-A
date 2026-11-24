@@ -422,7 +422,7 @@ export const TableDatabaseView: React.FC<TableDatabaseViewProps> = ({
           {!loading && filteredRows.length === 0 && (
             <div className="py-16 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
               <Table size={24} className="opacity-40" />
-              <span>当前视图暂无匹配记录，点击右上角蓝色「+ 新建」录入</span>
+              <span>暂无记录</span>
             </div>
           )}
         </div>

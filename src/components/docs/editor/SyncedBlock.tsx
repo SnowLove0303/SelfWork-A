@@ -130,10 +130,6 @@ export const SyncedBlock: React.FC<SyncedBlockProps> = ({
           )}
         </div>
 
-        <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
-          同步块可在任意文档中被多次引用，任何一处的修改都会全局实时同步至全库所有引用位置。
-        </p>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           <button
             type="button"
@@ -165,7 +161,6 @@ export const SyncedBlock: React.FC<SyncedBlockProps> = ({
 
         {allExisting.length > 0 && (
           <div className="pt-3 border-t border-white/5">
-            <div className="text-[10px] text-slate-500 mb-2 font-mono">或从现有同步块中选择引用：</div>
             <div className="max-h-32 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
               {allExisting.map((item) => (
                 <div

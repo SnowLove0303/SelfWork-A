@@ -21,10 +21,7 @@ export const DocTemplatePicker: React.FC<DocTemplatePickerProps> = ({
       <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/5">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
           <Sparkles size={16} className="text-sky-400" />
-          <span>从开箱即用技术模板起步</span>
-          <span className="text-[11px] font-normal text-slate-500">
-            (亦可直接在下方空白处输入内容自由创作)
-          </span>
+          <span>模板</span>
         </div>
         {onDismiss && (
           <button
