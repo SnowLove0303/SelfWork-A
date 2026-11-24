@@ -25,6 +25,8 @@ import {
   Columns,
   Rows,
   AppWindow,
+  Square,
+  Loader2,
 } from 'lucide-react';
 import {
   LauncherItem,
@@ -224,9 +226,20 @@ export const LauncherDashboard: React.FC = () => {
   }, []);
 
   // 卡片操作菜单与执行状态反馈
+  // 进程运行状态数据契约 (REQ-1 ~ REQ-5)
+interface LauncherProcessStatus {
+  id: string;
+  is_running: boolean;
+  pids: number[];
+  instance_count: number;
+}
+
+  // 卡片操作菜单与执行状态反馈
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [runningItemIds, setRunningItemIds] = useState<Record<string, boolean>>({});
+  const [processStatusMap, setProcessStatusMap] = useState<Record<string, LauncherProcessStatus>>({});
+  const [terminatingItemIds, setTerminatingItemIds] = useState<Record<string, boolean>>({});
 
   // 执行报文终端控制台状态 (REQ-01 & REQ-02)
   const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(false);
@@ -597,9 +610,139 @@ export const LauncherDashboard: React.FC = () => {
         return false;
       } finally {
         setRunningItemIds((prev) => ({ ...prev, [item.id]: false }));
+        setTimeout(() => {
+          refreshProcessStatus();
+        }, 800);
       }
     },
     [storage.items, appendLog]
+  );
+
+  // 快速启动项实时后台进程快照巡检
+  const refreshProcessStatus = useCallback(async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const targets = storage.items
+        .filter((it) => it.type === 'app' && it.target.trim())
+        .map((it) => ({
+          id: it.id,
+          target: it.target,
+          item_type: it.type,
+        }));
+
+      if (targets.length === 0) {
+        setProcessStatusMap({});
+        return;
+      }
+
+      const statusMap = await invoke<Record<string, LauncherProcessStatus>>(
+        'detect_launcher_processes',
+        { items: targets }
+      );
+      setProcessStatusMap(statusMap || {});
+    } catch (err) {
+      console.warn('Process detection cycle failed:', err);
+    }
+  }, [storage.items]);
+
+  // 前台聚焦低功耗轻量节流轮询 (2.5s)
+  useEffect(() => {
+    refreshProcessStatus();
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        refreshProcessStatus();
+      }
+    }, 2500);
+
+    const handleFocus = () => {
+      refreshProcessStatus();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [refreshProcessStatus]);
+
+  // 终止单项进程
+  const handleTerminateProcess = useCallback(
+    async (item: LauncherItem, e?: React.MouseEvent) => {
+      if (e) {
+        e.stopPropagation();
+      }
+      const status = processStatusMap[item.id];
+      if (!status || !status.is_running || status.pids.length === 0) {
+        return;
+      }
+
+      setTerminatingItemIds((prev) => ({ ...prev, [item.id]: true }));
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const count = await invoke<number>('terminate_launcher_processes', {
+          pids: status.pids,
+        });
+        appendLog(item.name, 'warn', `已安全终止进程 (共关闭 ${count} 个实例)`);
+        setFeedback({
+          type: 'success',
+          message: `已关闭【${item.name}】(${count} 个进程实例)`,
+        });
+        setTimeout(refreshProcessStatus, 300);
+      } catch (err: any) {
+        appendLog(item.name, 'error', `终止进程失败: ${err?.message || err}`);
+        setFeedback({
+          type: 'error',
+          message: `关闭失败: ${err?.message || err}`,
+        });
+      } finally {
+        setTerminatingItemIds((prev) => ({ ...prev, [item.id]: false }));
+      }
+    },
+    [processStatusMap, appendLog, refreshProcessStatus]
+  );
+
+  // 终止组合套件关联的所有进程
+  const handleTerminateComboSuite = useCallback(
+    async (combo: LauncherItem, e?: React.MouseEvent) => {
+      if (e) {
+        e.stopPropagation();
+      }
+      const subItemIds = combo.bundleItemIds || [];
+      const pidsToKill: number[] = [];
+      for (const subId of subItemIds) {
+        const st = processStatusMap[subId];
+        if (st && st.is_running) {
+          pidsToKill.push(...st.pids);
+        }
+      }
+
+      if (pidsToKill.length === 0) {
+        return;
+      }
+
+      setTerminatingItemIds((prev) => ({ ...prev, [combo.id]: true }));
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const count = await invoke<number>('terminate_launcher_processes', {
+          pids: pidsToKill,
+        });
+        appendLog(combo.name, 'warn', `已批量终止组合套件关联进程 (共关闭 ${count} 个实例)`);
+        setFeedback({
+          type: 'success',
+          message: `已关闭组合套件【${combo.name}】涉及的 ${count} 个进程`,
+        });
+        setTimeout(refreshProcessStatus, 300);
+      } catch (err: any) {
+        appendLog(combo.name, 'error', `终止组合进程失败: ${err?.message || err}`);
+        setFeedback({
+          type: 'error',
+          message: `关闭组合失败: ${err?.message || err}`,
+        });
+      } finally {
+        setTerminatingItemIds((prev) => ({ ...prev, [combo.id]: false }));
+      }
+    },
+    [processStatusMap, appendLog, refreshProcessStatus]
   );
 
   // 一键全启动 (当前分类全部项目)
@@ -1495,6 +1638,10 @@ export const LauncherDashboard: React.FC = () => {
                   const subItems = (combo.bundleItemIds || [])
                     .map((subId) => storage.items.find((it) => it.id === subId))
                     .filter(Boolean) as LauncherItem[];
+                  const runningSubCount = subItems.filter((sIt) => processStatusMap[sIt.id]?.is_running).length;
+                  const isComboAllRunning = subItems.length > 0 && runningSubCount === subItems.length;
+                  const isComboAnyRunning = runningSubCount > 0;
+                  const isComboTerminating = terminatingItemIds[combo.id];
 
                   return (
                     <div
@@ -1558,40 +1705,97 @@ export const LauncherDashboard: React.FC = () => {
                             {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                           </div>
                         ) : (
-                          <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => setActiveMenuDocId(isMenuOpen ? null : combo.id)}
-                              title="设置与更多"
-                              className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
-                            >
-                              <MoreVertical className="w-3.5 h-3.5" />
-                            </button>
-                            {isMenuOpen && (
-                              <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
-                                <button
-                                  onClick={() => {
-                                    handleOpenEditComboModal(combo);
-                                    setActiveMenuDocId(null);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* 组合套件聚合进程运行状态与一键关闭 */}
+                            {isComboAnyRunning && (
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 font-medium ${
+                                    isComboAllRunning
+                                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                      : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                                  }`}
+                                  title={
+                                    isComboAllRunning
+                                      ? `组合子项全部正在运行 (${runningSubCount}/${subItems.length})`
+                                      : `组合子项部分正在运行 (${runningSubCount}/${subItems.length})`
+                                  }
                                 >
-                                  <Edit2 className="w-3 h-3" />
-                                  <span>编辑组合</span>
-                                </button>
-                                <div className="h-px bg-white/5 my-1" />
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      isComboAllRunning ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                                    }`}
+                                  />
+                                  <span>
+                                    {isComboAllRunning ? '运行中' : `${runningSubCount}/${subItems.length}`}
+                                  </span>
+                                </span>
+
                                 <button
-                                  onClick={() => {
-                                    handleDeleteItem(combo.id);
-                                    setActiveMenuDocId(null);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                                  type="button"
+                                  onClick={(e) => handleTerminateComboSuite(combo, e)}
+                                  title={`关闭组合涉及的所有进程 (${runningSubCount} 项)`}
+                                  className="w-5 h-5 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer"
                                 >
-                                  <Trash2 className="w-3 h-3" />
-                                  <span>删除</span>
+                                  {isComboTerminating ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                                  ) : (
+                                    <Square className="w-2.5 h-2.5 fill-current" />
+                                  )}
                                 </button>
                               </div>
                             )}
+
+                            <div className="relative shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setActiveMenuDocId(isMenuOpen ? null : combo.id)}
+                                title="设置与更多"
+                                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
+                              >
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </button>
+                              {isMenuOpen && (
+                                <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                                  {isComboAnyRunning && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          handleTerminateComboSuite(combo);
+                                          setActiveMenuDocId(null);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                                      >
+                                        <Square className="w-3 h-3 fill-current" />
+                                        <span>关闭全部进程 ({runningSubCount})</span>
+                                      </button>
+                                      <div className="h-px bg-white/5 my-1" />
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      handleOpenEditComboModal(combo);
+                                      setActiveMenuDocId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300 hover:text-cyan-300 hover:bg-white/5"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>编辑组合</span>
+                                  </button>
+                                  <div className="h-px bg-white/5 my-1" />
+                                  <button
+                                    onClick={() => {
+                                      handleDeleteItem(combo.id);
+                                      setActiveMenuDocId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    <span>删除</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1599,20 +1803,45 @@ export const LauncherDashboard: React.FC = () => {
                       {/* 中栏：包含应用预览胶囊微缩标签流 */}
                       <div className="bg-black/25 rounded-xl p-2 mb-3 border border-white/5 min-h-[38px] flex flex-wrap items-center gap-1.5">
                         {subItems.length > 0 ? (
-                          subItems.map((sItem) => (
-                            <div
-                              key={sItem.id}
-                              title={sItem.target || sItem.name}
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-[10px] text-slate-300"
-                            >
-                              {sItem.icon && sItem.icon.startsWith('data:image/') ? (
-                                <img src={sItem.icon} alt="" className="w-3 h-3 object-contain rounded" />
-                              ) : (
-                                <AppWindow className="w-2.5 h-2.5 text-slate-400" />
-                              )}
-                              <span className="truncate max-w-[90px]">{sItem.name}</span>
-                            </div>
-                          ))
+                          subItems.map((sItem) => {
+                            const sStatus = processStatusMap[sItem.id];
+                            const isSubTerminating = terminatingItemIds[sItem.id];
+                            return (
+                              <div
+                                key={sItem.id}
+                                title={sItem.target || sItem.name}
+                                className={`group/sub flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] transition-colors ${
+                                  sStatus?.is_running
+                                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+                                    : 'bg-white/[0.04] border-white/10 text-slate-300'
+                                }`}
+                              >
+                                {sItem.icon && sItem.icon.startsWith('data:image/') ? (
+                                  <img src={sItem.icon} alt="" className="w-3 h-3 object-contain rounded" />
+                                ) : (
+                                  <AppWindow className="w-2.5 h-2.5 text-slate-400" />
+                                )}
+                                <span className="truncate max-w-[90px]">{sItem.name}</span>
+                                {sStatus?.is_running && (
+                                  <button
+                                    type="button"
+                                    title={`关闭【${sItem.name}】进程`}
+                                    onClick={(e) => handleTerminateProcess(sItem, e)}
+                                    className="w-3.5 h-3.5 rounded hover:bg-rose-500/30 text-emerald-400 hover:text-rose-300 flex items-center justify-center transition-all cursor-pointer ml-0.5"
+                                  >
+                                    {isSubTerminating ? (
+                                      <Loader2 className="w-2 h-2 animate-spin text-rose-400" />
+                                    ) : (
+                                      <>
+                                        <span className="group-hover/sub:hidden w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                        <X className="hidden group-hover/sub:inline w-2.5 h-2.5 stroke-[2.5]" />
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })
                         ) : (
                           <span className="text-[10px] text-slate-500">尚未配置任何子应用</span>
                         )}
@@ -1681,6 +1910,8 @@ export const LauncherDashboard: React.FC = () => {
               {standardItems.map((item) => {
                 const badge = renderTypeBadge(item.type);
                 const isRunning = runningItemIds[item.id];
+                const procStatus = processStatusMap[item.id];
+                const isTerminating = terminatingItemIds[item.id];
                 const isMenuOpen = activeMenuDocId === item.id;
                 const isSelected = selectedItemIds.includes(item.id);
 
@@ -1736,6 +1967,21 @@ export const LauncherDashboard: React.FC = () => {
                           {/* 下拉菜单浮层 */}
                           {isMenuOpen && (
                             <div className="absolute right-0 top-full mt-1 w-32 rounded-xl bg-slate-950/95 border border-white/10 shadow-2xl py-1 z-30 backdrop-blur-xl">
+                              {procStatus?.is_running && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      handleTerminateProcess(item);
+                                      setActiveMenuDocId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
+                                  >
+                                    <Square className="w-3 h-3 fill-current" />
+                                    <span>结束运行 ({procStatus.instance_count})</span>
+                                  </button>
+                                  <div className="h-px bg-white/5 my-1" />
+                                </>
+                              )}
                               <button
                                 onClick={() => {
                                   handleOpenEditModal(item);
@@ -1765,7 +2011,7 @@ export const LauncherDashboard: React.FC = () => {
 
                     {/* 核心视觉焦点：40x40 高清原生图标 + 应用名称 */}
                     <div className="my-auto flex flex-col items-center justify-center min-w-0">
-                      <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 flex items-center justify-center shrink-0 relative">
                         {item.icon && item.icon.startsWith('data:image/') ? (
                           <img
                             src={item.icon}
@@ -1775,6 +2021,34 @@ export const LauncherDashboard: React.FC = () => {
                         ) : (
                           <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/15 group-hover:border-cyan-500/30 transition-all duration-200 shadow-inner">
                             <badge.Icon className="w-5 h-5" />
+                          </div>
+                        )}
+
+                        {/* 进程运行指示灯与悬停一键关闭微角标 */}
+                        {procStatus?.is_running && !isSelectMode && (
+                          <div
+                            onClick={(e) => handleTerminateProcess(item, e)}
+                            title={`正在运行 (${procStatus.instance_count} 个实例) - 点击终止进程`}
+                            className="group/proc absolute -top-1.5 -right-1.5 z-20 cursor-pointer"
+                          >
+                            {/* 默认常驻态：精致祖母绿微光指示点 (多开时显示数量) */}
+                            <div className="flex group-hover/proc:hidden items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-emerald-500 border border-[#0d1117] shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-in fade-in zoom-in-75 duration-150">
+                              {procStatus.instance_count > 1 ? (
+                                <span className="text-[9px] font-mono font-bold text-black leading-none px-0.5">
+                                  {procStatus.instance_count}
+                                </span>
+                              ) : (
+                                <span className="w-1.5 h-1.5 rounded-full bg-white/90" />
+                              )}
+                            </div>
+                            {/* 悬停态：高对比红色小叉号关闭按钮 */}
+                            <div className="hidden group-hover/proc:flex items-center justify-center w-[16px] h-[16px] rounded-full bg-rose-500 text-white shadow-[0_0_10px_rgba(244,63,94,0.9)] hover:scale-110 active:scale-95 transition-all">
+                              {isTerminating ? (
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              ) : (
+                                <X className="w-2.5 h-2.5 stroke-[3]" />
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

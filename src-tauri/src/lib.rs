@@ -995,6 +995,161 @@ async fn pick_launcher_file(is_folder: Option<bool>) -> Result<Option<String>, S
     .map_err(|e| format!("执行文件选择异常: {}", e))?
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LauncherTargetPayload {
+    pub id: String,
+    pub target: String,
+    pub item_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LauncherProcessInfo {
+    pub id: String,
+    pub is_running: bool,
+    pub pids: Vec<u32>,
+    pub instance_count: usize,
+}
+
+/// 快速启动模块专用：白名单进程运行状态快速巡检
+#[tauri::command]
+async fn detect_launcher_processes(
+    items: Vec<LauncherTargetPayload>,
+) -> Result<HashMap<String, LauncherProcessInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut result_map: HashMap<String, LauncherProcessInfo> = HashMap::with_capacity(items.len());
+
+        let mut exe_to_items: HashMap<String, Vec<String>> = HashMap::new();
+        for item in &items {
+            let trimmed = item.target.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let path_obj = std::path::Path::new(trimmed);
+            if let Some(file_name) = path_obj.file_name().and_then(|n| n.to_str()) {
+                let lower = file_name.to_lowercase();
+                let exe_name = if lower.ends_with(".exe") {
+                    lower
+                } else if item.item_type == "app" {
+                    format!("{}.exe", lower)
+                } else {
+                    lower
+                };
+                exe_to_items.entry(exe_name).or_default().push(item.id.clone());
+            }
+        }
+
+        let mut exe_to_pids: HashMap<String, Vec<u32>> = HashMap::new();
+
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::Foundation::CloseHandle;
+            use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+                TH32CS_SNAPPROCESS,
+            };
+
+            unsafe {
+                let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+                if snapshot != windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+                    let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+                    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+                    if Process32FirstW(snapshot, &mut entry) != 0 {
+                        loop {
+                            let len = entry
+                                .szExeFile
+                                .iter()
+                                .position(|&c| c == 0)
+                                .unwrap_or(entry.szExeFile.len());
+                            let exe_name = String::from_utf16_lossy(&entry.szExeFile[..len]).to_lowercase();
+
+                            if exe_to_items.contains_key(&exe_name) {
+                                exe_to_pids.entry(exe_name).or_default().push(entry.th32ProcessID);
+                            }
+
+                            if Process32NextW(snapshot, &mut entry) == 0 {
+                                break;
+                            }
+                        }
+                    }
+                    CloseHandle(snapshot);
+                }
+            }
+        }
+
+        for item in items {
+            let mut pids = Vec::new();
+            let path_obj = std::path::Path::new(item.target.trim());
+            if let Some(file_name) = path_obj.file_name().and_then(|n| n.to_str()) {
+                let lower = file_name.to_lowercase();
+                let exe_name = if lower.ends_with(".exe") {
+                    lower
+                } else if item.item_type == "app" {
+                    format!("{}.exe", lower)
+                } else {
+                    lower
+                };
+                if let Some(found_pids) = exe_to_pids.get(&exe_name) {
+                    pids = found_pids.clone();
+                }
+            }
+
+            let is_running = !pids.is_empty();
+            let instance_count = pids.len();
+
+            result_map.insert(
+                item.id.clone(),
+                LauncherProcessInfo {
+                    id: item.id,
+                    is_running,
+                    pids,
+                    instance_count,
+                },
+            );
+        }
+
+        Ok(result_map)
+    })
+    .await
+    .map_err(|e| format!("进程检测任务异常: {}", e))?
+}
+
+/// 快速启动模块专用：安全终止指定启动项关联的活动进程
+#[tauri::command]
+async fn terminate_launcher_processes(pids: Vec<u32>) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut terminated_count = 0;
+        let current_pid = std::process::id();
+
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::Foundation::CloseHandle;
+            use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+
+            for pid in pids {
+                // 自卫保护：绝不终止自身进程或 PID 0 / 4 等系统内核保留进程
+                if pid == 0 || pid == 4 || pid == current_pid {
+                    continue;
+                }
+
+                unsafe {
+                    let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+                    if !handle.is_null() && handle != windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+                        if TerminateProcess(handle, 1) != 0 {
+                            terminated_count += 1;
+                        }
+                        CloseHandle(handle);
+                    }
+                }
+            }
+        }
+
+        Ok(terminated_count)
+    })
+    .await
+    .map_err(|e| format!("终止进程异常: {}", e))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1041,6 +1196,8 @@ pub fn run() {
             window_is_maximized,
             window_close,
             pick_launcher_file,
+            detect_launcher_processes,
+            terminate_launcher_processes,
             get_system_monitors,
             arrange_combo_windows,
             db::db_get_all_tasks,
